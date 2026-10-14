@@ -16,7 +16,9 @@
 | 履历层 | 知识点 × 深度（知道/用过/做过）× 时间 × 来源 + 证据页导出 | ✅ v1（internal/evidence） |
 | 能力评估 | Elo per 域：难度带 50-90% 校准，AI 助教评估能力的数字底座 | ✅ v0（internal/ability） |
 | 知识库层 | 三层：原文锚定（授权白名单+时效×可信权重）/ 助教理解（5-gram 指纹闸门）/ 批判批注（refuted>disputed 状态机）+ CC-BY-SA 导出 | ✅ v1（internal/kb） |
-| 练习层 | break-fix 沙盒：AI 预埋教学 bug → 修复=确定性验收；精准喂坑 | 规划中 |
+| 练习层 | break-fix 沙盒：预埋教学 bug（typo/boundary/logic）→ 修复=确定性验收；精准喂坑；路径安全 | ✅ v1（internal/sandbox，3 内置案例） |
+| 毕业层 | Learning→Maintaining→Graduated 状态机；毕业=调度权交还 | ✅ v1（internal/graduation） |
+| CLI | plan/evidence/kb/sandbox/graduate 全链路命令行 | ✅（cmd/outpost2） |
 | AI 助教层 | 护栏四纪律（已在 1.x P29 落地）+ 记忆结晶 + 品味进化（学会了且想继续学三信号） | 部分（护栏在 1.x） |
 
 ## 授权
@@ -42,5 +44,5 @@ go test ./internal/scheduler -v
 
 ## 迭代波次
 
-P29 护栏（✅ 在 1.x）→ P30 调度+履历（✅）→ **P31 知识库三层管线（✅ internal/kb，引擎层；LLM 综合调用在应用层）** → P32 break-fix 沙盒 → P33 证据页+毕业仪式。
+P29 护栏（✅ 在 1.x）→ P30 调度+履历（✅）→ P31 知识库三层管线（✅）→ P32 break-fix 沙盒（✅）→ P33 证据页+毕业仪式（✅ 引擎层）。
 效果验证：90 天冲刺 = 预注册 n=1 实验（指标见冲刺草案）。
