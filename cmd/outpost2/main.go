@@ -77,6 +77,8 @@ func main() {
 		cmdSandbox(os.Args[2:])
 	case "graduate":
 		cmdGraduate(os.Args[2:])
+	case "serve":
+		cmdServe(os.Args[2:])
 	default:
 		die(fmt.Errorf("未知子命令: %s", os.Args[1]))
 	}

@@ -1,0 +1,77 @@
+{
+  "dir": "outpost2-data",
+  "goals": [
+    {
+      "id": "P1",
+      "title": "部署品：有真实用户的小工具",
+      "deadline": "2026-11-05",
+      "progress": 0,
+      "actions": [
+        "定选题（解决自己真实痛点）",
+        "最小可用版跑通",
+        "部署到公网",
+        "找 ≥3 个真实用户",
+        "录 2 分钟演示视频"
+      ]
+    },
+    {
+      "id": "P2",
+      "title": "Agent 作品：开源 + 实践长文",
+      "deadline": "2026-11-29",
+      "progress": 0,
+      "actions": [
+        "选型（多 agent 协作/调度引擎/工具链）",
+        "仓库+README+QuickStart",
+        "发布实践长文",
+        "收获 ≥5 star/fork"
+      ]
+    },
+    {
+      "id": "P3",
+      "title": "FDE 证据页 + ≥30 份投递",
+      "deadline": "2027-01-13",
+      "progress": 0,
+      "actions": [
+        "证据页上线",
+        "简历按 FDE 改写",
+        "累计 30 份投递",
+        "≥3 场真实面试"
+      ]
+    }
+  ],
+  "plan": {
+    "Date": "2026-10-15T01:58:31.3523518+08:00",
+    "Main": [
+      {
+        "DeliverableID": "P1",
+        "Title": "定选题（解决自己真实痛点）",
+        "Minutes": 25
+      },
+      {
+        "DeliverableID": "P1",
+        "Title": "最小可用版跑通",
+        "Minutes": 25
+      }
+    ],
+    "Reviews": null,
+    "Extras": null,
+    "Note": "形态:standard | 主推进：部署品：有真实用户的小工具（截止 11-05，进度 0%）；今日无到期复习"
+  },
+  "done": {
+    "date": "2026-10-15",
+    "main": null,
+    "reviews": null,
+    "extras": null,
+    "shape": "standard"
+  },
+  "ledger": {
+    "points": {}
+  },
+  "bandit": {
+    "posterior": {}
+  },
+  "ability": {
+    "domains": {},
+    "K": 64
+  }
+}
