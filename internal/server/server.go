@@ -230,16 +230,23 @@ func (s *Server) Handlers() http.Handler {
 		g, gReason := graduation.Evaluate(graduation.DomainStats{DoneCount: d, MaintainDays: 0}, graduation.DefaultConfig(), time.Now())
 		today := (*tutor.Lesson)(nil)
 		curriculum := map[string]any{}
+		sessions := map[string]*tutor.Session{}
 		if s.Tutor != nil {
 			cur := s.Tutor.Curriculum()
 			today = s.Tutor.TodayLesson()
 			curriculum = map[string]any{"subjects": cur.Subjects, "lessons": cur.Lessons}
+			// 全部已有会话打包进 state——前端打开已学知识点=纯本地渲染（用户要求 ≤2ms 级响应）
+			for _, l := range cur.Lessons {
+				if sess := s.Tutor.Load(l.ID); sess != nil {
+					sessions[l.ID] = sess
+				}
+			}
 		}
 		writeJSON(w, map[string]any{
 			"plan": s.Plan, "done": s.Done, "goals": s.Goals,
 			"ledger": s.Ledger.List(), "counts": map[string]int{"known": k, "used": u, "done": d},
 			"graduation": map[string]any{"state": string(g), "reason": gReason},
-			"curriculum": curriculum, "today": today,
+			"curriculum": curriculum, "today": today, "sessions": sessions,
 		})
 	})
 	mux.HandleFunc("/api/refresh", func(w http.ResponseWriter, _ *http.Request) {
