@@ -120,7 +120,7 @@ a:hover{text-decoration:underline}
 
 <script>
 const $=id=>document.getElementById(id);
-const toast=m=>{const t=$('toast');t.textContent=m;t.style.display='block';setTimeout(()=>t.style.display='none',2400)};
+const toast=(m,ms)=>{const t=$('toast');t.textContent=m;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',ms||2400)};
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 let STATE=null, CURRENT=null, LASTVERDICT=false;
 
@@ -163,10 +163,19 @@ function switchTab(v){
 async function addSubject(){
   const name=$('subjectInput').value.trim();
   if(!name){toast('先输入科目名');return}
+  const btn=$('subjectBox').querySelector('button');btn.disabled=true;btn.textContent='拆课中…';
   toast('AI 正在把「'+name+'」拆成课程…（约 20 秒）');
-  $('subjectInput').value='';
-  try{ await api('/api/subject',{name}); CURRENT=null; await loadState(); toast('课程就绪——第一个知识点已丢给你'); }
-  catch(e){ toast('失败：'+e.message) }
+  try{
+    await api('/api/subject',{name});
+    $('subjectInput').value='';
+    CURRENT=null;HIST=null;EXER=null;
+    await loadState();
+    toast('「'+name+'」课程就绪——第一个知识点已经丢给你',3600);
+    if(STATE.today)openLesson(STATE.today.id); // 显式跳出新课，不等条件分支
+  }catch(e){
+    toast('开课失败：'+e.message+'（输入保留，可直接重试）',4200);
+  }
+  btn.disabled=false;btn.textContent='开课';
 }
 
 function findLessonMeta(nodeId){

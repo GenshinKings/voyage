@@ -107,16 +107,28 @@ func (t *Tutor) StartSubject(name string) (*Curriculum, error) {
 			return cur, nil
 		}
 	}
-	raw, err := t.Client.ChatJSON(
-		`你是课程设计师。学习者想学一个科目，请把它分解成 4-8 个有序知识点（从基础到进阶）。
+	var lessons []Lesson
+	var perr error
+	var err error
+	for attempt := 0; attempt < 2; attempt++ { // LLM 偶发格式漂移：解析失败自动重试一次
+		var raw string
+		raw, err = t.Client.ChatJSON(
+			`你是课程设计师。学习者想学一个科目，请把它分解成 4-8 个有序知识点（从基础到进阶）。
 每个知识点：title（≤16字，名词短语）、brief（一句话：学完能做什么）。
 分解原则：每个知识点都是 30 分钟内可以「讲解+一道检查题」收尾的最小单元；先概念后应用。
 JSON 顶层键必须是 "nodes"。`,
-		[]llm.Message{{Role: "user", Content: "科目：" + name}})
+			[]llm.Message{{Role: "user", Content: "科目：" + name}})
+		if err != nil {
+			continue
+		}
+		lessons, perr = parseCourse(raw)
+		if perr == nil && len(lessons) > 0 {
+			break
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
-	lessons, perr := parseCourse(raw)
 	if perr != nil {
 		return nil, fmt.Errorf("课程分解解析失败: %w", perr)
 	}
