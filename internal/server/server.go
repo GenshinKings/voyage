@@ -7,6 +7,7 @@ package server
 
 import (
 	_ "embed"
+	"strings"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -19,8 +20,10 @@ import (
 	"outpost2/internal/bandit"
 	"outpost2/internal/evidence"
 	"outpost2/internal/graduation"
+	"outpost2/internal/llm"
 	"outpost2/internal/sandbox"
 	"outpost2/internal/scheduler"
+	"outpost2/internal/tutor"
 )
 
 //go:embed static/index.html
@@ -76,6 +79,7 @@ type Server struct {
 	Ledger  *evidence.Ledger     `json:"ledger"`
 	Bandit  *bandit.Bandit       `json:"bandit"`
 	Ability *ability.Tracker     `json:"ability"`
+	Tutor   *tutor.Tutor         `json:"-"`
 }
 
 func (s *Server) load(path string, v any) bool {
@@ -98,6 +102,9 @@ func (s *Server) save(path string, v any) {
 // NewServer 装配：缺 goals 时写入种子（90 天冲刺三产出物）。
 func NewServer(dir string) *Server {
 	s := &Server{Dir: dir, Ledger: evidence.New(), Bandit: bandit.New(time.Now().UnixNano()), Ability: ability.New()}
+	if cfg, err := llm.LoadConfig(filepath.Join(dir, "llm.json")); err == nil {
+		s.Tutor = &tutor.Tutor{Dir: dir, Client: llm.NewClient(cfg)}
+	}
 	if s.load("state.json", s) {
 		return s
 	}
@@ -221,10 +228,18 @@ func (s *Server) Handlers() http.Handler {
 		}
 		k, u, d := s.Ledger.Counts()
 		g, gReason := graduation.Evaluate(graduation.DomainStats{DoneCount: d, MaintainDays: 0}, graduation.DefaultConfig(), time.Now())
+		today := (*tutor.Lesson)(nil)
+		curriculum := map[string]any{}
+		if s.Tutor != nil {
+			cur := s.Tutor.Curriculum()
+			today = s.Tutor.TodayLesson()
+			curriculum = map[string]any{"subjects": cur.Subjects, "lessons": cur.Lessons}
+		}
 		writeJSON(w, map[string]any{
 			"plan": s.Plan, "done": s.Done, "goals": s.Goals,
 			"ledger": s.Ledger.List(), "counts": map[string]int{"known": k, "used": u, "done": d},
 			"graduation": map[string]any{"state": string(g), "reason": gReason},
+			"curriculum": curriculum, "today": today,
 		})
 	})
 	mux.HandleFunc("/api/refresh", func(w http.ResponseWriter, _ *http.Request) {
@@ -251,6 +266,92 @@ func (s *Server) Handlers() http.Handler {
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		s.SettleMood(req.Mood, req.Completed)
 		writeJSON(w, map[string]any{"ok": true})
+	})
+	mux.HandleFunc("/api/subject", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Name string `json:"name"` }
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		if strings.TrimSpace(req.Name) == "" {
+			http.Error(w, "科目名不能为空", 400)
+			return
+		}
+		if s.Tutor == nil {
+			http.Error(w, "LLM 未配置（outpost2-data/llm.json）", 400)
+			return
+		}
+		cur, err := s.Tutor.StartSubject(req.Name)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		writeJSON(w, cur)
+	})
+	mux.HandleFunc("/api/tutor/open", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ NodeID string `json:"nodeId"` }
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		lesson := findLesson(s, req.NodeID)
+		if lesson == nil {
+			http.Error(w, "知识点不存在", 404)
+			return
+		}
+		sess, isNew, err := s.Tutor.StartOrResume(*lesson)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		writeJSON(w, map[string]any{"session": sess, "isNew": isNew})
+	})
+	mux.HandleFunc("/api/tutor/send", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			NodeID string `json:"nodeId"`
+			Text   string `json:"text"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		lesson := findLesson(s, req.NodeID)
+		if lesson == nil {
+			http.Error(w, "知识点不存在", 404)
+			return
+		}
+		v, err := s.Tutor.Send(*lesson, req.Text)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		verdict := ""
+		if v.Kind == "pass" || v.Kind == "partial" {
+			s.Ledger.Record(lesson.ID, lesson.Title, evidence.Known, time.Now(), "tutor:"+lesson.Subject, "")
+			s.Tutor.MarkLessonDone(lesson.ID)
+			s.save("ledger.json", s.Ledger)
+			verdict = v.Kind
+		}
+		writeJSON(w, map[string]any{"reply": v.Reply, "verdict": verdict})
+	})
+	mux.HandleFunc("/api/graph", func(w http.ResponseWriter, _ *http.Request) {
+		nodes := []map[string]any{}
+		edges := []map[string]string{}
+		if s.Tutor != nil {
+			cur := s.Tutor.Curriculum()
+			for i, l := range cur.Lessons {
+				depth := 1
+				if l.Status == "done" {
+					depth = 1 // 知道级（试验中）
+				}
+				nodes = append(nodes, map[string]any{"id": l.ID, "title": l.Title, "depth": depth, "subject": l.Subject, "status": l.Status})
+				if i > 0 && cur.Lessons[i-1].Subject == l.Subject {
+					edges = append(edges, map[string]string{"from": cur.Lessons[i-1].ID, "to": l.ID})
+				}
+				found := false
+				for _, nd := range nodes {
+					if nd["id"] == l.ID {
+						found = true
+					}
+				}
+				_ = found
+			}
+		}
+		for _, p := range s.Ledger.List() {
+			nodes = append(nodes, map[string]any{"id": p.ID, "title": p.Title, "depth": int(p.Depth), "subject": "evidence", "status": "done"})
+		}
+		writeJSON(w, map[string]any{"nodes": nodes, "edges": edges})
 	})
 	mux.HandleFunc("/api/sandbox/open", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
@@ -329,3 +430,17 @@ func Serve(addr string) (*Server, error) {
 }
 
 var _ = template.HTMLEscapeString // 保留模板引用
+
+// findLesson 从课程中取知识点。
+func findLesson(s *Server, nodeID string) *tutor.Lesson {
+	if s.Tutor == nil {
+		return nil
+	}
+	for _, l := range s.Tutor.Curriculum().Lessons {
+		if l.ID == nodeID {
+			l2 := l
+			return &l2
+		}
+	}
+	return nil
+}

@@ -1,0 +1,137 @@
+{
+  "subjects": [
+    "MCP Protocol Basics",
+    "Fee Bayesian Stats"
+  ],
+  "lessons": [
+    {
+      "id": "1019-rotocolasics-01",
+      "subject": "MCP Protocol Basics",
+      "title": "MCP 协议概述",
+      "brief": "能说出 MCP 的定位、核心目标与典型使用场景。",
+      "status": "active",
+      "order": 0
+    },
+    {
+      "id": "1019-rotocolasics-02",
+      "subject": "MCP Protocol Basics",
+      "title": "Host 与 Client 角色",
+      "brief": "能区分 Host、Client、Server 三方职责并画出连接关系。",
+      "status": "active",
+      "order": 1
+    },
+    {
+      "id": "1019-rotocolasics-03",
+      "subject": "MCP Protocol Basics",
+      "title": "Server 与能力声明",
+      "brief": "能解释 Server 暴露的 tools、resources、prompts 三类能力。",
+      "status": "active",
+      "order": 2
+    },
+    {
+      "id": "1019-rotocolasics-04",
+      "subject": "MCP Protocol Basics",
+      "title": "JSON-RPC 消息格式",
+      "brief": "能读懂并构造符合规范的请求、响应与通知消息。",
+      "status": "active",
+      "order": 3
+    },
+    {
+      "id": "1019-rotocolasics-05",
+      "subject": "MCP Protocol Basics",
+      "title": "初始化握手流程",
+      "brief": "能描述 initialize 阶段的能力协商与版本匹配过程。",
+      "status": "active",
+      "order": 4
+    },
+    {
+      "id": "1019-rotocolasics-06",
+      "subject": "MCP Protocol Basics",
+      "title": "工具调用流程",
+      "brief": "能说明 tools/list 与 tools/call 的交互步骤及结果处理。",
+      "status": "active",
+      "order": 5
+    },
+    {
+      "id": "1019-rotocolasics-07",
+      "subject": "MCP Protocol Basics",
+      "title": "传输层方式",
+      "brief": "能对比 stdio 与 HTTP 传输的适用场景与配置要点。",
+      "status": "active",
+      "order": 6
+    },
+    {
+      "id": "1019-rotocolasics-08",
+      "subject": "MCP Protocol Basics",
+      "title": "错误与安全实践",
+      "brief": "能识别常见错误码并应用权限与输入校验的防护措施。",
+      "status": "active",
+      "order": 7
+    },
+    {
+      "id": "1019-eeayesiantats-01",
+      "subject": "Fee Bayesian Stats",
+      "title": "贝叶斯思想与先验",
+      "brief": "能用先验分布和似然函数描述不确定性，并说明贝叶斯推断与频率学派的核心差异。",
+      "status": "active",
+      "order": 8
+    },
+    {
+      "id": "1019-eeayesiantats-02",
+      "subject": "Fee Bayesian Stats",
+      "title": "贝叶斯公式",
+      "brief": "能写出贝叶斯公式并用离散或简单连续例子手算后验概率。",
+      "status": "active",
+      "order": 9
+    },
+    {
+      "id": "1019-eeayesiantats-03",
+      "subject": "Fee Bayesian Stats",
+      "title": "共轭先验",
+      "brief": "能识别并利用 Beta-二项、正态-正态等共轭对快速求后验分布。",
+      "status": "active",
+      "order": 10
+    },
+    {
+      "id": "1019-eeayesiantats-04",
+      "subject": "Fee Bayesian Stats",
+      "title": "后验汇总与可信区间",
+      "brief": "能从后验分布计算后验均值、中位数、众数及可信区间并解释其含义。",
+      "status": "active",
+      "order": 11
+    },
+    {
+      "id": "1019-eeayesiantats-05",
+      "subject": "Fee Bayesian Stats",
+      "title": "先验选择",
+      "brief": "能区分信息先验、弱信息先验与无信息先验，并说明先验对后验的影响。",
+      "status": "active",
+      "order": 12
+    },
+    {
+      "id": "1019-eeayesiantats-06",
+      "subject": "Fee Bayesian Stats",
+      "title": "后验预测分布",
+      "brief": "能推导并使用后验预测分布对新观测作概率预测。",
+      "status": "active",
+      "order": 13
+    },
+    {
+      "id": "1019-eeayesiantats-07",
+      "subject": "Fee Bayesian Stats",
+      "title": "MCMC 抽样基础",
+      "brief": "能解释 MCMC 的直觉并用 Metropolis-Hastings 等简单算法从后验抽样。",
+      "status": "active",
+      "order": 14
+    },
+    {
+      "id": "1019-eeayesiantats-08",
+      "subject": "Fee Bayesian Stats",
+      "title": "贝叶斯模型评估",
+      "brief": "能用后验预测检查、贝叶斯因子或信息准则比较并评估贝叶斯模型。",
+      "status": "active",
+      "order": 15
+    }
+  ],
+  "updatedAt": "2026-10-19T23:47:56.240765+08:00"
+}

@@ -3,141 +3,249 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>前哨 2.0</title>
+<title>前哨 2.0 · 全托管学习机</title>
 <style>
-:root{--ink:#101B29;--paper:#FAFAF7;--line:#D8DDE3;--mut:#6B7684;--pink:#FB7299}
+:root{--ink:#101B29;--paper:#FAFAF7;--side:#FFFFFF;--line:#D8DDE3;--mut:#6B7684;--pink:#FB7299;--usr:#EEF2F7}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;background:var(--paper);color:var(--ink);line-height:1.65;max-width:860px;margin:0 auto;padding:44px 28px 80px}
-.kicker{font-size:12px;letter-spacing:.22em;color:var(--mut)}
-h1{font-size:34px;font-weight:700;margin:6px 0 2px}
-.date{color:var(--mut);font-size:14px;margin-bottom:28px}
-.sec{margin-top:34px}
-.sec-head{display:flex;align-items:baseline;gap:10px;border-bottom:1px solid var(--line);padding-bottom:6px;margin-bottom:14px}
-.num{font-size:20px;font-weight:700;color:var(--pink)}
-.sec-head h2{font-size:17px}
-.sec-head .sub{color:var(--mut);font-size:13px;margin-left:auto}
-.task{display:flex;gap:12px;align-items:flex-start;padding:12px 4px;border-bottom:1px dashed var(--line)}
-.task .no{font-weight:700;font-size:15px;min-width:26px;color:#8fa0b3}
-.task .body{flex:1}
-.task .t{font-weight:600}
-.task .m{color:var(--mut);font-size:13px}
-.task.done .t{text-decoration:line-through;color:var(--mut)}
-button{font:inherit;border:1px solid var(--ink);background:transparent;color:var(--ink);padding:5px 14px;cursor:pointer}
-button:hover{border-color:var(--pink);color:var(--pink)}
-button.primary{background:var(--ink);color:#fff}
-button.primary:hover{background:#22314a}
-.pill{display:inline-block;border:1px solid var(--line);color:var(--mut);font-size:12px;padding:1px 8px;margin-left:8px}
-.note{background:#F1F2EE;border-left:3px solid var(--ink);padding:10px 14px;font-size:14px;color:#414b58;margin-top:14px}
-.mood{display:flex;gap:10px;margin-top:16px}
-.mood button{flex:1;padding:10px}
-.grad{margin-top:8px;font-size:14px;color:var(--mut)}
+html,body{height:100%}
+body{font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;background:var(--paper);color:var(--ink);display:flex;height:100vh;overflow:hidden}
+#side{width:250px;background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column;flex-shrink:0}
+#side .logo{padding:16px 16px 10px;border-bottom:1px solid var(--line)}
+#side .logo .kicker{font-size:11px;letter-spacing:.2em;color:var(--mut)}
+#side .logo b{font-size:16px}
+.tabs{display:flex;border-bottom:1px solid var(--line)}
+.tab{flex:1;text-align:center;padding:9px 0;cursor:pointer;color:var(--mut);font-size:13px;border-bottom:2px solid transparent}
+.tab.on{color:var(--ink);border-bottom-color:var(--pink);font-weight:600}
+#subjectBox{padding:10px 12px;border-bottom:1px solid var(--line);display:flex;gap:6px}
+#subjectBox input{flex:1;min-width:0;border:1px solid var(--line);padding:6px 10px;font:inherit;border-radius:4px;outline:none}
+#subjectBox input:focus{border-color:var(--ink)}
+#subjectBox button{border:1px solid var(--ink);background:var(--ink);color:#fff;padding:6px 12px;border-radius:4px;cursor:pointer;font:inherit}
+#lessonList{flex:1;overflow-y:auto;padding:8px 6px}
+.lp{padding:9px 12px;border-radius:6px;cursor:pointer;font-size:13.5px;margin-bottom:2px;display:flex;align-items:center;gap:8px}
+.lp:hover{background:#F1F2EE}
+.lp.on{background:#EAEDEF;font-weight:600}
+.lp .st{font-size:11px;flex-shrink:0;width:14px}
+.lp.done{color:var(--mut)}
+.lp.done .st{color:#3FBF7F}
+.lp.today .st{color:var(--pink);font-weight:700}
+.grouplabel{font-size:11px;letter-spacing:.15em;color:var(--mut);margin:10px 10px 4px}
+#main{flex:1;display:flex;flex-direction:column;min-width:0}
+#topbar{padding:14px 24px 10px;border-bottom:1px solid var(--line);background:var(--paper)}
+#topbar .kicker{font-size:11px;letter-spacing:.2em;color:var(--mut)}
+#topbar h1{font-size:20px}
+#view{flex:1;overflow-y:auto;padding:24px 0}
+#chat{max-width:760px;margin:0 auto;padding:0 28px}
+.msg{margin:14px 0;display:flex}
+.msg .bubble{max-width:82%;padding:12px 16px;border-radius:10px;font-size:14.5px;line-height:1.75;white-space:pre-wrap;word-break:break-word}
+.msg.a .bubble{background:#F1F2EE;border:1px solid #E3E7EA}
+.msg.u{justify-content:flex-end}
+.msg.u .bubble{background:var(--usr);border:1px solid #DCE4EE}
+.bubble .mark{display:block;margin-top:10px;font-weight:700;color:#3FBF7F}
+.bubble .mark.partial{color:#8a7a3a}
+.inputbar{border-top:1px solid var(--line);background:var(--paper);padding:16px 28px 20px}
+#chatbox{max-width:760px;margin:0 auto;display:flex;gap:10px}
+#chatbox textarea{flex:1;border:1px solid var(--line);border-radius:8px;padding:10px 14px;font:inherit;resize:none;height:52px;outline:none;background:#fff}
+#chatbox textarea:focus{border-color:var(--ink)}
+#chatbox button{align-self:flex-end;border:1px solid var(--ink);background:var(--ink);color:#fff;padding:10px 22px;border-radius:8px;cursor:pointer;font:inherit}
+.empty{color:var(--mut);text-align:center;margin-top:80px;font-size:14px}
+#sediment{max-width:760px;margin:0 auto;padding:0 28px}
+.counts{display:flex;gap:28px;margin:18px 0}
+.counts .c .n{font-size:30px;font-weight:700}
+.counts .c .l{color:var(--mut);font-size:13px}
+.item{padding:10px 0 10px 14px;border-left:3px solid var(--line);margin:8px 0}
+.item.d3{border-color:var(--ink)}.item.d2{border-color:#5a7a99}.item.d1{border-color:#b8c4d0}
+.item .t{font-weight:600}.item .m{color:var(--mut);font-size:12.5px}
+#graphWrap{height:calc(100vh - 130px);position:relative}
+canvas{width:100%;height:100%;display:block}
+.gLegend{position:absolute;top:12px;left:16px;font-size:12.5px;color:var(--mut);background:rgba(255,255,255,.85);padding:6px 12px;border:1px solid var(--line);border-radius:6px}
+.hidden{display:none!important}
+#toast{position:fixed;left:50%;bottom:120px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:8px 22px;font-size:14px;display:none;border-radius:6px;z-index:9}
 a{color:var(--ink)}
 .mut{color:var(--mut);font-size:13px}
-#toast{position:fixed;left:50%;bottom:36px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:8px 22px;font-size:14px;display:none}
 </style>
 </head>
 <body>
-<div class="kicker">OUTPOST 2.0 · 全托管学习机</div>
-<h1 id="greet">今天丢来的</h1>
-<div class="date" id="date"></div>
-
-<div class="sec">
-  <div class="sec-head"><span class="num">01</span><h2>主推进</h2><span class="sub" id="shape"></span></div>
-  <div id="main"></div>
-</div>
-
-<div class="sec">
-  <div class="sec-head"><span class="num">02</span><h2>侧链复习</h2><span class="sub">≤10 分钟 · 到期即补</span></div>
-  <div id="reviews"></div>
-</div>
-
-<div class="sec">
-  <div class="sec-head"><span class="num">03</span><h2>可选加餐</h2><span class="sub">不做也完全合法</span></div>
-  <div id="extras"></div>
-</div>
-
-<div class="sec">
-  <div class="sec-head"><span class="num">04</span><h2>收工</h2></div>
-  <div class="mood">
-    <button onclick="mood('还想来',true)">完成 · 还想来</button>
-    <button onclick="mood('今天够了',true)">完成 · 今天够了</button>
-    <button onclick="mood('',false)">今天没完成</button>
+<div id="side">
+  <div class="logo"><div class="kicker">OUTPOST 2.0</div><b>全托管学习机</b></div>
+  <div class="tabs">
+    <div class="tab on" data-v="learn">学习</div>
+    <div class="tab" data-v="sediment">沉淀</div>
+    <div class="tab" data-v="graph">关联</div>
   </div>
-  <div class="note" id="note"></div>
-  <div class="grad" id="grad"></div>
+  <div id="subjectBox">
+    <input id="subjectInput" placeholder="输入想学的科目…">
+    <button onclick="addSubject()">开课</button>
+  </div>
+  <div id="lessonList"><div class="empty" style="margin-top:30px">加载中…</div></div>
 </div>
 
-<div class="sec">
-  <div class="sec-head"><span class="num">05</span><h2>履历</h2><span class="sub" id="counts"></span></div>
-  <div id="ledger"></div>
-  <p class="mut" style="margin-top:10px"><a href="/evidence.html">对外证据页 →</a>　<span id="sandboxTip"></span></p>
+<div id="main">
+  <div id="topbar"><div class="kicker">LEARNING · 对话式教学</div><h1 id="lessonTitle">今天丢来的</h1></div>
+  <div id="view">
+    <div id="chatOuter"><div id="chat"></div></div>
+    <div id="sediment" class="hidden"></div>
+    <div id="graphWrap" class="hidden"><div class="gLegend">圆=知识点 · 线=先后关系 · 越深=学得越扎实</div><canvas id="graphCanvas"></canvas></div>
+  </div>
+  <div class="inputbar">
+    <div id="chatbox">
+      <textarea id="input" placeholder="回答检查题，或问点什么…（Enter 发送）"></textarea>
+      <button onclick="send()">发送</button>
+    </div>
+  </div>
 </div>
-
 <div id="toast"></div>
+
 <script>
 const $=id=>document.getElementById(id);
-const toast=m=>{const t=$('toast');t.textContent=m;t.style.display='block';setTimeout(()=>t.style.display='none',2200)};
+const toast=m=>{const t=$('toast');t.textContent=m;t.style.display='block';setTimeout(()=>t.style.display='none',2400)};
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let STATE=null, CURRENT=null, LASTVERDICT=false;
 
-async function api(path,body){const r=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});return r.json()}
+async function api(path,body){const r=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});const j=await r.json().catch(()=>({}));if(r.status>=400)throw new Error((j.error||j.Error||'请求失败'));return j}
 
-async function refresh(){await api('/api/refresh');load()}
-
-async function completeMain(title){
-  await api('/api/complete-main',{title});
-  document.querySelectorAll('#main .task').forEach(el=>{if(el.dataset.t===title)el.classList.add('done')});
-  toast('已消化：'+title);
+function fmtContent(raw){
+  let html=esc(raw);
+  html=html.replace(/\n?\[PASS:partial\]\s*/g,'\n<span class="mark partial">◐ 本节收尾（半懂也记录在案，继续往下走）</span>\n');
+  html=html.replace(/\n?\[PASS\]\s*/g,'\n<span class="mark">✓ 本节收尾通过</span>\n');
+  return html;
 }
-async function mood(mood,completed){
-  await api('/api/mood',{mood,completed});
-  toast(mood?('已记录：'+mood):'已记录。明天见。');
+function switchTab(v){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.v===v));
+  $('chatOuter').classList.toggle('hidden',v!=='learn');
+  $('sediment').classList.toggle('hidden',v!=='sediment');
+  $('graphWrap').classList.toggle('hidden',v!=='graph');
+  if(v==='sediment')renderSediment();
+  if(v==='graph')renderGraph();
+  if(v==='learn'){$('view').scrollTop=$('view').scrollHeight}
+}
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>switchTab(t.dataset.v));
+
+async function addSubject(){
+  const name=$('subjectInput').value.trim();
+  if(!name){toast('先输入科目名');return}
+  toast('AI 正在把「'+name+'」拆成课程…（约 20 秒）');
+  $('subjectInput').value='';
+  try{ await api('/api/subject',{name}); CURRENT=null; await loadState(); toast('课程就绪——第一个知识点已丢给你'); }
+  catch(e){ toast('失败：'+e.message) }
 }
 
-async function load(){
-  const st=await api('/api/state');
-  $('date').textContent=new Date().toLocaleDateString('zh-CN',{year:'numeric',month:'long',day:'numeric',weekday:'long'});
-  const p=st.plan||{};
-  $('shape').textContent=(p.Note||'').split('|')[0];
-  $('note').textContent=p.Note||'';
-  $('greet').textContent='今天丢来的';
-  // 主推进
-  const main=$('main');main.innerHTML='';
-  (p.Main||[]).forEach((m,i)=>{
-    const el=document.createElement('div');el.className='task';el.dataset.t=m.Title;
-    el.innerHTML=`<span class="no">0${i+1}</span><div class="body"><div class="t">${esc(m.Title)}</div><div class="m">${esc(m.DeliverableID)} · ${m.Minutes} 分钟</div>
-    <button style="margin-top:6px" onclick="completeMain('${esc(m.Title)}')">完成</button></div>`;
-    if((st.done.main||[]).includes(m.Title))el.classList.add('done');
-    main.appendChild(el);
-  });
-  if(!(p.Main||[]).length)main.innerHTML='<div class="mut">今天不推进——只保养。这是合法答案。</div>';
-  // 复习
-  const rv=$('reviews');rv.innerHTML='';
-  (p.Reviews||[]).forEach(c=>{
-    const el=document.createElement('div');el.className='task';
-    el.innerHTML=`<span class="no">·</span><div class="body"><div class="t">${esc(c.Title)}</div><div class="m">到期 ${esc((c.Due||'').slice(0,10))}</div>
-    <button style="margin-top:6px" onclick="this.closest('.task').classList.add('done');api('/api/complete-review',{id:'${esc(c.ID)}'})">复习完</button></div>`;
-    if((st.done.reviews||[]).includes(c.ID))el.classList.add('done');
-    rv.appendChild(el);
-  });
-  if(!(p.Reviews||[]).length)rv.innerHTML='<div class="mut">今日无到期复习</div>';
-  // 加餐
-  const ex=$('extras');ex.innerHTML='';
-  (p.Extras||[]).forEach(e=>{
-    ex.innerHTML+=`<div class="task"><span class="no">+</span><div class="body"><div class="t">${esc(e.Title)}</div><div class="m">加餐 · ${esc(e.Domain)}</div></div></div>`;
-  });
-  if(!(p.Extras||[]).length)ex.innerHTML='<div class="mut">今天没有加餐</div>';
-  // 履历
-  $('counts').textContent=`做过 ${st.counts.done} · 用过 ${st.counts.used} · 知道 ${st.counts.known}`;
-  const lg=$('ledger');lg.innerHTML='';
-  (st.ledger||[]).slice(0,8).forEach(k=>{
-    lg.innerHTML+=`<div class="task"><div class="body"><div class="t">${esc(k.title)}</div><div class="m">${k.depth===3?'做过':k.depth===2?'用过':'知道'} · 首学 ${esc((k.firstAt||'').slice(0,10))} · 来源 ${esc(k.source)}</div></div></div>`;
-  });
-  if(!(st.ledger||[]).length)lg.innerHTML='<div class="mut">履历还是空的——修一个沙盒、完成一片主推进，就会长出第一条。</div>';
-  $('grad').textContent='毕业状态：'+(st.graduation?st.graduation.state+' — '+st.graduation.reason:'');
-  $('sandboxTip').innerHTML='break-fix 沙盒走命令行：<code>outpost2 sandbox -case bc-mcp-typo -dir 工作区</code>';
+async function openLesson(nodeId){
+  CURRENT=nodeId; LASTVERDICT=false;
+  renderSidebar();
+  try{
+    const r=await api('/api/tutor/open',{nodeId});
+    $('lessonTitle').textContent=r.session.title;
+    renderChat(r.session.messages);
+    LASTVERDICT=endsClosed(r.session);
+    if(r.isNew)toast('新知识点丢给你了——跟着助教走');
+  }catch(e){ $('lessonTitle').textContent='暂时打不开'; toast('失败：'+e.message) }
 }
-window.completeMain=completeMain;window.mood=mood;window.api=api;
-load();
+function endsClosed(s){return (s.messages||[]).some(m=>m.role==='assistant'&&/\[PASS/.test(m.content))}
+
+function renderChat(msgs){
+  const c=$('chat');c.innerHTML='';
+  (msgs||[]).forEach(m=>{c.insertAdjacentHTML('beforeend','<div class="msg '+(m.role==='assistant'?'a':'u')+'"><div class="bubble">'+fmtContent(m.content)+'</div></div>')});
+  $('view').scrollTop=$('view').scrollHeight;
+}
+
+async function send(){
+  if(!CURRENT){toast('先在左侧选一个知识点');return}
+  if(LASTVERDICT){toast('这一节已收尾——左侧选下一个知识点');return}
+  const text=$('input').value.trim();if(!text)return;
+  $('input').value='';
+  const c=$('chat');c.insertAdjacentHTML('beforeend','<div class="msg u"><div class="bubble">'+esc(text)+'</div></div>');
+  const pending=c.insertAdjacentHTML('beforeend','<div class="msg a"><div class="bubble" id="tmpwait">…</div></div>');
+  $('view').scrollTop=$('view').scrollHeight;
+  try{
+    const r=await api('/api/tutor/send',{nodeId:CURRENT,text});
+    const tmp=$('tmpwait');if(tmp)tmp.closest('.msg').remove();
+    c.insertAdjacentHTML('beforeend','<div class="msg a"><div class="bubble">'+fmtContent(r.reply)+'</div></div>');
+    $('view').scrollTop=$('view').scrollHeight;
+    if(r.verdict){LASTVERDICT=true;await loadState();renderSidebar();toast(r.verdict==='partial'?'本节收尾（半懂记录在案）——下一节来了':'本节收尾——履历已记「知道」，下一节来了')}
+  }catch(e){const tmp=$('tmpwait');if(tmp)tmp.closest('.msg').remove();toast('失败：'+e.message)}
+}
+
+async function loadState(){
+  STATE=await api('/api/state');
+  renderSidebar();
+  if(!CURRENT&&STATE.today)openLesson(STATE.today.id);
+}
+function renderSidebar(){
+  const list=$('lessonList');list.innerHTML='';
+  if(!STATE.curriculum||!(STATE.curriculum.lessons||[]).length){
+    list.innerHTML='<div class="empty" style="margin-top:24px;padding:0 10px">输入想学的科目，<br>AI 会拆成课程，每天教一个知识点</div>';return;
+  }
+  let lastSub='';
+  (STATE.curriculum.lessons||[]).forEach(l=>{
+    if(l.subject!==lastSub){lastSub=l.subject;list.innerHTML+='<div class="grouplabel">'+esc(l.subject).toUpperCase()+'</div>'}
+    const isToday=STATE.today&&STATE.today.id===l.id&&l.status!=='done';
+    const el=document.createElement('div');
+    el.className='lp'+(l.status==='done'?' done':'')+(isToday?' today':'')+(CURRENT===l.id?' on':'');
+    el.innerHTML='<span class="st">'+(l.status==='done'?'✓':(isToday?'今':'·'))+'</span><span>'+esc(l.title)+'</span>';
+    el.onclick=()=>openLesson(l.id);
+    list.appendChild(el);
+  });
+  $('lessonTitle').textContent=STATE.today?('今天丢来的：'+STATE.today.title):'学完了——给我一个新科目';
+}
+function renderSediment(){
+  const s=$('sediment');const st=STATE;if(!st)return;
+  let html='<h1 style="font-size:24px;margin:20px 0">已经学会的</h1><div class="counts"><div class="c"><div class="n">'+st.counts.known+'</div><div class="l">知道</div></div><div class="c"><div class="n">'+st.counts.used+'</div><div class="l">用过</div></div><div class="c"><div class="n">'+st.counts.done+'</div><div class="l">做过</div></div></div>';
+  (st.ledger||[]).forEach(k=>{
+    html+='<div class="item d'+k.depth+'"><div class="t">'+esc(k.title)+'</div><div class="m">'+(k.depth===3?'做过':k.depth===2?'用过':'知道')+' · 首学 '+esc((k.firstAt||'').slice(0,10))+' · 来源 '+esc(k.source)+'</div></div>';
+  });
+  if(!(st.ledger||[]).length)html+='<div class="mut">履历还是空的。完成第一节的检查题，这里就长出第一条。</div>';
+  html+='<div style="margin-top:24px"><a href="/evidence.html" target="_blank">对外证据页 →</a></div>';
+  s.innerHTML=html;
+}
+
+/* ---------- 关联图：力导向 ---------- */
+async function renderGraph(){
+  const g=await api('/api/graph');
+  const nodes=(g.nodes||[]).map(n=>({...n,x:0,y:0}));
+  const edges=g.edges||[];
+  nodes.forEach((n,i)=>{n.x=480+Math.cos(i*1.7)*200+((i*37)%60-30);n.y=320+Math.sin(i*2.3)*150+((i*53)%50-25)});
+  for(let it=0;it<200;it++){
+    for(let i=0;i<nodes.length;i++)for(let j=i+1;j<nodes.length;j++){
+      const dx=nodes[j].x-nodes[i].x,dy=nodes[j].y-nodes[i].y;const d=Math.max(40,Math.hypot(dx,dy));
+      const f=2800/d;const ux=dx/d,uy=dy/d;
+      nodes[i].x-=ux*f;nodes[i].y-=uy*f;nodes[j].x+=ux*f;nodes[j].y+=uy*f;
+    }
+    edges.forEach(e=>{
+      const a=nodes.find(n=>n.id===e.from),b=nodes.find(n=>n.id===e.to);if(!a||!b)return;
+      const dx=b.x-a.x,dy=b.y-a.y;const d=Math.max(1,Math.hypot(dx,dy));const f=(d-140)*0.012;
+      a.x+=dx*f;a.y+=dy*f;b.x-=dx*f;b.y-=dy*f;
+    });
+    nodes.forEach(n=>{n.x+=(640-n.x)*0.004;n.y+=(320-n.y)*0.004});
+  }
+  requestAnimationFrame(()=>{
+    const cv=$('graphCanvas');if(!cv.clientWidth)return;
+    const dpr=window.devicePixelRatio||1;
+    cv.width=cv.clientWidth*dpr;cv.height=cv.clientHeight*dpr;
+    const ctx=cv.getContext('2d');ctx.scale(dpr,dpr);
+    ctx.clearRect(0,0,cv.clientWidth,cv.clientHeight);
+    const cx=x=>Math.max(36,Math.min(cv.clientWidth-36,x));
+    const cy=y=>Math.max(36,Math.min(cv.clientHeight-56,y));
+    edges.forEach(e=>{
+      const a=nodes.find(n=>n.id===e.from),b=nodes.find(n=>n.id===e.to);if(!a||!b)return;
+      ctx.strokeStyle='#C9D1D9';ctx.lineWidth=1.2;ctx.beginPath();
+      ctx.moveTo(cx(a.x),cy(a.y));ctx.lineTo(cx(b.x),cy(b.y));ctx.stroke();
+    });
+    nodes.forEach(n=>{
+      const x=cx(n.x),y=cy(n.y);
+      ctx.beginPath();ctx.arc(x,y,16,0,7);
+      ctx.fillStyle=n.depth>=3?'#101B29':(n.depth===2?'#54749B':'#B7C4D2');
+      ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
+      ctx.fillStyle='#101B29';ctx.font='12px system-ui';ctx.textAlign='center';
+      const t=String(n.title||'');ctx.fillText(t.length>9?t.slice(0,9)+'…':t,x,y+32);
+    });
+  });
+}
+
+/* 启动 */
+$('input').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}});
+loadState();
+window.send=send;window.addSubject=addSubject;window.openLesson=openLesson;window.mood=moodStub;
+function moodStub(){}
 </script>
 </body>
 </html>

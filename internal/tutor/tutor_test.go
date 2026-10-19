@@ -1,0 +1,133 @@
+package tutor
+
+import (
+	"os"
+	"strings"
+	"testing"
+
+	"outpost2/internal/llm"
+)
+
+// mockClient 确定性 LLM：replies[0]=课程分解 JSON（ChatJSON 用），此后按调用次序轮转。
+type mockClient struct{ replies []string; n int }
+
+func (m *mockClient) Chat(system string, msgs []llm.Message) (string, error) {
+	m.n++
+	if m.n < len(m.replies) {
+		return m.replies[m.n], nil
+	}
+	return m.replies[len(m.replies)-1], nil
+}
+func (m *mockClient) ChatJSON(system string, msgs []llm.Message) (string, error) {
+	return m.replies[0], nil
+}
+
+func TestSubjectDecomposeAndFlow(t *testing.T) {
+	dir := t.TempDir()
+	mc := &mockClient{replies: []string{
+		`{"nodes":[{"title":"映射的定义","brief":"能说出映射与函数的关系"},{"title":"单射与满射","brief":"能判别两类映射"},{"title":"复合映射","brief":"能计算 g∘f"}]}`,
+		"开场讲解+检查题：映射和函数什么关系？",
+		"答对了！加深一下：类型论里的映射呢？\n[PASS]",
+	}}
+	tu := &Tutor{Dir: dir, Client: mc}
+
+	cur, err := tu.StartSubject("映射")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cur.Lessons) != 3 {
+		t.Fatalf("应分解出 3 个知识点: %d", len(cur.Lessons))
+	}
+	if cur.Lessons[0].Status != "active" {
+		t.Fatal("第一个应为 active")
+	}
+	cur2, _ := tu.StartSubject("映射")
+	if len(cur2.Lessons) != 3 {
+		t.Fatal("同科目应幂等")
+	}
+	today := tu.TodayLesson()
+	if today.ID != cur.Lessons[0].ID {
+		t.Fatalf("今日知识点错误: %+v", today)
+	}
+	s, isNew, err := tu.StartOrResume(*today)
+	if err != nil || !isNew {
+		t.Fatalf("开场失败: %v isNew=%v", err, isNew)
+	}
+	if len(s.Messages) != 2 {
+		t.Fatalf("开场应 2 条消息: %d", len(s.Messages))
+	}
+	v, err := tu.Send(*today, "函数是特殊的映射：定义域和陪域都是数集")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Kind != "pass" {
+		t.Fatalf("应判定 pass: %+v", v)
+	}
+	if !strings.Contains(v.Reply, "[PASS]") {
+		t.Fatal("回复应含 [PASS] 标记")
+	}
+	tu.MarkLessonDone(today.ID)
+	cur3 := tu.Curriculum()
+	if cur3.Lessons[0].Status != "done" {
+		t.Fatal("课程状态应 done")
+	}
+	if next := tu.TodayLesson(); next == nil || next.ID == today.ID {
+		t.Fatalf("今日应推进: %+v", next)
+	}
+	v2, _ := tu.Send(*today, "再讲讲？")
+	if v2.Kind != "pass" || !strings.Contains(v2.Reply, "收尾") {
+		t.Fatalf("已收尾会话应温和拒绝: %+v", v2)
+	}
+}
+
+// 答错第一次不给 [PASS]（mock：第一次追问，第二次才 PASS）。
+func TestRetryBeforePass(t *testing.T) {
+	dir := t.TempDir()
+	mc := &mockClient{replies: []string{
+		`{"nodes":[{"title":"A","brief":"b"}]}`,
+		"开场+检查题",
+		"不对，误区在……再试一次？", // 第 1 答 → 追问
+		"这次对了\n[PASS]",           // 第 2 答 → PASS
+	}}
+	tu := &Tutor{Dir: dir, Client: mc}
+	cur, _ := tu.StartSubject("科目Y")
+	lesson := cur.Lessons[0]
+	if _, _, err := tu.StartOrResume(lesson); err != nil {
+		t.Fatal(err)
+	}
+	v1, _ := tu.Send(lesson, "乱答一")
+	if v1.Kind != "" {
+		t.Fatalf("第一次应继续对话不判定: %+v", v1)
+	}
+	if s := tu.Load(lesson.ID); len(s.Messages) != 4 {
+		t.Fatalf("追问后应 4 条消息: %d", len(s.Messages))
+	}
+	v2, _ := tu.Send(lesson, "答对二")
+	if v2.Kind != "pass" {
+		t.Fatalf("第二次应 pass: %+v", v2)
+	}
+}
+
+// 会话跨天持久化（重启恢复）。
+func TestSessionPersistence(t *testing.T) {
+	dir := t.TempDir()
+	mc := &mockClient{replies: []string{
+		`{"nodes":[{"title":"A","brief":"b"}]}`,
+		"开场",
+	}}
+	tu := &Tutor{Dir: dir, Client: mc}
+	cur, _ := tu.StartSubject("科目X")
+	lesson := cur.Lessons[0]
+	if _, _, err := tu.StartOrResume(lesson); err != nil {
+		t.Fatal(err)
+	}
+	loaded := tu.Load(lesson.ID)
+	if loaded == nil || len(loaded.Messages) != 2 {
+		t.Fatalf("会话应持久化: %+v", loaded)
+	}
+	tu2 := &Tutor{Dir: dir, Client: mc}
+	if l := tu2.Load(lesson.ID); l == nil || len(l.Messages) != 2 {
+		t.Fatal("重启后应恢复会话")
+	}
+	_ = os.RemoveAll(dir)
+}
