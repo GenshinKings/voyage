@@ -157,6 +157,26 @@ func energyFor(shape string) scheduler.Energy {
 	return scheduler.EnergyNormal
 }
 
+// sessionDigest 助教实际讲过的内容摘要——练习题只能考讲过的东西。
+func sessionDigest(s *tutor.Session) string {
+	var b strings.Builder
+	for _, m := range s.Messages {
+		if m.Role != "assistant" {
+			continue
+		}
+		b.WriteString(m.Content)
+		b.WriteString(" ")
+		if b.Len() > 400 {
+			break
+		}
+	}
+	out := strings.TrimSpace(b.String())
+	if len(out) > 400 {
+		out = out[:400] + "…"
+	}
+	return out
+}
+
 // ResolveShapeCurrent 当前策略（v1：bandit 后验从 state 持久化恢复）。
 func ResolveShapeCurrent(s *Server, now time.Time) string {
 	arms := []string{"standard", "sprint", "maintain"}
@@ -361,10 +381,11 @@ func (s *Server) Handlers() http.Handler {
 		var topics []string
 		if s.Tutor != nil {
 			for _, l := range s.Tutor.Curriculum().Lessons {
-				// 只从和助教聊天过程中真正学过的知识点出题，不是整个课程大纲
-				if s.Tutor.Load(l.ID) != nil {
-					topics = append(topics, l.Subject+" / "+l.Title)
+				sess := s.Tutor.Load(l.ID)
+				if sess == nil {
+					continue // 只从和助教聊天过程中真正学过的知识点出题
 				}
+				topics = append(topics, l.Subject+" / "+l.Title+"\n  课上讲了："+sessionDigest(sess))
 			}
 		}
 		if len(topics) == 0 {

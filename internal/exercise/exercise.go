@@ -39,9 +39,10 @@ func (e *Engine) Generate(topics []string) ([]Exercise, error) {
 	if len(topics) == 0 {
 		return nil, fmt.Errorf("还没有可出题的知识点——先开课")
 	}
-	system := `你是实操练习出题助教。根据学习者正在学的知识点，出 3 道实操练习题：动手算、动手写一小段代码或命令、或真实场景决策——不要背诵默写题。
+	system := `你是实操练习出题助教。下面给出学习者正在学的知识点，以及每个知识点「课上实际讲过的内容摘要」。
+只出能考这些讲过的内容的题——对话里没教到的概念一律不碰。出 3 道实操练习题：动手算、动手写一小段代码或命令、或真实场景决策——不要背诵默写题。
 输出 JSON：{"exercises":[{"title":"不超过12个字","topic":"对应知识点","problem":"完整题面：任务+已知条件+要求产出，不要包含答案"}]}`
-	raw, err := e.Client.ChatJSON(system, []llm.Message{{Role: "user", Content: "正在学的知识点：\n" + strings.Join(topics, "\n")}})
+	raw, err := e.Client.ChatJSON(system, []llm.Message{{Role: "user", Content: "正在学的知识点与课上讲过的内容：\n" + strings.Join(topics, "\n\n")}})
 	if err != nil {
 		return nil, err
 	}
