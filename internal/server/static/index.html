@@ -79,7 +79,7 @@ a{color:var(--ink)}
     <div class="sbtn" data-v="graph">◈ 关联</div>
   </div>
   <div id="subjectBox">
-    <input id="subjectInput" placeholder="想学的科目…">
+    <input id="subjectInput" placeholder="想学什么？口语也行，如拍照">
     <button onclick="addSubject()">开课</button>
   </div>
   <div class="grouplabel" style="padding:8px 12px 0">今天的练习</div>
@@ -288,9 +288,20 @@ function openExercise(id){
 function renderSediment(){
   const s=$('sediment');const st=STATE;if(!st)return;
   let html='<div class="counts"><div class="c"><div class="n">'+st.counts.known+'</div><div class="l">知道</div></div><div class="c"><div class="n">'+st.counts.used+'</div><div class="l">用过</div></div><div class="c"><div class="n">'+st.counts.done+'</div><div class="l">做过</div></div></div>';
+  // 按学习科目分组（来源 tutor:科目 → 科目名；practice → 实操练习）
+  const groups={};const order=[];
   (st.ledger||[]).forEach(k=>{
-    const clickable=k.id&&(st.sessions||{})[k.id];
-    html+='<div class="item d'+k.depth+(clickable?' clickable':'')+'"'+(clickable?' onclick=\'jumpLesson("'+k.id+'")\' title="看这段对话的完整历史"':'')+'><div class="t">'+esc(k.title)+'</div><div class="m">'+(k.depth===3?'做过':k.depth===2?'用过':'知道')+' · 首学 '+esc((k.firstAt||'').slice(0,10))+' · 来源 '+esc(k.source)+(clickable?' · 点击看完整对话':'')+'</div></div>';
+    const src=k.source||'';
+    const g=(src.indexOf('tutor:')===0)?src.slice(6):'实操练习';
+    if(!groups[g]){groups[g]=[];order.push(g)}
+    groups[g].push(k);
+  });
+  order.forEach(g=>{
+    html+='<div class="grouplabel" style="margin:14px 0 2px">'+esc(g)+'</div>';
+    groups[g].forEach(k=>{
+      const clickable=k.id&&(st.sessions||{})[k.id];
+      html+='<div class="item d'+k.depth+(clickable?' clickable':'')+'"'+(clickable?' onclick=\'jumpLesson("'+k.id+'")\' title="看这段对话的完整历史"':'')+'><div class="t">'+esc(k.title)+'</div><div class="m">'+(k.depth===3?'做过':k.depth===2?'用过':'知道')+' · 首学 '+esc((k.firstAt||'').slice(0,10))+(clickable?' · 点击看完整对话':'')+'</div></div>';
+    });
   });
   if(!(st.ledger||[]).length)html+='<div class="mut">履历还是空的。完成第一节的检查题，这里就长出第一条。</div>';
   html+='<div style="margin-top:24px"><a href="/evidence.html" target="_blank">对外证据页 →</a></div>';

@@ -9,7 +9,12 @@ import (
 )
 
 // mockClient 确定性 LLM：replies[0]=课程分解 JSON（ChatJSON 用），此后按调用次序轮转。
-type mockClient struct{ replies []string; n int }
+// normOut=科目归一化应答（不设则 echo 输入→归一化解析失败回退原名）。
+type mockClient struct {
+	replies []string
+	n       int
+	normOut string
+}
 
 func (m *mockClient) Chat(system string, msgs []llm.Message) (string, error) {
 	m.n++
@@ -19,6 +24,12 @@ func (m *mockClient) Chat(system string, msgs []llm.Message) (string, error) {
 	return m.replies[len(m.replies)-1], nil
 }
 func (m *mockClient) ChatJSON(system string, msgs []llm.Message) (string, error) {
+	if strings.Contains(system, "归一化") {
+		if m.normOut != "" {
+			return m.normOut, nil
+		}
+		return msgs[len(msgs)-1].Content, nil
+	}
 	return m.replies[0], nil
 }
 
@@ -130,4 +141,70 @@ func TestSessionPersistence(t *testing.T) {
 		t.Fatal("重启后应恢复会话")
 	}
 	_ = os.RemoveAll(dir)
+}
+
+// 科目归一化：口语→规范学科；单科目在学：开新课=替换旧科目。
+func TestStartSubjectNormalizeAndReplace(t *testing.T) {
+	dir := t.TempDir()
+	mc := &mockClient{
+		normOut: `{"subject":"摄影"}`,
+		replies: []string{
+			`{"nodes":[{"title":"构图","brief":"能构图"},{"title":"用光","brief":"能用自然光"}]}`,
+		},
+	}
+	tu := &Tutor{Dir: dir, Client: mc}
+	cur, err := tu.StartSubject("拍照")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cur.Subjects) != 1 || cur.Subjects[0] != "摄影" {
+		t.Fatalf("拍照应归一化为单科目摄影: %v", cur.Subjects)
+	}
+	if len(cur.Lessons) != 2 || cur.Lessons[0].Subject != "摄影" {
+		t.Fatalf("摄影课程应替换式建立: %+v", cur.Lessons)
+	}
+	// 再开「摄影」→ 归一化后同名 → 幂等
+	mc2 := &mockClient{normOut: `{"subject":"摄影"}`}
+	cur2, err := (&Tutor{Dir: dir, Client: mc2}).StartSubject("摄影")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cur2.Lessons) != 2 {
+		t.Fatalf("同名科目应幂等: %d", len(cur2.Lessons))
+	}
+	// 换科目=替换：课程表只剩新科目。替换前先给旧科目开会话（验证会话文件保留）
+	if _, _, err := tu.StartOrResume(cur.Lessons[0]); err != nil {
+		t.Fatal(err)
+	}
+	mc3 := &mockClient{
+		normOut: `{"subject":"烹饪"}`,
+		replies: []string{`{"nodes":[{"title":"刀工","brief":"会切"}]}`},
+	}
+	cur3, err := (&Tutor{Dir: dir, Client: mc3}).StartSubject("做饭")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cur3.Subjects) != 1 || cur3.Subjects[0] != "烹饪" {
+		t.Fatalf("替换后应只剩烹饪: %v", cur3.Subjects)
+	}
+	if len(cur3.Lessons) != 1 || cur3.Lessons[0].Subject != "烹饪" {
+		t.Fatalf("课程表应只剩新科目: %+v", cur3.Lessons)
+	}
+	// 旧科目会话文件保留（历史可从沉淀回看）
+	if tu.Load(cur.Lessons[0].ID) == nil {
+		t.Fatal("替换后旧科目会话文件应保留")
+	}
+}
+
+// 归一化失败回退原名。
+func TestNormalizeFallback(t *testing.T) {
+	mc := &mockClient{normOut: `这不是JSON`}
+	tu := &Tutor{Dir: t.TempDir(), Client: mc}
+	if got := tu.normalizeSubject("摄影"); got != "摄影" {
+		t.Fatalf("解析失败应回退原名: %s", got)
+	}
+	tu2 := &Tutor{Dir: t.TempDir()}
+	if got := tu2.normalizeSubject("拍照"); got != "拍照" {
+		t.Fatalf("无 LLM 应回退原名: %s", got)
+	}
 }

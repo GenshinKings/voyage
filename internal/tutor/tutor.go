@@ -64,16 +64,47 @@ const teachSystem = `你是前哨 2.0 的 AI 助教，正在一对一把一个�
 
 // ---------- 课程 ----------
 
-// StartSubject 用户给科目 → LLM 分解成 4-8 个有序知识点。已存在同名科目则直接返回（幂等）。
+// normalizeSubject 科目名归一化：口语输入映射到规范学科（拍照→摄影）；已是规范名原样返回。
+// LLM 不可用或解析失败时用原名（不阻塞开课）。
+func (t *Tutor) normalizeSubject(name string) string {
+	if t.Client == nil {
+		return name
+	}
+	raw, err := t.Client.ChatJSON(
+		`你是学科名归一化助手。学习者输入的想学内容可能口语化、笼统（如"拍照""修图""炒股"）。
+输出 JSON {"subject":"规范学科名"}：若输入已是规范学科名则原样返回；否则映射到最贴近的通用规范学科（拍照→摄影，修图→图像处理，炒股→投资学）。学科名不超过 8 个字。`,
+		[]llm.Message{{Role: "user", Content: name}})
+	if err != nil {
+		return name
+	}
+	var wrap map[string]json.RawMessage
+	if json.Unmarshal([]byte(raw), &wrap) != nil {
+		return name
+	}
+	for _, k := range []string{"subject", "name"} {
+		if r, ok := wrap[k]; ok {
+			var s string
+			if json.Unmarshal(r, &s) == nil && strings.TrimSpace(s) != "" {
+				return strings.TrimSpace(s)
+			}
+		}
+	}
+	return name
+}
+
+// StartSubject 用户给科目 → 归一化 → LLM 分解成 4-8 个有序知识点。
+// 单科目在学：开新课=替换旧科目（旧会话文件与履历保留，历史仍可从沉淀进入）。
+// 已在学同名科目则直接返回（幂等）。
 func (t *Tutor) StartSubject(name string) (*Curriculum, error) {
+	if t.Client == nil {
+		return nil, fmt.Errorf("LLM 未配置")
+	}
+	name = t.normalizeSubject(name)
 	cur := t.Curriculum()
 	for _, s := range cur.Subjects {
 		if s == name {
 			return cur, nil
 		}
-	}
-	if t.Client == nil {
-		return nil, fmt.Errorf("LLM 未配置")
 	}
 	raw, err := t.Client.ChatJSON(
 		`你是课程设计师。学习者想学一个科目，请把它分解成 4-8 个有序知识点（从基础到进阶）。
@@ -91,18 +122,21 @@ JSON 顶层键必须是 "nodes"。`,
 	if len(lessons) == 0 {
 		return nil, fmt.Errorf("课程分解为空")
 	}
-	cur.Subjects = append(cur.Subjects, name)
+	// 替换式：在学课程只能有一个
+	cur.Subjects = []string{name}
 	base := time.Now().Format("0102") + "-" + sanitize(name)
+	newLessons := make([]Lesson, 0, len(lessons))
 	for i, n := range lessons {
-		cur.Lessons = append(cur.Lessons, Lesson{
+		newLessons = append(newLessons, Lesson{
 			ID:      fmt.Sprintf("%s-%02d", base, i+1),
 			Subject: name,
 			Title:   n.Title,
 			Brief:   n.Brief,
 			Status:  "active",
-			Order:   len(cur.Lessons),
+			Order:   i + 1,
 		})
 	}
+	cur.Lessons = newLessons
 	cur.UpdatedAt = time.Now()
 	t.saveCurriculum(cur)
 	return cur, nil

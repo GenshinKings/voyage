@@ -246,6 +246,14 @@ func (s *Server) Handlers() http.Handler {
 					sessions[l.ID] = sess
 				}
 			}
+			// 换科目后被移出课程表的历史会话：履历里出现过的 id 也打包，沉淀仍可回看
+			for _, p := range s.Ledger.List() {
+				if _, ok := sessions[p.ID]; !ok {
+					if sess := s.Tutor.Load(p.ID); sess != nil {
+						sessions[p.ID] = sess
+					}
+				}
+			}
 		}
 		writeJSON(w, map[string]any{
 			"plan": s.Plan, "done": s.Done, "goals": s.Goals,

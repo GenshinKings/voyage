@@ -1,8 +1,6 @@
 {
   "subjects": [
-    "MCP Protocol Basics",
-    "Fee Bayesian Stats",
-    "线性代数"
+    "MCP Protocol Basics"
   ],
   "lessons": [
     {
@@ -68,135 +66,7 @@
       "brief": "能识别常见错误码并应用权限与输入校验的防护措施。",
       "status": "active",
       "order": 7
-    },
-    {
-      "id": "1019-eeayesiantats-01",
-      "subject": "Fee Bayesian Stats",
-      "title": "贝叶斯思想与先验",
-      "brief": "能用先验分布和似然函数描述不确定性，并说明贝叶斯推断与频率学派的核心差异。",
-      "status": "active",
-      "order": 8
-    },
-    {
-      "id": "1019-eeayesiantats-02",
-      "subject": "Fee Bayesian Stats",
-      "title": "贝叶斯公式",
-      "brief": "能写出贝叶斯公式并用离散或简单连续例子手算后验概率。",
-      "status": "active",
-      "order": 9
-    },
-    {
-      "id": "1019-eeayesiantats-03",
-      "subject": "Fee Bayesian Stats",
-      "title": "共轭先验",
-      "brief": "能识别并利用 Beta-二项、正态-正态等共轭对快速求后验分布。",
-      "status": "active",
-      "order": 10
-    },
-    {
-      "id": "1019-eeayesiantats-04",
-      "subject": "Fee Bayesian Stats",
-      "title": "后验汇总与可信区间",
-      "brief": "能从后验分布计算后验均值、中位数、众数及可信区间并解释其含义。",
-      "status": "active",
-      "order": 11
-    },
-    {
-      "id": "1019-eeayesiantats-05",
-      "subject": "Fee Bayesian Stats",
-      "title": "先验选择",
-      "brief": "能区分信息先验、弱信息先验与无信息先验，并说明先验对后验的影响。",
-      "status": "active",
-      "order": 12
-    },
-    {
-      "id": "1019-eeayesiantats-06",
-      "subject": "Fee Bayesian Stats",
-      "title": "后验预测分布",
-      "brief": "能推导并使用后验预测分布对新观测作概率预测。",
-      "status": "active",
-      "order": 13
-    },
-    {
-      "id": "1019-eeayesiantats-07",
-      "subject": "Fee Bayesian Stats",
-      "title": "MCMC 抽样基础",
-      "brief": "能解释 MCMC 的直觉并用 Metropolis-Hastings 等简单算法从后验抽样。",
-      "status": "active",
-      "order": 14
-    },
-    {
-      "id": "1019-eeayesiantats-08",
-      "subject": "Fee Bayesian Stats",
-      "title": "贝叶斯模型评估",
-      "brief": "能用后验预测检查、贝叶斯因子或信息准则比较并评估贝叶斯模型。",
-      "status": "active",
-      "order": 15
-    },
-    {
-      "id": "1020-subj-01",
-      "subject": "线性代数",
-      "title": "向量与向量空间",
-      "brief": "能判断一组向量是否构成向量空间并解释其几何意义。",
-      "status": "active",
-      "order": 16
-    },
-    {
-      "id": "1020-subj-02",
-      "subject": "线性代数",
-      "title": "矩阵运算与初等变换",
-      "brief": "能熟练进行矩阵加减乘、转置与初等行变换并化简矩阵。",
-      "status": "active",
-      "order": 17
-    },
-    {
-      "id": "1020-subj-03",
-      "subject": "线性代数",
-      "title": "线性方程组求解",
-      "brief": "能用高斯消元法判断方程组解的存在性并求出通解。",
-      "status": "active",
-      "order": 18
-    },
-    {
-      "id": "1020-subj-04",
-      "subject": "线性代数",
-      "title": "行列式与可逆矩阵",
-      "brief": "能计算行列式并据此判断矩阵是否可逆及求逆矩阵。",
-      "status": "active",
-      "order": 19
-    },
-    {
-      "id": "1020-subj-05",
-      "subject": "线性代数",
-      "title": "矩阵的秩与线性相关",
-      "brief": "能通过秩判断向量组的线性相关性并确定极大无关组。",
-      "status": "active",
-      "order": 20
-    },
-    {
-      "id": "1020-subj-06",
-      "subject": "线性代数",
-      "title": "特征值与特征向量",
-      "brief": "能求矩阵的特征值与特征向量并理解其几何意义。",
-      "status": "active",
-      "order": 21
-    },
-    {
-      "id": "1020-subj-07",
-      "subject": "线性代数",
-      "title": "矩阵对角化",
-      "brief": "能判断矩阵是否可对角化并完成对角化分解。",
-      "status": "active",
-      "order": 22
-    },
-    {
-      "id": "1020-subj-08",
-      "subject": "线性代数",
-      "title": "内积与正交变换",
-      "brief": "能计算内积、判定正交性并构造正交矩阵。",
-      "status": "active",
-      "order": 23
     }
   ],
-  "updatedAt": "2026-10-20T01:24:09.0881588+08:00"
+  "updatedAt": "2026-10-20T01:39:23.0872999+08:00"
 }
