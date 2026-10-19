@@ -19,6 +19,7 @@ import (
 	"outpost2/internal/ability"
 	"outpost2/internal/bandit"
 	"outpost2/internal/evidence"
+	"outpost2/internal/exercise"
 	"outpost2/internal/graduation"
 	"outpost2/internal/llm"
 	"outpost2/internal/sandbox"
@@ -72,14 +73,16 @@ type Completed struct {
 
 // Server 应用壳。
 type Server struct {
-	Dir     string               `json:"dir"`
-	Goals   []Goal               `json:"goals"`
-	Plan    *scheduler.TodayPlan `json:"plan,omitempty"`
-	Done    Completed            `json:"done"`
-	Ledger  *evidence.Ledger     `json:"ledger"`
-	Bandit  *bandit.Bandit       `json:"bandit"`
-	Ability *ability.Tracker     `json:"ability"`
-	Tutor   *tutor.Tutor         `json:"-"`
+	Dir       string               `json:"dir"`
+	Goals     []Goal               `json:"goals"`
+	Plan      *scheduler.TodayPlan `json:"plan,omitempty"`
+	Done      Completed            `json:"done"`
+	Ledger    *evidence.Ledger     `json:"ledger"`
+	Bandit    *bandit.Bandit       `json:"bandit"`
+	Ability   *ability.Tracker     `json:"ability"`
+	Exercises []exercise.Exercise  `json:"exercises"` // 今天的实操练习（助教按实时进度出）
+	Tutor     *tutor.Tutor         `json:"-"`
+	Exer      *exercise.Engine     `json:"-"`
 }
 
 func (s *Server) load(path string, v any) bool {
@@ -103,7 +106,9 @@ func (s *Server) save(path string, v any) {
 func NewServer(dir string) *Server {
 	s := &Server{Dir: dir, Ledger: evidence.New(), Bandit: bandit.New(time.Now().UnixNano()), Ability: ability.New()}
 	if cfg, err := llm.LoadConfig(filepath.Join(dir, "llm.json")); err == nil {
-		s.Tutor = &tutor.Tutor{Dir: dir, Client: llm.NewClient(cfg)}
+		client := llm.NewClient(cfg)
+		s.Tutor = &tutor.Tutor{Dir: dir, Client: client}
+		s.Exer = &exercise.Engine{Client: client}
 	}
 	if s.load("state.json", s) {
 		return s
@@ -244,6 +249,7 @@ func (s *Server) Handlers() http.Handler {
 		}
 		writeJSON(w, map[string]any{
 			"plan": s.Plan, "done": s.Done, "goals": s.Goals,
+			"exercises": s.Exercises,
 			"ledger": s.Ledger.List(), "counts": map[string]int{"known": k, "used": u, "done": d},
 			"graduation": map[string]any{"state": string(g), "reason": gReason},
 			"curriculum": curriculum, "today": today, "sessions": sessions,
@@ -331,6 +337,59 @@ func (s *Server) Handlers() http.Handler {
 			verdict = v.Kind
 		}
 		writeJSON(w, map[string]any{"reply": v.Reply, "verdict": verdict})
+	})
+	mux.HandleFunc("/api/exercise/generate", func(w http.ResponseWriter, _ *http.Request) {
+		if len(s.Exercises) > 0 { // 幂等：今天的题已出过
+			writeJSON(w, map[string]any{"exercises": s.Exercises})
+			return
+		}
+		if s.Exer == nil {
+			http.Error(w, "LLM 未配置（outpost2-data/llm.json）", 400)
+			return
+		}
+		var topics []string
+		if s.Tutor != nil {
+			for _, l := range s.Tutor.Curriculum().Lessons {
+				topics = append(topics, l.Subject+" / "+l.Title)
+			}
+		}
+		list, err := s.Exer.Generate(topics)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		s.Exercises = list
+		s.saveState()
+		writeJSON(w, map[string]any{"exercises": s.Exercises})
+	})
+	mux.HandleFunc("/api/exercise/answer", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			ID   string `json:"id"`
+			Text string `json:"text"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		if s.Exer == nil {
+			http.Error(w, "LLM 未配置（outpost2-data/llm.json）", 400)
+			return
+		}
+		for i := range s.Exercises {
+			if s.Exercises[i].ID != req.ID {
+				continue
+			}
+			reply, done, err := s.Exer.Answer(&s.Exercises[i], req.Text)
+			if err != nil {
+				http.Error(w, err.Error(), 500)
+				return
+			}
+			if done { // 实操完成=「用过」级履历
+				s.Ledger.Record(s.Exercises[i].ID, s.Exercises[i].Title, evidence.Used, time.Now(), "practice", "")
+				s.save("ledger.json", s.Ledger)
+			}
+			s.saveState()
+			writeJSON(w, map[string]any{"reply": reply, "verdict": done})
+			return
+		}
+		http.Error(w, "练习不存在", 404)
 	})
 	mux.HandleFunc("/api/graph", func(w http.ResponseWriter, _ *http.Request) {
 		nodes := []map[string]any{}

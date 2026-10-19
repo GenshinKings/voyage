@@ -81,7 +81,7 @@ a{color:var(--ink)}
     <input id="subjectInput" placeholder="想学的科目…">
     <button onclick="addSubject()">开课</button>
   </div>
-  <div class="grouplabel" style="padding:8px 12px 0">今天</div>
+  <div class="grouplabel" style="padding:8px 12px 0">今天的练习</div>
   <div id="lessonList"><div class="empty" style="margin-top:24px;padding:0 10px">加载中…</div></div>
 </div>
 
@@ -115,11 +115,29 @@ function fmtContent(raw){
   html=html.replace(/\[PASS\]/g,'<span class="mark">✓ 本节收尾通过</span>');
   return html;
 }
+let curView='learn';
+function updateChrome(v){
+  // 「跳回今日知识点」只属于沉淀/关联两页；输入框只在学习的教学/练习态
+  const back=(v==='sediment'||v==='graph')&&STATE&&STATE.today;
+  $('backToday').classList.toggle('hidden',!back);
+  const kb=$('kicker');
+  if(v==='sediment'){kb.textContent='SEDIMENT · 已经学会的';$('lessonTitle').textContent='沉淀'}
+  else if(v==='graph'){kb.textContent='GRAPH · 知识地图';$('lessonTitle').textContent='关联'}
+  else if(HIST){kb.textContent='HISTORY · 对话历史'}
+  else if(EXER){kb.textContent='PRACTICE · 实操练习'}
+  else{kb.textContent='LEARNING · 对话式教学'}
+  $('chatbox').style.display=(v==='learn'&&!HIST)?'flex':'none';
+  const dis=!!HIST;$('input').disabled=dis;
+  const b=$('chatbox').querySelector('button');if(b)b.disabled=dis;
+  $('input').placeholder=HIST?'历史对话只读':(EXER?'写下你的解法/算式/代码…':'回答检查题，或问点什么…（Enter 发送）');
+}
 function switchTab(v){
+  curView=v;
   document.querySelectorAll('.sbtn').forEach(t=>t.classList.toggle('on',t.dataset.v===v));
   $('chatOuter').classList.toggle('hidden',v!=='learn');
   $('sediment').classList.toggle('hidden',v!=='sediment');
   $('graphWrap').classList.toggle('hidden',v!=='graph');
+  updateChrome(v);
   if(v==='sediment')renderSediment();
   if(v==='graph')renderGraph();
 }
@@ -179,8 +197,9 @@ function renderChat(msgs){
 }
 
 async function send(){
-  if(HIST){toast('历史对话只读——点右上角回到今天');return}
-  if(!CURRENT){toast('先在左侧选一个知识点');return}
+  if(HIST)return;
+  if(EXER)return sendExercise($('input').value.trim());
+  if(!CURRENT){toast('先回答今天的检查题，或点一道练习');return}
   if(LASTVERDICT){toast('这一节已收尾——左侧选下一个知识点');return}
   const text=$('input').value.trim();if(!text)return;
   $('input').value='';
@@ -196,35 +215,73 @@ async function send(){
   }catch(e){const tmp=$('tmpwait');if(tmp)tmp.closest('.msg').remove();toast('失败：'+e.message)}
 }
 
+// 练习作答：题目对话里发解法 → 助教批改 → [PASS] 记「用过」履历
+async function sendExercise(text){
+  if(!text)return;
+  $('input').value='';
+  const c=$('chat');c.insertAdjacentHTML('beforeend','<div class="msg u"><div class="bubble">'+esc(text)+'</div></div>');
+  c.insertAdjacentHTML('beforeend','<div class="msg a"><div class="bubble" id="tmpwait">批改中…</div></div>');
+  $('view').scrollTop=$('view').scrollHeight;
+  try{
+    const r=await api('/api/exercise/answer',{id:EXER,text});
+    const tmp=$('tmpwait');if(tmp)tmp.closest('.msg').remove();
+    const ex=(STATE.exercises||[]).find(x=>x.id===EXER);
+    if(ex)ex.messages.push({role:'user',content:text},{role:'assistant',content:r.reply});
+    c.insertAdjacentHTML('beforeend','<div class="msg a"><div class="bubble">'+fmtContent(r.reply)+'</div></div>');
+    $('view').scrollTop=$('view').scrollHeight;
+    if(r.verdict){await loadState();toast('这道练习过了——履历记「用过」')}
+  }catch(e){const tmp=$('tmpwait');if(tmp)tmp.closest('.msg').remove();toast('失败：'+e.message)}
+}
+
 async function loadState(){
   STATE=await api('/api/state');
   renderSidebar();
-  if(!CURRENT&&!HIST&&STATE.today){if(!openCached(STATE.today.id))openLesson(STATE.today.id)}
+  if(!CURRENT&&!HIST&&!EXER&&STATE.today){if(!openCached(STATE.today.id))openLesson(STATE.today.id)}
 }
+let GEN=0;
 function renderSidebar(){
   const list=$('lessonList');list.innerHTML='';
   if(!STATE.curriculum||!(STATE.curriculum.lessons||[]).length){
     list.innerHTML='<div class="empty" style="margin-top:24px;padding:0 10px">输入想学的科目，<br>AI 会拆成课程，今天开始教</div>';return;
   }
-  // 只考虑今天要学什么：侧栏只放今天这一封；
-  // 历史对话不属于侧栏——沉淀/关联点进去，占地不大
-  if(!STATE.today){
-    list.innerHTML='<div class="empty" style="margin-top:24px;padding:0 10px">今天没有排课</div>';return;
+  // 侧栏=今天的实操练习（助教按实时进度出，点开一道做）；今日所学在主区，不在侧栏
+  list.innerHTML='<div class="grouplabel" style="padding:8px 12px 0">今天的练习</div>';
+  const ex=STATE.exercises||[];
+  if(!ex.length){
+    list.innerHTML+='<div class="empty" style="margin-top:16px;padding:0 10px">'+(GEN?'助教正在出题…':'等助教出题…')+'</div>';
+    if(!GEN)genExercises();
+    return;
   }
-  const all=STATE.curriculum.lessons||[];
-  const l=all.find(x=>x.id===STATE.today.id);
-  const title=l?l.title:(STATE.today.title||'今日知识点');
-  const sess=(STATE.sessions||{})[STATE.today.id];
-  const fin=!!(sess&&endsClosed(sess));
-  const el=document.createElement('div');
-  el.className='lp today'+(CURRENT===STATE.today.id&&!HIST?' on':'');
-  el.innerHTML='<span class="st">'+(fin?'✓':'今')+'</span><span>'+esc(title)+'</span>';
-  el.onclick=()=>fin?showHistory(STATE.today.id):openLesson(STATE.today.id);
-  list.appendChild(el);
+  ex.forEach(e=>{
+    const el=document.createElement('div');
+    el.className='lp'+(e.status==='done'?' done':'')+(EXER===e.id?' on':'');
+    el.innerHTML='<span class="st">'+(e.status==='done'?'✓':'·')+'</span><span>'+esc(e.title)+'</span>';
+    el.onclick=()=>openExercise(e.id);
+    list.appendChild(el);
+  });
+}
+async function genExercises(){
+  GEN=1;
+  try{
+    const r=await api('/api/exercise/generate',{});
+    STATE.exercises=r.exercises||[];
+  }catch(e){toast('出题失败：'+e.message)}
+  GEN=0;
+  renderSidebar();
+}
+// 练习视图：像历史记录一样的对话排版，点开一道做一道
+function openExercise(id){
+  const e=(STATE.exercises||[]).find(x=>x.id===id);if(!e)return;
+  leaveHistory();
+  EXER=id;CURRENT=null;
+  $('lessonTitle').textContent=e.title;
+  $('kicker').textContent='PRACTICE · 实操练习';
+  renderChat(e.messages);
+  switchTab('learn');
 }
 function renderSediment(){
   const s=$('sediment');const st=STATE;if(!st)return;
-  let html='<h1 style="font-size:24px;margin:20px 0">已经学会的</h1><div class="counts"><div class="c"><div class="n">'+st.counts.known+'</div><div class="l">知道</div></div><div class="c"><div class="n">'+st.counts.used+'</div><div class="l">用过</div></div><div class="c"><div class="n">'+st.counts.done+'</div><div class="l">做过</div></div></div>';
+  let html='<div class="counts"><div class="c"><div class="n">'+st.counts.known+'</div><div class="l">知道</div></div><div class="c"><div class="n">'+st.counts.used+'</div><div class="l">用过</div></div><div class="c"><div class="n">'+st.counts.done+'</div><div class="l">做过</div></div></div>';
   (st.ledger||[]).forEach(k=>{
     const clickable=k.id&&(st.sessions||{})[k.id];
     html+='<div class="item d'+k.depth+(clickable?' clickable':'')+'"'+(clickable?' onclick=\'jumpLesson("'+k.id+'")\' title="看这段对话的完整历史"':'')+'><div class="t">'+esc(k.title)+'</div><div class="m">'+(k.depth===3?'做过':k.depth===2?'用过':'知道')+' · 首学 '+esc((k.firstAt||'').slice(0,10))+' · 来源 '+esc(k.source)+(clickable?' · 点击看完整对话':'')+'</div></div>';
@@ -233,22 +290,11 @@ function renderSediment(){
   html+='<div style="margin-top:24px"><a href="/evidence.html" target="_blank">对外证据页 →</a></div>';
   s.innerHTML=html;
 }
-/* 历史对话：从沉淀/关联进场，只读展示 + 跳回今日按钮 */
+/* 历史对话：从沉淀/关联进场，只读展示 */
 let HIST=null;
-function enterHistory(){
-  HIST=true;if(!CURRENT)CURRENT=null;
-  $('kicker').textContent='HISTORY · 对话历史';
-  $('backToday').classList.remove('hidden');
-  $('input').disabled=true;$('input').placeholder='历史对话只读——点右上角回到今天';
-  const b=$('chatbox').querySelector('button');if(b)b.disabled=true;
-}
-function leaveHistory(){
-  HIST=null;
-  $('kicker').textContent='LEARNING · 对话式教学';
-  $('backToday').classList.add('hidden');
-  $('input').disabled=false;$('input').placeholder='回答检查题，或问点什么…（Enter 发送）';
-  const b=$('chatbox').querySelector('button');if(b)b.disabled=false;
-}
+let EXER=null; // 当前作答中的实操练习 id
+function enterHistory(){HIST=true;updateChrome(curView||'learn')}
+function leaveHistory(){HIST=null;EXER=null;updateChrome(curView||'learn')}
 function backToday(){leaveHistory();if(STATE.today)openLesson(STATE.today.id)}
 function jumpLesson(nodeId){
   const sess=(STATE&&STATE.sessions||{})[nodeId];
@@ -265,8 +311,10 @@ let GNODES=[];
 async function renderGraph(){
   GNODES=[];
   const g=await api('/api/graph');
-  const nodes=(g.nodes||[]).map((n,i)=>({...n,x:0,y:0,idx:i}));
-  const edges=g.edges||[];
+  const learned=(STATE&&STATE.sessions)||{};
+  // 只画真正开始学过的知识点；没学过的不画出来充数
+  const nodes=(g.nodes||[]).filter(n=>learned[n.id]).map((n,i)=>({...n,x:0,y:0,idx:i}));
+  const edges=(g.edges||[]).filter(e=>learned[e.from]&&learned[e.to]);
   // 标准 FR 力导向：合力先累加，位移按退火温度 clamp —— 数学上不可能发散（旧版逐对直接位移曾振荡炸成 NaN）
   const cx=640,cy=320;
   nodes.forEach((n,i)=>{const ang=i/nodes.length*Math.PI*2;n.x=cx+Math.cos(ang)*280;n.y=cy+Math.sin(ang)*185});
@@ -305,6 +353,12 @@ async function renderGraph(){
     cv.width=cv.clientWidth*dpr;cv.height=cv.clientHeight*dpr;
     const ctx=cv.getContext('2d');ctx.scale(dpr,dpr);
     ctx.clearRect(0,0,cv.clientWidth,cv.clientHeight);
+    if(!nodes.length){ // 零学习状态=空地图
+      ctx.fillStyle='#6B7684';ctx.font='14px system-ui';ctx.textAlign='center';
+      ctx.fillText('学完第一个知识点，这里长出你的知识地图',cv.clientWidth/2,cv.clientHeight/2);
+      cv.onclick=null;
+      return;
+    }
     const px=x=>Math.max(36,Math.min(cv.clientWidth-36,x));
     const py=y=>Math.max(36,Math.min(cv.clientHeight-56,y));
     edges.forEach(e=>{
