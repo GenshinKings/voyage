@@ -31,7 +31,9 @@ body{font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif
 .lp.done .st{color:#3FBF7F}
 .lp.today .st{color:var(--pink);font-weight:700}
 #main{flex:1;display:flex;flex-direction:column;min-width:0}
-#topbar{padding:14px 24px 10px;border-bottom:1px solid var(--line);background:var(--paper)}
+#topbar{padding:10px 24px;border-bottom:1px solid var(--line);background:var(--paper);display:flex;justify-content:space-between;align-items:center;gap:12px}
+.backbtn{border:1px solid var(--pink);background:transparent;color:var(--pink);padding:7px 14px;border-radius:6px;cursor:pointer;font:inherit;font-size:13px;white-space:nowrap;flex-shrink:0}
+.backbtn:hover{background:rgba(251,114,153,.08)}
 #topbar .kicker{font-size:11px;letter-spacing:.2em;color:var(--mut)}
 #topbar h1{font-size:20px}
 #view{flex:1;overflow-y:auto;padding:24px 0}
@@ -79,12 +81,12 @@ a{color:var(--ink)}
     <input id="subjectInput" placeholder="想学的科目…">
     <button onclick="addSubject()">开课</button>
   </div>
-  <div class="grouplabel" style="padding:8px 12px 0">会话历史</div>
+  <div class="grouplabel" style="padding:8px 12px 0">今天</div>
   <div id="lessonList"><div class="empty" style="margin-top:24px;padding:0 10px">加载中…</div></div>
 </div>
 
 <div id="main">
-  <div id="topbar"><div class="kicker">LEARNING · 对话式教学</div><h1 id="lessonTitle">今天丢来的</h1></div>
+  <div id="topbar"><div><div class="kicker" id="kicker">LEARNING · 对话式教学</div><h1 id="lessonTitle">今天丢来的</h1></div><button id="backToday" class="backbtn hidden" onclick="backToday()">← 跳回今日知识点</button></div>
   <div id="view">
     <div id="chatOuter"><div id="chat"></div></div>
     <div id="sediment" class="hidden"></div>
@@ -138,6 +140,7 @@ function findLessonMeta(nodeId){
 
 // 本地缓存直开（≤2ms 级）：已有会话不碰网络
 function openCached(nodeId){
+  leaveHistory();
   const sess=(STATE&&STATE.sessions||{})[nodeId];
   if(!sess)return false;
   CURRENT=nodeId;LASTVERDICT=false;
@@ -151,6 +154,7 @@ function openCached(nodeId){
 }
 
 async function openLesson(nodeId){
+  leaveHistory();
   if(openCached(nodeId))return;
   CURRENT=nodeId;LASTVERDICT=false;
   renderSidebar();
@@ -175,6 +179,7 @@ function renderChat(msgs){
 }
 
 async function send(){
+  if(HIST){toast('历史对话只读——点右上角回到今天');return}
   if(!CURRENT){toast('先在左侧选一个知识点');return}
   if(LASTVERDICT){toast('这一节已收尾——左侧选下一个知识点');return}
   const text=$('input').value.trim();if(!text)return;
@@ -194,46 +199,65 @@ async function send(){
 async function loadState(){
   STATE=await api('/api/state');
   renderSidebar();
-  if(!CURRENT&&STATE.today){if(!openCached(STATE.today.id))openLesson(STATE.today.id)}
+  if(!CURRENT&&!HIST&&STATE.today){if(!openCached(STATE.today.id))openLesson(STATE.today.id)}
 }
 function renderSidebar(){
   const list=$('lessonList');list.innerHTML='';
   if(!STATE.curriculum||!(STATE.curriculum.lessons||[]).length){
-    list.innerHTML='<div class="empty" style="margin-top:24px;padding:0 10px">输入想学的科目，<br>AI 会拆成课程，每天教一个知识点</div>';return;
+    list.innerHTML='<div class="empty" style="margin-top:24px;padding:0 10px">输入想学的科目，<br>AI 会拆成课程，今天开始教</div>';return;
   }
-  // 侧栏=会话历史（往后看的存货），不是课程排期（往前看的欠账）：
-  // 只显示学过的 + 今天丢来的这一封；未学的全貌在「关联」地图里灰着
-  let lastSub='',shown=0;
-  (STATE.curriculum.lessons||[]).forEach(l=>{
-    const hasSession=!!((STATE.sessions||{})[l.id]);
-    const isToday=STATE.today&&STATE.today.id===l.id&&l.status!=='done';
-    if(!hasSession&&!isToday)return;
-    if(l.subject!==lastSub){lastSub=l.subject;list.innerHTML+='<div class="grouplabel">'+esc(l.subject).toUpperCase()+'</div>'}
-    const el=document.createElement('div');
-    el.className='lp'+(l.status==='done'?' done':'')+(isToday?' today':'')+(CURRENT===l.id?' on':'');
-    el.innerHTML='<span class="st">'+(l.status==='done'?'✓':(isToday?'今':'·'))+'</span><span>'+esc(l.title)+'</span>';
-    el.onclick=()=>openLesson(l.id);
-    list.appendChild(el);shown++;
-  });
-  if(!shown)list.innerHTML='<div class="empty" style="margin-top:24px;padding:0 10px">暂无历史<br>学完第一节，这里开始积累</div>';
-  const meta=CURRENT?findLessonMeta(CURRENT):null;
-  if(meta)$('lessonTitle').textContent=meta.title;
+  // 只考虑今天要学什么：侧栏只放今天这一封；
+  // 历史对话不属于侧栏——沉淀/关联点进去，占地不大
+  if(!STATE.today){
+    list.innerHTML='<div class="empty" style="margin-top:24px;padding:0 10px">今天没有排课</div>';return;
+  }
+  const all=STATE.curriculum.lessons||[];
+  const l=all.find(x=>x.id===STATE.today.id);
+  const title=l?l.title:(STATE.today.title||'今日知识点');
+  const sess=(STATE.sessions||{})[STATE.today.id];
+  const fin=!!(sess&&endsClosed(sess));
+  const el=document.createElement('div');
+  el.className='lp today'+(CURRENT===STATE.today.id&&!HIST?' on':'');
+  el.innerHTML='<span class="st">'+(fin?'✓':'今')+'</span><span>'+esc(title)+'</span>';
+  el.onclick=()=>fin?showHistory(STATE.today.id):openLesson(STATE.today.id);
+  list.appendChild(el);
 }
 function renderSediment(){
   const s=$('sediment');const st=STATE;if(!st)return;
   let html='<h1 style="font-size:24px;margin:20px 0">已经学会的</h1><div class="counts"><div class="c"><div class="n">'+st.counts.known+'</div><div class="l">知道</div></div><div class="c"><div class="n">'+st.counts.used+'</div><div class="l">用过</div></div><div class="c"><div class="n">'+st.counts.done+'</div><div class="l">做过</div></div></div>';
   (st.ledger||[]).forEach(k=>{
     const clickable=k.id&&(st.sessions||{})[k.id];
-    html+='<div class="item d'+k.depth+(clickable?' clickable':'')+'"'+(clickable?' onclick=\'jumpLesson("'+k.id+'")\' title="回到对应对话"':'')+'><div class="t">'+esc(k.title)+'</div><div class="m">'+(k.depth===3?'做过':k.depth===2?'用过':'知道')+' · 首学 '+esc((k.firstAt||'').slice(0,10))+' · 来源 '+esc(k.source)+(clickable?' · 点击回到对话':'')+'</div></div>';
+    html+='<div class="item d'+k.depth+(clickable?' clickable':'')+'"'+(clickable?' onclick=\'jumpLesson("'+k.id+'")\' title="看这段对话的完整历史"':'')+'><div class="t">'+esc(k.title)+'</div><div class="m">'+(k.depth===3?'做过':k.depth===2?'用过':'知道')+' · 首学 '+esc((k.firstAt||'').slice(0,10))+' · 来源 '+esc(k.source)+(clickable?' · 点击看完整对话':'')+'</div></div>';
   });
   if(!(st.ledger||[]).length)html+='<div class="mut">履历还是空的。完成第一节的检查题，这里就长出第一条。</div>';
   html+='<div style="margin-top:24px"><a href="/evidence.html" target="_blank">对外证据页 →</a></div>';
   s.innerHTML=html;
 }
-// 联动：沉淀/关联点知识点 → 自动回到学习页对应对话（本地缓存直开，≤2ms 级）
+/* 历史对话：从沉淀/关联进场，只读展示 + 跳回今日按钮 */
+let HIST=null;
+function enterHistory(){
+  HIST=true;if(!CURRENT)CURRENT=null;
+  $('kicker').textContent='HISTORY · 对话历史';
+  $('backToday').classList.remove('hidden');
+  $('input').disabled=true;$('input').placeholder='历史对话只读——点右上角回到今天';
+  const b=$('chatbox').querySelector('button');if(b)b.disabled=true;
+}
+function leaveHistory(){
+  HIST=null;
+  $('kicker').textContent='LEARNING · 对话式教学';
+  $('backToday').classList.add('hidden');
+  $('input').disabled=false;$('input').placeholder='回答检查题，或问点什么…（Enter 发送）';
+  const b=$('chatbox').querySelector('button');if(b)b.disabled=false;
+}
+function backToday(){leaveHistory();if(STATE.today)openLesson(STATE.today.id)}
 function jumpLesson(nodeId){
-  if(openCached(nodeId))return;
-  toast('还没轮到它——到日子我自然丢给你');
+  const sess=(STATE&&STATE.sessions||{})[nodeId];
+  if(!sess){toast('还没轮到它——到日子我自然丢给你');return}
+  CURRENT=null;enterHistory();
+  const meta=findLessonMeta(nodeId);
+  $('lessonTitle').textContent=meta?meta.title:(sess.title||'');
+  renderChat(sess.messages);
+  switchTab('learn');
 }
 
 /* ---------- 关联图：力导向 ---------- */
