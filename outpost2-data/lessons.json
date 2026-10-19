@@ -1,7 +1,8 @@
 {
   "subjects": [
     "MCP Protocol Basics",
-    "Fee Bayesian Stats"
+    "Fee Bayesian Stats",
+    "线性代数"
   ],
   "lessons": [
     {
@@ -131,7 +132,71 @@
       "brief": "能用后验预测检查、贝叶斯因子或信息准则比较并评估贝叶斯模型。",
       "status": "active",
       "order": 15
+    },
+    {
+      "id": "1020-subj-01",
+      "subject": "线性代数",
+      "title": "向量与向量空间",
+      "brief": "能判断一组向量是否构成向量空间并解释其几何意义。",
+      "status": "active",
+      "order": 16
+    },
+    {
+      "id": "1020-subj-02",
+      "subject": "线性代数",
+      "title": "矩阵运算与初等变换",
+      "brief": "能熟练进行矩阵加减乘、转置与初等行变换并化简矩阵。",
+      "status": "active",
+      "order": 17
+    },
+    {
+      "id": "1020-subj-03",
+      "subject": "线性代数",
+      "title": "线性方程组求解",
+      "brief": "能用高斯消元法判断方程组解的存在性并求出通解。",
+      "status": "active",
+      "order": 18
+    },
+    {
+      "id": "1020-subj-04",
+      "subject": "线性代数",
+      "title": "行列式与可逆矩阵",
+      "brief": "能计算行列式并据此判断矩阵是否可逆及求逆矩阵。",
+      "status": "active",
+      "order": 19
+    },
+    {
+      "id": "1020-subj-05",
+      "subject": "线性代数",
+      "title": "矩阵的秩与线性相关",
+      "brief": "能通过秩判断向量组的线性相关性并确定极大无关组。",
+      "status": "active",
+      "order": 20
+    },
+    {
+      "id": "1020-subj-06",
+      "subject": "线性代数",
+      "title": "特征值与特征向量",
+      "brief": "能求矩阵的特征值与特征向量并理解其几何意义。",
+      "status": "active",
+      "order": 21
+    },
+    {
+      "id": "1020-subj-07",
+      "subject": "线性代数",
+      "title": "矩阵对角化",
+      "brief": "能判断矩阵是否可对角化并完成对角化分解。",
+      "status": "active",
+      "order": 22
+    },
+    {
+      "id": "1020-subj-08",
+      "subject": "线性代数",
+      "title": "内积与正交变换",
+      "brief": "能计算内积、判定正交性并构造正交矩阵。",
+      "status": "active",
+      "order": 23
     }
   ],
-  "updatedAt": "2026-10-19T23:47:56.240765+08:00"
+  "updatedAt": "2026-10-20T01:24:09.0881588+08:00"
 }

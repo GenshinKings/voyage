@@ -1,6 +1,7 @@
 package exercise
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -82,5 +83,31 @@ func TestGenerateNoClient(t *testing.T) {
 	e := &Engine{}
 	if _, err := e.Generate([]string{"t"}); err == nil {
 		t.Fatal("无 Client 应报错")
+	}
+}
+
+func TestAnswerFileSubmission(t *testing.T) {
+	path := t.TempDir() + "/solution.json"
+	if err := os.WriteFile(path, []byte(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	e := &Engine{Client: &mockClient{chatOut: []string{"格式对，capability 声明漏了 tools。\n\n[PASS]"}}}
+	ex := &Exercise{ID: "f1", Status: "active"}
+	_, _, err := e.Answer(ex, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	submitted := ex.Messages[0].Content
+	if !strings.Contains(submitted, "以本地文件提交") || !strings.Contains(submitted, "jsonrpc") {
+		t.Fatalf("提交内容应含文件内容，got: %s", submitted)
+	}
+	// 不存在的路径=当普通文本
+	ex2 := &Exercise{ID: "f2", Status: "active"}
+	e2 := &Engine{Client: &mockClient{chatOut: []string{"还没写完，继续。\n再看看 params。"}}}
+	if _, _, err := e2.Answer(ex2, "Z:/不存在的路径/xx.json"); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(ex2.Messages[0].Content, "以本地文件提交") {
+		t.Fatal("不存在的路径不应按文件处理")
 	}
 }

@@ -3,6 +3,7 @@ package exercise
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -69,11 +70,23 @@ func (e *Engine) Generate(topics []string) ([]Exercise, error) {
 }
 
 // Answer 批改一次作答；完全正确时回复末尾出现 [PASS]，练习转 done。
+// 作答文本若是一个存在的本地文件路径（写代码的题），读文件内容作为提交物进批改上下文。
 func (e *Engine) Answer(ex *Exercise, text string) (string, bool, error) {
 	if e.Client == nil {
 		return "", false, fmt.Errorf("LLM 未配置（outpost2-data/llm.json）")
 	}
-	ex.Messages = append(ex.Messages, llm.Message{Role: "user", Content: text})
+	content := text
+	if p := strings.TrimSpace(text); isSubmissionFile(p) {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			return "", false, fmt.Errorf("读不了提交的文件 %s: %w", p, err)
+		}
+		if len(b) > 64<<10 {
+			return "", false, fmt.Errorf("文件太大（>64KB）：%s", p)
+		}
+		content = fmt.Sprintf("（以本地文件提交：%s）\n%s", p, string(b))
+	}
+	ex.Messages = append(ex.Messages, llm.Message{Role: "user", Content: content})
 	system := `你是实操练习的批改助教。对照题面评学习者这次作答：先说对在哪、错在哪、漏了什么关键点；如果解法已完整正确，在回复最后单独一行输出 [PASS]；否则只给一步提示，不要直接报答案。`
 	reply, err := e.Client.Chat(system, ex.Messages)
 	if err != nil {
@@ -112,6 +125,15 @@ func parseList(raw string) []rawEx {
 		}
 	}
 	return nil
+}
+
+// isSubmissionFile 作答文本是否指向一个存在的本地文件（单行、≤260 字符、存在且非目录）。
+func isSubmissionFile(p string) bool {
+	if p == "" || strings.ContainsAny(p, "\n\r") || len(p) > 260 {
+		return false
+	}
+	fi, err := os.Stat(p)
+	return err == nil && !fi.IsDir()
 }
 
 func firstNonEmpty(ss ...string) string {

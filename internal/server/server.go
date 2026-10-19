@@ -296,6 +296,9 @@ func (s *Server) Handlers() http.Handler {
 			http.Error(w, err.Error(), 500)
 			return
 		}
+		// 换/开科目=今日练习作废重出（题目永远跟着当下在学的东西走）
+		s.Exercises = nil
+		s.saveState()
 		writeJSON(w, cur)
 	})
 	mux.HandleFunc("/api/tutor/open", func(w http.ResponseWriter, r *http.Request) {
@@ -350,8 +353,15 @@ func (s *Server) Handlers() http.Handler {
 		var topics []string
 		if s.Tutor != nil {
 			for _, l := range s.Tutor.Curriculum().Lessons {
-				topics = append(topics, l.Subject+" / "+l.Title)
+				// 只从和助教聊天过程中真正学过的知识点出题，不是整个课程大纲
+				if s.Tutor.Load(l.ID) != nil {
+					topics = append(topics, l.Subject+" / "+l.Title)
+				}
 			}
+		}
+		if len(topics) == 0 {
+			http.Error(w, "先去上今天的课——聊过的内容才会出练习", 400)
+			return
 		}
 		list, err := s.Exer.Generate(topics)
 		if err != nil {
