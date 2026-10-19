@@ -79,7 +79,7 @@ a{color:var(--ink)}
     <input id="subjectInput" placeholder="想学的科目…">
     <button onclick="addSubject()">开课</button>
   </div>
-  <div class="grouplabel" style="padding:8px 12px 0">知识点</div>
+  <div class="grouplabel" style="padding:8px 12px 0">会话历史</div>
   <div id="lessonList"><div class="empty" style="margin-top:24px;padding:0 10px">加载中…</div></div>
 </div>
 
@@ -201,16 +201,21 @@ function renderSidebar(){
   if(!STATE.curriculum||!(STATE.curriculum.lessons||[]).length){
     list.innerHTML='<div class="empty" style="margin-top:24px;padding:0 10px">输入想学的科目，<br>AI 会拆成课程，每天教一个知识点</div>';return;
   }
-  let lastSub='';
+  // 侧栏=会话历史（往后看的存货），不是课程排期（往前看的欠账）：
+  // 只显示学过的 + 今天丢来的这一封；未学的全貌在「关联」地图里灰着
+  let lastSub='',shown=0;
   (STATE.curriculum.lessons||[]).forEach(l=>{
-    if(l.subject!==lastSub){lastSub=l.subject;list.innerHTML+='<div class="grouplabel">'+esc(l.subject).toUpperCase()+'</div>'}
+    const hasSession=!!((STATE.sessions||{})[l.id]);
     const isToday=STATE.today&&STATE.today.id===l.id&&l.status!=='done';
+    if(!hasSession&&!isToday)return;
+    if(l.subject!==lastSub){lastSub=l.subject;list.innerHTML+='<div class="grouplabel">'+esc(l.subject).toUpperCase()+'</div>'}
     const el=document.createElement('div');
     el.className='lp'+(l.status==='done'?' done':'')+(isToday?' today':'')+(CURRENT===l.id?' on':'');
     el.innerHTML='<span class="st">'+(l.status==='done'?'✓':(isToday?'今':'·'))+'</span><span>'+esc(l.title)+'</span>';
     el.onclick=()=>openLesson(l.id);
-    list.appendChild(el);
+    list.appendChild(el);shown++;
   });
+  if(!shown)list.innerHTML='<div class="empty" style="margin-top:24px;padding:0 10px">暂无历史<br>学完第一节，这里开始积累</div>';
   const meta=CURRENT?findLessonMeta(CURRENT):null;
   if(meta)$('lessonTitle').textContent=meta.title;
 }
@@ -226,7 +231,10 @@ function renderSediment(){
   s.innerHTML=html;
 }
 // 联动：沉淀/关联点知识点 → 自动回到学习页对应对话（本地缓存直开，≤2ms 级）
-function jumpLesson(nodeId){openCached(nodeId)}
+function jumpLesson(nodeId){
+  if(openCached(nodeId))return;
+  toast('还没轮到它——到日子我自然丢给你');
+}
 
 /* ---------- 关联图：力导向 ---------- */
 let GNODES=[];
@@ -235,24 +243,40 @@ async function renderGraph(){
   const g=await api('/api/graph');
   const nodes=(g.nodes||[]).map((n,i)=>({...n,x:0,y:0,idx:i}));
   const edges=g.edges||[];
-  let seed=nodes.length*13+7;
-  const rnd=()=>{seed=(seed*1103515245+12345)%2147483648;return seed/2147483648-0.5};
-  nodes.forEach((n,i)=>{n.x=480+rnd()*260;n.y=320+rnd()*200});
-  for(let it=0;it<200;it++){
+  // 标准 FR 力导向：合力先累加，位移按退火温度 clamp —— 数学上不可能发散（旧版逐对直接位移曾振荡炸成 NaN）
+  const cx=640,cy=320;
+  nodes.forEach((n,i)=>{const ang=i/nodes.length*Math.PI*2;n.x=cx+Math.cos(ang)*280;n.y=cy+Math.sin(ang)*185});
+  const byId={};nodes.forEach(n=>byId[n.id]=n);
+  const fX=nodes.map(()=>0),fY=nodes.map(()=>0);
+  for(let it=0;it<400;it++){
+    const temp=90*(1-it/400)+5;
+    fX.fill(0);fY.fill(0);
     for(let i=0;i<nodes.length;i++)for(let j=i+1;j<nodes.length;j++){
-      const dx=nodes[j].x-nodes[i].x,dy=nodes[j].y-nodes[i].y;const d=Math.max(40,Math.hypot(dx,dy));
-      const f=2800/d;const ux=dx/d,uy=dy/d;
-      nodes[i].x-=ux*f;nodes[i].y-=uy*f;nodes[j].x+=ux*f;nodes[j].y+=uy*f;
+      const dx=nodes[j].x-nodes[i].x,dy=nodes[j].y-nodes[i].y;
+      let d=Math.hypot(dx,dy);if(d<1)d=1;
+      const f=10000/(d*d),ux=dx/d,uy=dy/d;
+      fX[i]-=ux*f;fY[i]-=uy*f;fX[j]+=ux*f;fY[j]+=uy*f;
     }
     edges.forEach(e=>{
-      const a=nodes.find(n=>n.id===e.from),b=nodes.find(n=>n.id===e.to);if(!a||!b)return;
-      const dx=b.x-a.x,dy=b.y-a.y;const d=Math.max(1,Math.hypot(dx,dy));const f=(d-140)*0.012;
-      a.x+=dx*f;a.y+=dy*f;b.x-=dx*f;b.y-=dy*f;
+      const a=byId[e.from],b=byId[e.to];if(!a||!b)return;
+      const dx=b.x-a.x,dy=b.y-a.y;
+      let d=Math.hypot(dx,dy);if(d<1)d=1;
+      const f=(d-150)*0.014;
+      fX[a.idx]+=dx/d*f;fY[a.idx]+=dy/d*f;
+      fX[b.idx]-=dx/d*f;fY[b.idx]-=dy/d*f;
     });
-    nodes.forEach(n=>{n.x+=(640-n.x)*0.004;n.y+=(320-n.y)*0.004});
+    nodes.forEach(n=>{
+      const df=Math.hypot(fX[n.idx],fY[n.idx]);
+      const cl=df>temp?temp/df:1;
+      n.x+=fX[n.idx]*cl;n.y+=fY[n.idx]*cl;
+      n.x+=(cx-n.x)*0.004;n.y+=(cy-n.y)*0.004;
+    });
   }
-  requestAnimationFrame(()=>{
-    const cv=$('graphCanvas');if(!cv||!cv.clientWidth)return;
+  try{
+    window.__graphErr='drawing';
+    const cv=$('graphCanvas');
+    if(!cv||!cv.clientWidth){await new Promise(r=>setTimeout(r,60));} // 布局兜底。不用 rAF：后台页面 rAF 会被浏览器节流暂停
+    if(!cv||!cv.clientWidth)throw new Error('画布无尺寸');
     const dpr=window.devicePixelRatio||1;
     cv.width=cv.clientWidth*dpr;cv.height=cv.clientHeight*dpr;
     const ctx=cv.getContext('2d');ctx.scale(dpr,dpr);
@@ -274,7 +298,8 @@ async function renderGraph(){
       const t=String(n.title||'');ctx.fillText(t.length>9?t.slice(0,9)+'…':t,x,y+32);
       GNODES.push({id:n.id,x:x,y:y});
     });
-  });
+    window.__graphErr='';
+  }catch(err){const m=String(err&&err.message||err);window.__graphErr=m;toast('关联图渲染失败：'+m)}
   // canvas 点击命中 → 回到对应对话
   const cv=$('graphCanvas');
   cv.onclick=ev=>{
