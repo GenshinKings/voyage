@@ -88,6 +88,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Micr
 .item .m{color:var(--mut);font-size:12.5px;margin-top:1px}
 #graphWrap{height:calc(100vh - 240px);position:relative;margin:8px 24px 20px}
 #readView{max-width:736px;margin:0 auto;padding:8px 28px 130px}
+#dirView{max-width:736px;margin:0 auto;padding:8px 28px 130px}
+.dir-msg{margin:14px 0;display:flex}
+.dir-msg .bubble{max-width:78%;padding:11px 15px;border-radius:18px;font-size:14.5px;line-height:1.7;white-space:pre-wrap;word-break:break-word}
+.dir-msg.a .bubble{background:var(--card);box-shadow:0 1px 2px rgba(0,0,0,.05),0 0 0 1px rgba(0,0,0,.03);border-bottom-left-radius:6px}
+.dir-msg.u{justify-content:flex-end}
+.dir-msg.u .bubble{background:var(--usr);color:#fff;border-bottom-right-radius:6px}
+.proposal-card{background:var(--card);border:1.5px solid var(--pink);border-radius:12px;padding:16px 18px;margin:14px 0}
+.proposal-card h4{font-size:15px;margin:0 0 8px}
+.proposal-card ol{margin:6px 0 12px 18px;font-size:13.5px;line-height:1.8}
+.dir-input{display:flex;gap:10px;margin-top:12px}
+.dir-input textarea{flex:1;border:1px solid rgba(0,0,0,.12);border-radius:12px;padding:11px 15px;font:inherit;font-size:14px;height:48px;resize:none;outline:none;background:#fff}
+.dir-input textarea:focus{border-color:var(--pink);box-shadow:0 0 0 3.5px rgba(0,113,227,.18)}
+.dir-input button{border:none;background:var(--pink);color:#fff;padding:10px 20px;border-radius:12px;cursor:pointer;font:inherit;font-weight:600}
 .reading-body{background:var(--card);border-radius:12px;padding:22px 26px;font-size:14.5px;line-height:1.85;box-shadow:0 1px 2px rgba(0,0,0,.05),0 0 0 1px rgba(0,0,0,.03)}
 .reading-body h3{font-size:17px;letter-spacing:-.01em;margin:18px 0 6px}
 .reading-body h4{font-size:14.5px;margin:14px 0 4px}
@@ -116,15 +129,13 @@ a:hover{text-decoration:underline}
   <div class="logo"><div class="kicker">OUTPOST 2.0</div><b>全托管学习机</b></div>
   <div class="sidebtns">
     <div class="sbtn on" data-v="learn">◈ 学习</div>
+    <div class="sbtn" data-v="dir">◈ 方向</div>
     <div class="sbtn" data-v="read">◈ 阅读</div>
     <div class="sbtn" data-v="sediment">◈ 沉淀</div>
     <div class="sbtn" data-v="graph">◈ 关联</div>
     <div class="sbtn" data-v="set">◈ 设置</div>
   </div>
-  <div id="subjectBox">
-    <input id="subjectInput" placeholder="想学什么？口语也行，如拍照">
-    <button onclick="addSubject()">开课</button>
-  </div>
+  <div id="subjectBox" style="cursor:pointer" onclick="switchTab('dir')" title="和 AI 助教聊聊你想学什么"><div class="mut" style="font-size:12.5px;padding:2px 0">＋ 想学新东西？去「方向」和助教聊</div></div>
   <div id="lessonList"><div class="empty" style="margin-top:24px;padding:0 10px">加载中…</div></div>
   <div id="subjFoot"></div>
 </div>
@@ -133,6 +144,7 @@ a:hover{text-decoration:underline}
   <div id="topbar"><div><div class="kicker" id="kicker">LEARNING · 对话式教学</div><h1 id="lessonTitle">今天丢来的</h1></div><div style="display:flex;gap:8px;flex-shrink:0"><button id="todayClass" class="backbtn hidden" style="border-color:var(--line);color:var(--mut)" onclick="openTodayClass()">今天的课</button><button id="backToday" class="backbtn hidden" onclick="backToday()">← 跳回今日知识点</button></div></div>
   <div id="view">
     <div id="chatOuter"><div id="guideCard"></div><div id="chat"></div></div>
+    <div id="dirView" class="hidden"></div>
     <div id="readView" class="hidden"></div>
     <div id="sediment" class="hidden"></div>
     <div id="setView" class="hidden"></div>
@@ -169,6 +181,7 @@ function updateChrome(v){
   $('todayClass').classList.toggle('hidden',!(v==='learn'&&EXER&&!HIST));
   const kb=$('kicker');
   if(v==='sediment'){kb.textContent='SEDIMENT · 已经学会的';$('lessonTitle').textContent='沉淀'}
+  else if(v==='dir'){kb.textContent='DIRECTION · 学习方向';$('lessonTitle').textContent='方向'}
   else if(v==='read'){kb.textContent='READING · 阅读原文';$('lessonTitle').textContent='阅读'}
   else if(v==='graph'){kb.textContent='GRAPH · 知识地图';$('lessonTitle').textContent='关联'}
   else if(v==='set'){kb.textContent='SETTINGS · 模型与约束';$('lessonTitle').textContent='设置'}
@@ -185,11 +198,13 @@ function switchTab(v){
   document.querySelectorAll('.sbtn').forEach(t=>t.classList.toggle('on',t.dataset.v===v));
   $('chatOuter').classList.toggle('hidden',v!=='learn');
   $('readView').classList.toggle('hidden',v!=='read');
+  $('dirView').classList.toggle('hidden',v!=='dir');
   $('setView').classList.toggle('hidden',v!=='set');
   $('sediment').classList.toggle('hidden',v!=='sediment');
   $('graphWrap').classList.toggle('hidden',v!=='graph');
   updateChrome(v);
   if(v==='read')renderReadings();
+  if(v==='dir')renderDirection();
   if(v==='set')renderSettings();
   if(v==='sediment')renderSediment();
   if(v==='graph')renderGraph();
@@ -426,6 +441,59 @@ async function finishReading(id){
     const r=(STATE.readings||[]).find(x=>x.id===id);if(r)r.done=true;
     READING=null;renderReadings();await loadState();
     toast('读完——履历记「知道」');
+  }catch(e){toast('失败：'+e.message)}
+}
+
+/* ---------- 方向：和 AI 助教讨论学习方向，收敛后同步到学习 ---------- */
+let DIRMSG=null,DIRPROPOSAL=null;
+async function renderDirection(){
+  const v=$('dirView');
+  if(DIRMSG!==null){renderDirView();return}
+  v.innerHTML='<div class="mut" style="margin:4px 0 12px">加载中…</div>';
+  try{
+    const d=await api('/api/direction/open');
+    DIRMSG=d.messages||[];DIRPROPOSAL=d.proposal||null;
+    renderDirView();
+  }catch(e){v.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
+}
+function renderDirView(){
+  const v=$('dirView');
+  let h='<div class="mut" style="margin:4px 0 10px">和助教聊聊你想学什么、为什么、有多少时间——方向聊清楚了，课程就同步到「学习」。</div>';
+  (DIRMSG||[]).forEach(m=>{h+='<div class="dir-msg '+(m.role==='assistant'?'a':'u')+'"><div class="bubble">'+fmtContent(m.content)+'</div></div>';});
+  if(DIRPROPOSAL){
+    h+='<div class="proposal-card"><h4>📋 课程提案 · '+esc(DIRPROPOSAL.subject)+'</h4><ol>';
+    (DIRPROPOSAL.lessons||[]).forEach(l=>{h+='<li><b>'+esc(l.title)+'</b> — '+esc(l.brief||'')+'</li>';});
+    h+='</ol><button class="backbtn" onclick="commitProposal()" style="background:var(--pink);color:#fff;border:none">✓ 同步到学习</button> <span class="mut" style="font-size:12px;margin-left:8px">想调整就继续在下面说</span></div>';
+  }
+  h+='<div class="dir-input"><textarea id="dirInput" placeholder="'+(DIRPROPOSAL?'想调整提案？直接说':'说说你想学什么，为什么想学…')+'"></textarea><button onclick="sendDirection()">发送</button></div>';
+  v.innerHTML=h;
+  const ta=document.getElementById('dirInput');
+  ta.onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendDirection();}};
+  v.scrollTop=v.scrollHeight;
+}
+async function sendDirection(){
+  const ta=document.getElementById('dirInput');
+  const text=ta.value.trim();if(!text)return;
+  ta.value='';
+  DIRMSG.push({role:'user',content:text});
+  DIRMSG.push({role:'assistant',content:'…'});
+  renderDirView();
+  try{
+    const r=await api('/api/direction/send',{text});
+    DIRMSG.splice(DIRMSG.length-1,1,{role:'assistant',content:r.reply});
+    if(r.proposal)DIRPROPOSAL=r.proposal;
+    renderDirView();
+  }catch(e){DIRMSG.splice(DIRMSG.length-1,1);renderDirView();toast('失败：'+e.message)}
+}
+async function commitProposal(){
+  if(!DIRPROPOSAL)return;
+  try{
+    await api('/api/direction/commit',{subject:DIRPROPOSAL.subject,lessons:DIRPROPOSAL.lessons});
+    CURRENT=null;HIST=null;EXER=null;
+    DIRMSG=null;DIRPROPOSAL=null;
+    await loadState();
+    switchTab('learn');
+    toast('方向已同步——新课已丢给你');
   }catch(e){toast('失败：'+e.message)}
 }
 

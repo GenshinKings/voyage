@@ -171,6 +171,20 @@ func NewServer(dir string) *Server {
 
 func (s *Server) saveState() { s.save("state.json", s) }
 
+func sessMessages(sess *tutor.DirectionSession) []llm.Message {
+	if sess == nil {
+		return []llm.Message{}
+	}
+	return sess.Messages
+}
+
+func sessProposal(sess *tutor.DirectionSession) *tutor.Proposal {
+	if sess == nil {
+		return nil
+	}
+	return sess.Proposal
+}
+
 // rebuildLLM 按当前激活 Profile 重建 LLM 客户端（切换/新增模型后热生效）。
 func (s *Server) rebuildLLM() {
 	if s.LLMStore == nil {
@@ -690,6 +704,38 @@ func (s *Server) Handlers() http.Handler {
 			return
 		}
 		http.Error(w, "阅读材料不存在", 404)
+	})
+	mux.HandleFunc("/api/direction/open", func(w http.ResponseWriter, r *http.Request) {
+		sess := s.Tutor.LoadDirection()
+		writeJSON(w, map[string]any{"messages": sessMessages(sess), "proposal": sessProposal(sess)})
+	})
+	mux.HandleFunc("/api/direction/send", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Text string `json:"text"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		reply, proposal, err := s.Tutor.DirectionSend(req.Text)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		writeJSON(w, map[string]any{"reply": reply, "proposal": proposal})
+	})
+	mux.HandleFunc("/api/direction/commit", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Subject string         `json:"subject"`
+			Lessons []tutor.Lesson `json:"lessons"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		if req.Subject == "" || len(req.Lessons) == 0 {
+			http.Error(w, "提案不完整", 400)
+			return
+		}
+		cur := s.Tutor.SetSubjectWithLessons(req.Subject, req.Lessons)
+		s.Exercises = nil // 新方向 = 今日练习作废重出
+		s.Tutor.ResetDirection()
+		s.saveState()
+		writeJSON(w, map[string]any{"ok": true, "curriculum": map[string]any{"subjects": cur.Subjects, "lessons": cur.Lessons}})
 	})
 	mux.HandleFunc("/api/llm/profiles", func(w http.ResponseWriter, _ *http.Request) {
 		profiles := []map[string]any{}
