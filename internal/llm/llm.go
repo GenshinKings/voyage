@@ -19,6 +19,72 @@ type Config struct {
 	Model   string `json:"model"`
 }
 
+// Profile 一个可切换的模型配置（任意 OpenAI 兼容 chat API）。
+type Profile struct {
+	Name    string `json:"name"`
+	BaseURL string `json:"baseUrl"`
+	Key     string `json:"key"`
+	Model   string `json:"model"`
+}
+
+func (p Profile) Config() Config { return Config{BaseURL: p.BaseURL, Key: p.Key, Model: p.Model} }
+
+// MaskKey 打码显示（前端只见首尾）。
+func (p Profile) MaskKey() string {
+	if len(p.Key) < 10 {
+		return "****"
+	}
+	return p.Key[:7] + "****" + p.Key[len(p.Key)-4:]
+}
+
+// Store llm.json 的多 profile 形态：active 指向当前作为 AI 助教的配置。
+type Store struct {
+	Active   string             `json:"active"`
+	Profiles map[string]Profile `json:"profiles"`
+}
+
+// LoadStore 读取并兼容旧单配置格式（无 profiles 时自动迁移为 default）。
+func LoadStore(path string) (*Store, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var st Store
+	if json.Unmarshal(b, &st) == nil && st.Profiles != nil && len(st.Profiles) > 0 {
+		if st.Active == "" {
+			for k := range st.Profiles {
+				st.Active = k
+				break
+			}
+		}
+		return &st, nil
+	}
+	var legacy Config
+	if json.Unmarshal(b, &legacy) == nil && legacy.Key != "" {
+		return &Store{Active: "default", Profiles: map[string]Profile{
+			"default": {Name: "default", BaseURL: legacy.BaseURL, Key: legacy.Key, Model: legacy.Model},
+		}}, nil
+	}
+	return nil, fmt.Errorf("无法解析 llm.json")
+}
+
+func (st *Store) Save(path string) error {
+	b, err := json.MarshalIndent(st, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, b, 0o600) // 0600：含 key，仅本用户可读
+}
+
+// ActiveProfile 当前生效的配置。
+func (st *Store) ActiveProfile() (Profile, error) {
+	p, ok := st.Profiles[st.Active]
+	if !ok {
+		return p, fmt.Errorf("没有激活的模型配置")
+	}
+	return p, nil
+}
+
 // ChatClient 对话接口（生产=*Client；测试=mock 可注入）。
 type ChatClient interface {
 	Chat(system string, msgs []Message) (string, error)

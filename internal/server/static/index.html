@@ -24,6 +24,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Micr
 #subjectBox button{border:none;background:var(--pink);color:#fff;padding:7px 14px;border-radius:9px;cursor:pointer;font:inherit;font-size:13px;font-weight:600;transition:transform 100ms ease-out,filter 150ms}
 #subjectBox button:active{transform:scale(.96);filter:brightness(.92)}
 #lessonList{flex:1;overflow-y:auto;padding:4px 10px}
+.gc-form{display:flex;flex-direction:column;gap:8px}
+.gc-form input{border:1px solid rgba(0,0,0,.12);border-radius:9px;padding:8px 11px;font:inherit;font-size:13px;outline:none;background:#fff}
+.gc-form input:focus{border-color:var(--pink);box-shadow:0 0 0 3.5px rgba(0,113,227,.18)}
+#agentsEdit{width:100%;min-height:260px;border:1px solid rgba(0,0,0,.12);border-radius:10px;padding:14px;font:12.5px/1.7 ui-monospace,"SF Mono",Menlo,Consolas,monospace;outline:none;background:#fff;resize:vertical}
+#agentsEdit:focus{border-color:var(--pink);box-shadow:0 0 0 3.5px rgba(0,113,227,.18)}
 #subjFoot{padding:12px 18px;border-top:1px solid rgba(0,0,0,.06);font-size:12px;color:var(--mut);flex-shrink:0;line-height:1.6}
 #subjFoot b{color:var(--ink);font-weight:600}
 .grouplabel{font-size:11px;letter-spacing:.05em;color:var(--mut);margin:14px 8px 4px;font-weight:600}
@@ -114,6 +119,7 @@ a:hover{text-decoration:underline}
     <div class="sbtn" data-v="read">◈ 阅读</div>
     <div class="sbtn" data-v="sediment">◈ 沉淀</div>
     <div class="sbtn" data-v="graph">◈ 关联</div>
+    <div class="sbtn" data-v="set">◈ 设置</div>
   </div>
   <div id="subjectBox">
     <input id="subjectInput" placeholder="想学什么？口语也行，如拍照">
@@ -129,6 +135,7 @@ a:hover{text-decoration:underline}
     <div id="chatOuter"><div id="guideCard"></div><div id="chat"></div></div>
     <div id="readView" class="hidden"></div>
     <div id="sediment" class="hidden"></div>
+    <div id="setView" class="hidden"></div>
     <div id="graphWrap" class="hidden"><div class="gLegend">圆=收尾的知识点 · <span style="color:#0071e3;font-weight:600">━</span> 练习中真实调用的连接（×N=次数） · <span style="color:#b8c0c8">━</span> 课程先后 · 点圆回到对话</div><canvas id="graphCanvas"></canvas></div>
   </div>
   <div class="inputbar">
@@ -164,6 +171,7 @@ function updateChrome(v){
   if(v==='sediment'){kb.textContent='SEDIMENT · 已经学会的';$('lessonTitle').textContent='沉淀'}
   else if(v==='read'){kb.textContent='READING · 阅读原文';$('lessonTitle').textContent='阅读'}
   else if(v==='graph'){kb.textContent='GRAPH · 知识地图';$('lessonTitle').textContent='关联'}
+  else if(v==='set'){kb.textContent='SETTINGS · 模型与约束';$('lessonTitle').textContent='设置'}
   else if(HIST){kb.textContent='HISTORY · 对话历史'}
   else if(EXER){kb.textContent='PRACTICE · 实操练习'}
   else{kb.textContent='LEARNING · 对话式教学'}
@@ -177,10 +185,12 @@ function switchTab(v){
   document.querySelectorAll('.sbtn').forEach(t=>t.classList.toggle('on',t.dataset.v===v));
   $('chatOuter').classList.toggle('hidden',v!=='learn');
   $('readView').classList.toggle('hidden',v!=='read');
+  $('setView').classList.toggle('hidden',v!=='set');
   $('sediment').classList.toggle('hidden',v!=='sediment');
   $('graphWrap').classList.toggle('hidden',v!=='graph');
   updateChrome(v);
   if(v==='read')renderReadings();
+  if(v==='set')renderSettings();
   if(v==='sediment')renderSediment();
   if(v==='graph')renderGraph();
 }
@@ -416,6 +426,52 @@ async function finishReading(id){
     const r=(STATE.readings||[]).find(x=>x.id===id);if(r)r.done=true;
     READING=null;renderReadings();await loadState();
     toast('读完——履历记「知道」');
+  }catch(e){toast('失败：'+e.message)}
+}
+
+/* ---------- 设置：模型配置口 + AGENTS.md 约束 ---------- */
+function renderSettings(){
+  const v=$('setView');
+  v.innerHTML='<div class="mut" style="margin:4px 0 12px">加载中…</div>';
+  api('/api/llm/profiles').then(d=>{
+    let h='<div class="grouplabel" style="margin:4px 0 8px">AI 助教模型</div>';
+    const ps=d.profiles||[];
+    ps.forEach(p=>{
+      h+='<div class="lp'+(p.active?' on':'')+'" style="cursor:default"><span class="st">'+(p.active?'✓':'·')+'</span><span><b>'+esc(p.name)+'</b> · '+esc(p.model)+'<div class="lp-sub">'+esc(p.baseUrl)+' · key '+esc(p.keyMasked)+'</div></span>'+(p.active?'':'<span style="margin-left:auto"><button class="backbtn act-model" data-name="'+esc(p.name)+'" style="border-color:var(--line);background:var(--card);color:var(--ink)">启用</button></span>')+'</div>';
+    });
+    h+='<div class="gc-form">';
+    h+='<div class="grouplabel" style="margin:16px 0 6px">新增 / 更换模型（保存即启用）</div>';
+    h+='<input id="pfName" placeholder="名称，如 deepseek / glm / 本地 ollama">';
+    h+='<input id="pfUrl" placeholder="BaseURL，如 https://api.deepseek.com">';
+    h+='<input id="pfModel" placeholder="模型名，如 deepseek-chat">';
+    h+='<input id="pfKey" type="password" placeholder="API Key（编辑已有配置时留空=沿用旧 key）">';
+    h+='<button class="backbtn" onclick="saveModel()" style="margin-top:8px">保存并启用</button></div>';
+    h+='<div class="grouplabel" style="margin:20px 0 6px">AGENTS.md — 助教行为约束（每次调用注入，改完即生效）</div>';
+    h+='<textarea id="agentsEdit" spellcheck="false">'+esc(d.agents||'')+'</textarea>';
+    h+='<button class="backbtn" onclick="saveAgents()" style="margin-top:8px">保存约束</button>';
+    v.innerHTML=h;
+    v.querySelectorAll('.act-model').forEach(b=>{b.onclick=()=>activateModel(b.dataset.name);});
+  }).catch(e=>{v.innerHTML='<div class="empty">'+esc(e.message)+'</div>';});
+}
+async function saveModel(){
+  try{
+    await api('/api/llm/profile',{name:val('pfName'),baseUrl:val('pfUrl'),model:val('pfModel'),key:val('pfKey')});
+    toast('模型已切换为「'+val('pfName')+'」——教学与练习即刻生效');
+    renderSettings();
+  }catch(e){toast('失败：'+e.message)}
+}
+async function activateModel(name){
+  try{
+    await api('/api/llm/profile',{name:name,baseUrl:'-'});
+    toast('已启用「'+name+'」');
+    renderSettings();
+  }catch(e){toast('失败：'+e.message)}
+}
+function val(id){const el=document.getElementById(id);return el?el.value.trim():''}
+async function saveAgents(){
+  try{
+    await api('/api/agents',{content:document.getElementById('agentsEdit').value});
+    toast('约束已保存——下一次 AI 调用即生效');
   }catch(e){toast('失败：'+e.message)}
 }
 

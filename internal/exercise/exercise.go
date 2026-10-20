@@ -26,8 +26,25 @@ type Exercise struct {
 }
 
 // Engine 出题+批改。生产 Client=*llm.Client；测试可注入 mock。
+// AgentsPath=用户约束文件（AGENTS.md），每次调用热读，优先级高于内置纪律。
 type Engine struct {
-	Client llm.ChatClient
+	Client     llm.ChatClient
+	AgentsPath string
+}
+
+func (e *Engine) withAgents(system string) string {
+	if e.AgentsPath == "" {
+		return system
+	}
+	b, err := os.ReadFile(e.AgentsPath)
+	if err != nil {
+		return system
+	}
+	a := strings.TrimSpace(string(b))
+	if a == "" {
+		return system
+	}
+	return "【出题与批改行为约束（用户自定义，优先级最高，与下列默认纪律冲突时以此为准）】\n" + a + "\n\n" + system
 }
 
 type rawEx struct {
@@ -101,7 +118,7 @@ func (e *Engine) Answer(ex *Exercise, text string) (string, bool, error) {
 	}
 	ex.Messages = append(ex.Messages, llm.Message{Role: "user", Content: content})
 	system := `你是实操练习的批改助教。对照题面评学习者这次作答：先说对在哪、错在哪、漏了什么关键点；如果解法已完整正确，在回复最后单独一行输出 [PASS]；否则只给一步提示，不要直接报答案。`
-	reply, err := e.Client.Chat(system, ex.Messages)
+	reply, err := e.Client.Chat(e.withAgents(system), ex.Messages)
 	if err != nil {
 		return "", false, err
 	}

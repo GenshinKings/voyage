@@ -30,24 +30,46 @@ type Lesson struct {
 
 // Curriculum 科目 → 知识点序列（顺序制 v1）。
 type Curriculum struct {
-	Subjects []string  `json:"subjects"`
-	Lessons  []Lesson  `json:"lessons"`
+	Subjects  []string  `json:"subjects"`
+	Lessons   []Lesson  `json:"lessons"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // Session 单个知识点的教学对话。
 type Session struct {
-	NodeID    string      `json:"nodeId"`
-	Title     string      `json:"title"`
+	NodeID    string        `json:"nodeId"`
+	Title     string        `json:"title"`
 	Messages  []llm.Message `json:"messages"`
-	Verdict   string      `json:"verdict,omitempty"` // pass | partial | ""
-	UpdatedAt time.Time   `json:"updatedAt"`
+	Verdict   string        `json:"verdict,omitempty"` // pass | partial | ""
+	UpdatedAt time.Time     `json:"updatedAt"`
 }
 
 // Tutor 教学引擎。
 type Tutor struct {
-	Dir    string         // 数据目录（tutor/ 子目录存会话）
-	Client llm.ChatClient // 生产=*llm.Client；测试可注入 mock
+	Dir        string         // 数据目录（tutor/ 子目录存会话）
+	Client     llm.ChatClient // 生产=*llm.Client；测试可注入 mock
+	AgentsPath string         // AGENTS.md 约束文件路径（每次调用热读，用户可编辑，改完即生效）
+}
+
+// agents 读取用户自定义约束（AGENTS.md）。缺失/失败返回空（默认纪律兜底）。
+func (t *Tutor) agents() string {
+	if t.AgentsPath == "" {
+		return ""
+	}
+	b, err := os.ReadFile(t.AgentsPath)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
+}
+
+// withAgents 把用户约束前置到 system prompt——冲突时以 AGENTS.md 为准。
+func (t *Tutor) withAgents(system string) string {
+	a := t.agents()
+	if a == "" {
+		return system
+	}
+	return "【教师行为约束（用户自定义，优先级最高，与下列默认纪律冲突时以此为准）】\n" + a + "\n\n" + system
 }
 
 const teachSystem = `你是前哨 2.0 的 AI 助教，正在一对一把一个知识点教给学习者。
@@ -72,9 +94,9 @@ func (t *Tutor) normalizeSubject(name string) string {
 	if t.Client == nil {
 		return name
 	}
-	raw, err := t.Client.ChatJSON(
+	raw, err := t.Client.ChatJSON(t.withAgents(
 		`你是学科名归一化助手。学习者输入的想学内容可能口语化、笼统（如"拍照""修图""炒股"）。
-输出 JSON {"subject":"规范学科名"}：若输入已是规范学科名则原样返回；否则映射到最贴近的通用规范学科（拍照→摄影，修图→图像处理，炒股→投资学）。学科名不超过 8 个字。`,
+输出 JSON {"subject":"规范学科名"}：若输入已是规范学科名则原样返回；否则映射到最贴近的通用规范学科（拍照→摄影，修图→图像处理，炒股→投资学）。学科名不超过 8 个字。`),
 		[]llm.Message{{Role: "user", Content: name}})
 	if err != nil {
 		return name
@@ -113,11 +135,11 @@ func (t *Tutor) StartSubject(name string) (*Curriculum, error) {
 	var err error
 	for attempt := 0; attempt < 2; attempt++ { // LLM 偶发格式漂移：解析失败自动重试一次
 		var raw string
-		raw, err = t.Client.ChatJSON(
+		raw, err = t.Client.ChatJSON(t.withAgents(
 			`你是课程设计师。学习者想学一个科目，请把它分解成 4-8 个有序知识点（从基础到进阶）。
 每个知识点：title（≤16字，名词短语）、brief（一句话：学完能做什么）。
 分解原则：每个知识点都是 30 分钟内可以「讲解+一道检查题」收尾的最小单元；先概念后应用。
-JSON 顶层键必须是 "nodes"。`,
+JSON 顶层键必须是 "nodes"。`),
 			[]llm.Message{{Role: "user", Content: "科目：" + name}})
 		if err != nil {
 			continue
@@ -235,7 +257,7 @@ func (t *Tutor) StartOrResume(lesson Lesson) (*Session, bool, error) {
 	user := fmt.Sprintf("知识点：《%s》——%s\n科目：%s\n现在开始教学：输出你的开场（讲解+检查题）。",
 		lesson.Title, lesson.Brief, lesson.Subject)
 	s.Messages = append(s.Messages, llm.Message{Role: "user", Content: user})
-	reply, err := t.Client.Chat(sys, s.Messages)
+	reply, err := t.Client.Chat(t.withAgents(sys), s.Messages)
 	if err != nil {
 		return nil, false, err
 	}
@@ -246,8 +268,8 @@ func (t *Tutor) StartOrResume(lesson Lesson) (*Session, bool, error) {
 
 // Verdict 判定结果。
 type Verdict struct {
-	Kind    string `json:"kind"` // ""=继续对话 | pass | partial
-	Reply   string `json:"reply"`
+	Kind  string `json:"kind"` // ""=继续对话 | pass | partial
+	Reply string `json:"reply"`
 }
 
 // Send 学习者发言 → 助教回复；解析 [PASS] 判定并落履历标记。
@@ -265,7 +287,7 @@ func (t *Tutor) Send(lesson Lesson, userText string) (Verdict, error) {
 		return Verdict{}, fmt.Errorf("LLM 未配置")
 	}
 	s.Messages = append(s.Messages, llm.Message{Role: "user", Content: userText})
-	reply, err := t.Client.Chat(teachSystem, s.Messages)
+	reply, err := t.Client.Chat(t.withAgents(teachSystem), s.Messages)
 	if err != nil {
 		return Verdict{}, err
 	}

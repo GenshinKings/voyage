@@ -99,9 +99,12 @@ type Server struct {
 	PracBias   map[string]int       `json:"pracBias"`   // 科目→难度偏置（楼梯式 DDA：±80 内）
 	PracStreak map[string]int       `json:"pracStreak"` // 科目→连对计数（bias 上探的依据）
 	// 真实知识连接："核心ID->语境ID"→语境式练习真实调用次数——关联图的强边来源
-	ContextEdges map[string]int     `json:"contextEdges"`
-	Tutor      *tutor.Tutor         `json:"-"`
-	Exer       *exercise.Engine     `json:"-"`
+	ContextEdges map[string]int `json:"contextEdges"`
+	// 模型配置口：多 Profile 热切换（key 只落本地 llm.json，0600，不入仓库）
+	LLMStore   *llm.Store       `json:"-"`
+	AgentsPath string           `json:"-"` // AGENTS.md 约束文件（每次 LLM 调用热读）
+	Tutor      *tutor.Tutor     `json:"-"`
+	Exer       *exercise.Engine `json:"-"`
 }
 
 func (s *Server) load(path string, v any) bool {
@@ -123,12 +126,15 @@ func (s *Server) save(path string, v any) {
 
 // NewServer 装配：缺 goals 时写入种子（90 天冲刺三产出物）。
 func NewServer(dir string) *Server {
-	s := &Server{Dir: dir, Ledger: evidence.New(), Bandit: bandit.New(time.Now().UnixNano()), Ability: ability.New()}
-	if cfg, err := llm.LoadConfig(filepath.Join(dir, "llm.json")); err == nil {
-		client := llm.NewClient(cfg)
-		s.Tutor = &tutor.Tutor{Dir: dir, Client: client}
-		s.Exer = &exercise.Engine{Client: client}
+	s := &Server{Dir: dir, Ledger: evidence.New(), Bandit: bandit.New(time.Now().UnixNano()), Ability: ability.New(), AgentsPath: filepath.Join(dir, "AGENTS.md")}
+	// 模型配置口：llm.json 多 Profile（兼容旧单配置自动迁移）；AGENTS.md 用户约束（缺失写默认模板）
+	if st, err := llm.LoadStore(filepath.Join(dir, "llm.json")); err == nil {
+		s.LLMStore = st
 	}
+	if _, err := os.Stat(s.AgentsPath); os.IsNotExist(err) {
+		_ = os.WriteFile(s.AgentsPath, []byte(defaultAgentsMD), 0o644)
+	}
+	s.rebuildLLM()
 	loaded := s.load("state.json", s)
 	// 履历从单一真相源恢复（此前只信 state.json 的过期副本，重启即丢——事故 2026-10-20）
 	s.load("ledger.json", &s.Ledger)
@@ -164,6 +170,53 @@ func NewServer(dir string) *Server {
 }
 
 func (s *Server) saveState() { s.save("state.json", s) }
+
+// rebuildLLM 按当前激活 Profile 重建 LLM 客户端（切换/新增模型后热生效）。
+func (s *Server) rebuildLLM() {
+	if s.LLMStore == nil {
+		return
+	}
+	p, err := s.LLMStore.ActiveProfile()
+	if err != nil {
+		return
+	}
+	client := llm.NewClient(p.Config())
+	s.Tutor = &tutor.Tutor{Dir: s.Dir, Client: client, AgentsPath: s.AgentsPath}
+	s.Exer = &exercise.Engine{Client: client, AgentsPath: s.AgentsPath}
+}
+
+func (s *Server) readAgents() string {
+	b, err := os.ReadFile(s.AgentsPath)
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
+// defaultAgentsMD 首启写入的用户可编辑约束模板（每次 LLM 调用热读，改完即生效）。
+const defaultAgentsMD = `# AGENTS.md — AI 助教行为约束
+
+> 本文件在**每次** AI 调用时注入，改完保存即生效（无需重启）。
+> 与系统默认纪律冲突时，以本文件为准。删掉本文件则回到默认纪律。
+
+## 教学边界
+- 只教当前知识点课上讲过的内容；对话没教到的概念不出题、不默认学习者会。
+- 每条回复 ≤250 字，永远以让学习者动一次脑/动一次手收尾。
+- 语气温和不评判，不用考试腔，多用生活化类比。
+
+## 收尾规则
+- [PASS] 与 [PASS:partial] 必须单独成行。
+- 加深追问必须单独成条并等学习者回答；不在同一条消息里既提问又收尾。
+- 收尾自查：还有没讲到也没被问到的要点 → 先输出【还有没讲的：…要继续学吗？】。
+
+## 出题与批改
+- 只出实操题（动手算 / 写代码 / 场景决策），不出背诵默写题。
+- 语境式：旧概念在新题路径中被自然调用，不在题面重新讲解。
+- 批改先说对错再给一步提示，不直接报答案。
+
+## 我的自定义约束
+（在下面添加你自己的要求，例如：讲解尽量引用我的行业背景；少用数学符号；全程中文……）
+`
 
 // RefreshPlan 重新生成今日计划（bandit 学形态，规则引擎给骨架）。
 func (s *Server) RefreshPlan() scheduler.TodayPlan {
@@ -637,6 +690,70 @@ func (s *Server) Handlers() http.Handler {
 			return
 		}
 		http.Error(w, "阅读材料不存在", 404)
+	})
+	mux.HandleFunc("/api/llm/profiles", func(w http.ResponseWriter, _ *http.Request) {
+		profiles := []map[string]any{}
+		active := ""
+		if s.LLMStore != nil {
+			active = s.LLMStore.Active
+			for name, pr := range s.LLMStore.Profiles {
+				profiles = append(profiles, map[string]any{
+					"name": name, "baseUrl": pr.BaseURL, "model": pr.Model,
+					"keyMasked": pr.MaskKey(), "active": name == s.LLMStore.Active,
+				})
+			}
+		}
+		writeJSON(w, map[string]any{"active": active, "profiles": profiles, "agents": s.readAgents()})
+	})
+	mux.HandleFunc("/api/llm/profile", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Name    string `json:"name"`
+			BaseURL string `json:"baseUrl"`
+			Key     string `json:"key"`
+			Model   string `json:"model"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		req.Name = strings.TrimSpace(req.Name)
+		if req.Name == "" || req.BaseURL == "" || req.Model == "" {
+			http.Error(w, "name / baseUrl / model 必填", 400)
+			return
+		}
+		if s.LLMStore == nil {
+			s.LLMStore = &llm.Store{Profiles: map[string]llm.Profile{}}
+		}
+		key := strings.TrimSpace(req.Key)
+		if key == "" { // key 留空=保留该 profile 已存 key
+			if old, ok := s.LLMStore.Profiles[req.Name]; ok {
+				key = old.Key
+			}
+		}
+		if key == "" {
+			http.Error(w, "key 不能为空（首次配置该模型时必填）", 400)
+			return
+		}
+		s.LLMStore.Profiles[req.Name] = llm.Profile{Name: req.Name, BaseURL: req.BaseURL, Key: key, Model: req.Model}
+		s.LLMStore.Active = req.Name
+		if err := s.LLMStore.Save(filepath.Join(s.Dir, "llm.json")); err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		s.rebuildLLM()
+		writeJSON(w, map[string]any{"ok": true, "active": req.Name})
+	})
+	mux.HandleFunc("/api/agents", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			var req struct {
+				Content string `json:"content"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&req)
+			if err := os.WriteFile(s.AgentsPath, []byte(req.Content), 0o644); err != nil {
+				http.Error(w, err.Error(), 500)
+				return
+			}
+			writeJSON(w, map[string]any{"ok": true})
+			return
+		}
+		writeJSON(w, map[string]any{"content": s.readAgents()})
 	})
 	mux.HandleFunc("/api/graph", func(w http.ResponseWriter, _ *http.Request) {
 		nodes := []map[string]any{}
