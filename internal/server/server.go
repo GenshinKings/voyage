@@ -71,6 +71,18 @@ type Completed struct {
 	Shape   string   `json:"shape,omitempty"`
 }
 
+// Reading 阅读材料：教务策展产出的原文（或中文整理/翻译）。读完记「知道」级履历。
+type Reading struct {
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	URL         string `json:"url"`
+	Content     string `json:"content"`            // 正文（中文整理/翻译，Markdown）
+	Original    string `json:"original,omitempty"` // 英文原文（如有）
+	Translation string `json:"translation,omitempty"` // Original 的中文翻译（按需生成缓存）
+	Done        bool   `json:"done"`
+	ReadAt      string `json:"readAt,omitempty"`
+}
+
 // Server 应用壳。
 type Server struct {
 	Dir       string               `json:"dir"`
@@ -81,6 +93,7 @@ type Server struct {
 	Bandit    *bandit.Bandit       `json:"bandit"`
 	Ability   *ability.Tracker     `json:"ability"`
 	Exercises []exercise.Exercise  `json:"exercises"` // 今天的实操练习（助教按实时进度出）
+	Readings  []Reading            `json:"readings"`  // 阅读材料（阅读管理器主体）
 	Tutor     *tutor.Tutor         `json:"-"`
 	Exer      *exercise.Engine     `json:"-"`
 }
@@ -110,7 +123,22 @@ func NewServer(dir string) *Server {
 		s.Tutor = &tutor.Tutor{Dir: dir, Client: client}
 		s.Exer = &exercise.Engine{Client: client}
 	}
-	if s.load("state.json", s) {
+	loaded := s.load("state.json", s)
+	// 阅读材料合并：内容以 readings.json（教务策展，覆盖式）为准，Done/翻译缓存以 state.json 为准
+	persisted := s.Readings
+	s.load("readings.json", &s.Readings)
+	byID := map[string]Reading{}
+	for _, p := range persisted {
+		byID[p.ID] = p
+	}
+	for i := range s.Readings {
+		if p, ok := byID[s.Readings[i].ID]; ok {
+			s.Readings[i].Done = p.Done
+			s.Readings[i].ReadAt = p.ReadAt
+			s.Readings[i].Translation = p.Translation
+		}
+	}
+	if loaded {
 		return s
 	}
 	// 种子：90 天冲刺（90天FDE证据冲刺-v1草案.md 的三产出物）
@@ -277,7 +305,7 @@ func (s *Server) Handlers() http.Handler {
 		}
 		writeJSON(w, map[string]any{
 			"plan": s.Plan, "done": s.Done, "goals": s.Goals,
-			"exercises": s.Exercises,
+			"exercises": s.Exercises, "readings": s.Readings,
 			"ledger": s.Ledger.List(), "counts": map[string]int{"known": k, "used": u, "done": d},
 			"graduation": map[string]any{"state": string(g), "reason": gReason},
 			"curriculum": curriculum, "today": today, "sessions": sessions,
@@ -392,7 +420,13 @@ func (s *Server) Handlers() http.Handler {
 			http.Error(w, "先去上今天的课——聊过的内容才会出练习", 400)
 			return
 		}
-		list, err := s.Exer.Generate(topics)
+		// 难度自适应 v1（分层架构：能力模型→策略）：按当前 Elo 难度带约束题面难度
+		diffNote := ""
+		if s.Ability != nil {
+			lo, hi := s.Ability.DifficultyBand("practice")
+			diffNote = fmt.Sprintf("\n\n学习者当前能力：Elo≈%.0f。所有题面难度必须落在 Elo %.0f–%.0f 区间（对应预期正确率约 50%%–85%%）：不出明显超纲的题，也不出送分题。", s.Ability.Rating("practice"), lo, hi)
+		}
+		list, err := s.Exer.Generate(topics, diffNote)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
@@ -420,6 +454,17 @@ func (s *Server) Handlers() http.Handler {
 				http.Error(w, err.Error(), 500)
 				return
 			}
+			// 能力模型更新（RL 分层第一层）：每题首次作答=一次能力观测，Elo 随对错浮动
+			first := true
+			for _, m := range s.Exercises[i].Messages {
+				if m.Role == "user" {
+					first = false
+					break
+				}
+			}
+			if first && s.Ability != nil {
+				s.Ability.Answer("practice", s.Ability.Rating("practice"), done)
+			}
 			if done { // 实操完成=「用过」级履历
 				s.Ledger.Record(s.Exercises[i].ID, s.Exercises[i].Title, evidence.Used, time.Now(), "practice", "")
 				s.save("ledger.json", s.Ledger)
@@ -429,6 +474,59 @@ func (s *Server) Handlers() http.Handler {
 			return
 		}
 		http.Error(w, "练习不存在", 404)
+	})
+	mux.HandleFunc("/api/reading/done", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			ID string `json:"id"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		for i := range s.Readings {
+			if s.Readings[i].ID != req.ID || s.Readings[i].Done {
+				continue
+			}
+			s.Readings[i].Done = true
+			s.Readings[i].ReadAt = time.Now().Format(time.RFC3339)
+			s.Ledger.Record(s.Readings[i].ID, s.Readings[i].Title, evidence.Known, time.Now(), "reading", s.Readings[i].URL)
+			s.save("ledger.json", s.Ledger)
+			s.saveState()
+			writeJSON(w, map[string]any{"ok": true})
+			return
+		}
+		http.Error(w, "阅读材料不存在或已读完", 404)
+	})
+	mux.HandleFunc("/api/reading/translate", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			ID string `json:"id"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		for i := range s.Readings {
+			rd := &s.Readings[i]
+			if rd.ID != req.ID {
+				continue
+			}
+			if rd.Original == "" {
+				http.Error(w, "该材料没有英文原文可翻译", 400)
+				return
+			}
+			if rd.Translation == "" {
+				if s.Exer == nil || s.Exer.Client == nil {
+					http.Error(w, "LLM 未配置（outpost2-data/llm.json）", 400)
+					return
+				}
+				tr, err := s.Exer.Client.Chat(
+					`你是技术文档翻译。把英文技术文档翻译成中文：保留 Markdown 结构与代码块（代码与代码注释不翻译），术语首次出现时括注英文原词。直接输出译文 Markdown，不要解释。`,
+					[]llm.Message{{Role: "user", Content: rd.Original}})
+				if err != nil {
+					http.Error(w, err.Error(), 500)
+					return
+				}
+				rd.Translation = strings.TrimSpace(tr)
+				s.saveState()
+			}
+			writeJSON(w, map[string]any{"translation": rd.Translation})
+			return
+		}
+		http.Error(w, "阅读材料不存在", 404)
 	})
 	mux.HandleFunc("/api/graph", func(w http.ResponseWriter, _ *http.Request) {
 		nodes := []map[string]any{}

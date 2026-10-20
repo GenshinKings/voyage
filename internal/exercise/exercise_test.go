@@ -33,7 +33,7 @@ func TestGenerateParseThreeShapes(t *testing.T) {
 	}
 	for i, raw := range shapes {
 		e := &Engine{Client: &mockClient{jsonOut: []string{raw}}}
-		list, err := e.Generate([]string{"Fee Bayesian Stats / 贝叶斯公式"})
+		list, err := e.Generate([]string{"Fee Bayesian Stats / 贝叶斯公式"}, "")
 		if err != nil {
 			t.Fatalf("shape %d: %v", i, err)
 		}
@@ -49,7 +49,7 @@ func TestGenerateParseThreeShapes(t *testing.T) {
 func TestGenerateEmptyProblemSkipped(t *testing.T) {
 	raw := `{"exercises":[{"title":"a","topic":"t","problem":""},{"title":"b","topic":"t","problem":"真题面"}]}`
 	e := &Engine{Client: &mockClient{jsonOut: []string{raw}}}
-	list, err := e.Generate([]string{"t"})
+	list, err := e.Generate([]string{"t"}, "")
 	if err != nil || len(list) != 1 || list[0].Title != "b" {
 		t.Fatalf("list=%+v err=%v", list, err)
 	}
@@ -81,7 +81,7 @@ func TestAnswerNoPassStaysActive(t *testing.T) {
 
 func TestGenerateNoClient(t *testing.T) {
 	e := &Engine{}
-	if _, err := e.Generate([]string{"t"}); err == nil {
+	if _, err := e.Generate([]string{"t"}, ""); err == nil {
 		t.Fatal("无 Client 应报错")
 	}
 }

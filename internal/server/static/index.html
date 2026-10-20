@@ -71,6 +71,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Micr
 .item .t{font-weight:600;letter-spacing:-.01em}
 .item .m{color:var(--mut);font-size:12.5px;margin-top:1px}
 #graphWrap{height:calc(100vh - 240px);position:relative;margin:8px 24px 20px}
+#readView{max-width:736px;margin:0 auto;padding:8px 28px 130px}
+.reading-body{background:var(--card);border-radius:12px;padding:22px 26px;font-size:14.5px;line-height:1.85;box-shadow:0 1px 2px rgba(0,0,0,.05),0 0 0 1px rgba(0,0,0,.03)}
+.reading-body h3{font-size:17px;letter-spacing:-.01em;margin:18px 0 6px}
+.reading-body h4{font-size:14.5px;margin:14px 0 4px}
+.reading-body pre{background:#f6f8fa;border:1px solid rgba(0,0,0,.07);border-radius:9px;padding:12px 14px;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:12.5px;line-height:1.55;overflow-x:auto;margin:10px 0;white-space:pre}
+.reading-body code{background:#f0f1f3;border-radius:5px;padding:1px 6px;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:12.5px}
+.reading-body pre code{background:none;padding:0}
+.reading-body blockquote{border-left:3px solid var(--pink);background:rgba(0,113,227,.05);border-radius:0 8px 8px 0;padding:8px 14px;margin:10px 0;color:#3a3a3c}
+.reading-original{margin-bottom:10px}
 canvas{width:100%;height:100%;display:block}
 .gLegend{position:absolute;top:12px;left:14px;font-size:12px;color:var(--mut);background:rgba(255,255,255,.7);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);padding:6px 12px;border-radius:999px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
 .hidden{display:none!important}
@@ -91,6 +100,7 @@ a:hover{text-decoration:underline}
   <div class="logo"><div class="kicker">OUTPOST 2.0</div><b>全托管学习机</b></div>
   <div class="sidebtns">
     <div class="sbtn on" data-v="learn">◈ 学习</div>
+    <div class="sbtn" data-v="read">◈ 阅读</div>
     <div class="sbtn" data-v="sediment">◈ 沉淀</div>
     <div class="sbtn" data-v="graph">◈ 关联</div>
   </div>
@@ -106,6 +116,7 @@ a:hover{text-decoration:underline}
   <div id="topbar"><div><div class="kicker" id="kicker">LEARNING · 对话式教学</div><h1 id="lessonTitle">今天丢来的</h1></div><div style="display:flex;gap:8px;flex-shrink:0"><button id="todayClass" class="backbtn hidden" style="border-color:var(--line);color:var(--mut)" onclick="openTodayClass()">今天的课</button><button id="backToday" class="backbtn hidden" onclick="backToday()">← 跳回今日知识点</button></div></div>
   <div id="view">
     <div id="chatOuter"><div id="chat"></div></div>
+    <div id="readView" class="hidden"></div>
     <div id="sediment" class="hidden"></div>
     <div id="graphWrap" class="hidden"><div class="gLegend">圆=知识点 · 线=先后关系 · 越深=学得越扎实 · 点圆回到对话</div><canvas id="graphCanvas"></canvas></div>
   </div>
@@ -140,6 +151,7 @@ function updateChrome(v){
   $('todayClass').classList.toggle('hidden',!(v==='learn'&&EXER&&!HIST));
   const kb=$('kicker');
   if(v==='sediment'){kb.textContent='SEDIMENT · 已经学会的';$('lessonTitle').textContent='沉淀'}
+  else if(v==='read'){kb.textContent='READING · 阅读原文';$('lessonTitle').textContent='阅读'}
   else if(v==='graph'){kb.textContent='GRAPH · 知识地图';$('lessonTitle').textContent='关联'}
   else if(HIST){kb.textContent='HISTORY · 对话历史'}
   else if(EXER){kb.textContent='PRACTICE · 实操练习'}
@@ -153,9 +165,11 @@ function switchTab(v){
   curView=v;
   document.querySelectorAll('.sbtn').forEach(t=>t.classList.toggle('on',t.dataset.v===v));
   $('chatOuter').classList.toggle('hidden',v!=='learn');
+  $('readView').classList.toggle('hidden',v!=='read');
   $('sediment').classList.toggle('hidden',v!=='sediment');
   $('graphWrap').classList.toggle('hidden',v!=='graph');
   updateChrome(v);
+  if(v==='read')renderReadings();
   if(v==='sediment')renderSediment();
   if(v==='graph')renderGraph();
 }
@@ -310,6 +324,63 @@ function openExercise(id){
   renderChat(e.messages);
   switchTab('learn');
 }
+/* ---------- 阅读：原文/中文对照的阅读管理器 ---------- */
+let READING=null;
+function mdRender(t){
+  let h=esc(t);
+  h=h.replace(/```([\s\S]*?)```/g,(m,c)=>'<pre>'+c.replace(/^\n/,'')+'</pre>');
+  h=h.replace(/^### (.*)$/gm,'<h4>$1</h4>').replace(/^## (.*)$/gm,'<h3>$1</h3>').replace(/^# (.*)$/gm,'<h3>$1</h3>');
+  h=h.replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>');
+  h=h.replace(/^&gt; (.*)$/gm,'<blockquote>$1</blockquote>');
+  h=h.replace(/`([^`\n]+)`/g,'<code>$1</code>');
+  h=h.replace(/^- (.*)$/gm,'• $1<br>');
+  return h;
+}
+function renderReadings(){
+  const v=$('readView');
+  if(READING){renderReading(READING);return}
+  const rs=(STATE.readings||[]).slice().sort((x,y)=>(x.done?1:0)-(y.done?1:0));
+  if(!rs.length){v.innerHTML='<div class="empty" style="margin-top:80px">教务策展的阅读材料会落在这里——<br>原文（或中文翻译），读完记入履历</div>';return}
+  let html='<div class="grouplabel" style="margin:4px 0 8px">阅读材料</div>';
+  rs.forEach(r=>{
+    html+='<div class="lp'+(r.done?' done':'')+'" onclick="openReading(\''+r.id+'\')"><span class="st">'+(r.done?'✓':'·')+'</span><span>'+esc(r.title)+'</span></div>';
+  });
+  v.innerHTML=html;
+}
+function openReading(id){
+  const r=(STATE.readings||[]).find(x=>x.id===id);if(!r)return;
+  READING=id;renderReading(r);
+}
+function renderReading(r){
+  const v=$('readView');
+  let body='';
+  if(r.original&&!r.translation){
+    body='<div class="mut" style="margin:8px 0">下面是中文整理版。<a href="'+esc(r.url)+'" target="_blank">读英文原文 ↗</a></div>';
+  }
+  body+='<div class="reading-body">'+mdRender(r.translation||r.content||r.original||'（空）')+'</div>';
+  v.innerHTML='<div style="display:flex;gap:8px;margin:4px 0 10px;flex-wrap:wrap">'+
+    (r.original?'<button class="backbtn" onclick="toggleOriginal(\''+r.id+'\')" style="border-color:var(--line);background:var(--card);color:var(--ink)">中/EN 对照</button>':'')+
+    (r.url?'<button class="backbtn" onclick="window.open(\''+esc(r.url)+'\',\'_blank\')" style="border-color:var(--line);background:var(--card);color:var(--ink)">原文链接 ↗</button>':'')+
+    (r.done?'<span class="mut" style="align-self:center">已读完 ✓</span>':'<button class="backbtn" onclick="finishReading(\''+r.id+'\')">✓ 读完，记入履历</button>')+
+    '</div><div class="mut" style="margin-bottom:8px"><a href="'+esc(r.url)+'" target="_blank">'+esc(r.url)+'</a></div>'+body;
+}
+function toggleOriginal(id){
+  const r=(STATE.readings||[]).find(x=>x.id===id);if(!r)return;
+  const v=$('readView');
+  const showing=v.querySelector('.reading-original');
+  if(showing){showing.remove();return}
+  v.querySelector('.reading-body').insertAdjacentHTML('beforebegin','<div class="reading-original"><div class="grouplabel">ORIGINAL</div><div class="reading-body">'+mdRender(r.original)+'</div></div>');
+}
+async function finishReading(id){
+  try{
+    await api('/api/reading/done',{id});
+    const r=(STATE.readings||[]).find(x=>x.id===id);if(r)r.done=true;
+    READING=null;renderReadings();await loadState();
+    toast('读完——履历记「知道」');
+  }catch(e){toast('失败：'+e.message)}
+}
+
+/* ---------- 沉淀：已经学会的 ---------- */
 function renderSediment(){
   const s=$('sediment');const st=STATE;if(!st)return;
   let html='<div class="counts"><div class="c"><div class="n">'+st.counts.known+'</div><div class="l">知道</div></div><div class="c"><div class="n">'+st.counts.used+'</div><div class="l">用过</div></div><div class="c"><div class="n">'+st.counts.done+'</div><div class="l">做过</div></div></div>';
