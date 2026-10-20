@@ -462,6 +462,7 @@ function jumpLesson(nodeId){
 
 /* ---------- 关联图：力导向 ---------- */
 let GNODES=[];
+/* ---------- 关联图：弧线图（课程序为轴，练习真实调用为弧） ---------- */
 async function renderGraph(){
   GNODES=[];
   const g=await api('/api/graph');
@@ -470,82 +471,60 @@ async function renderGraph(){
   ((STATE.curriculum||{}).lessons||[]).forEach(l=>{if(l.status==='done')learned[l.id]=true});
   const exs=(STATE&&STATE.exercises)||[];
   const exAllDone=exs.length>0&&exs.every(e=>e.status==='done');
-  const nodes=(g.nodes||[]).filter(n=>learned[n.id]&&exAllDone).map((n,i)=>({...n,x:0,y:0,idx:i}));
-  const edges=(g.edges||[]).filter(e=>learned[e.from]&&learned[e.to]&&exAllDone);
-  // 标准 FR 力导向：合力先累加，位移按退火温度 clamp —— 数学上不可能发散（旧版逐对直接位移曾振荡炸成 NaN）
-  const cx=640,cy=320;
-  nodes.forEach((n,i)=>{const ang=i/nodes.length*Math.PI*2;n.x=cx+Math.cos(ang)*280;n.y=cy+Math.sin(ang)*185});
-  const byId={};nodes.forEach(n=>byId[n.id]=n);
-  const fX=nodes.map(()=>0),fY=nodes.map(()=>0);
-  for(let it=0;it<400;it++){
-    const temp=90*(1-it/400)+5;
-    fX.fill(0);fY.fill(0);
-    for(let i=0;i<nodes.length;i++)for(let j=i+1;j<nodes.length;j++){
-      const dx=nodes[j].x-nodes[i].x,dy=nodes[j].y-nodes[i].y;
-      let d=Math.hypot(dx,dy);if(d<1)d=1;
-      const f=10000/(d*d),ux=dx/d,uy=dy/d;
-      fX[i]-=ux*f;fY[i]-=uy*f;fX[j]+=ux*f;fY[j]+=uy*f;
-    }
-    edges.forEach(e=>{
-      const a=byId[e.from],b=byId[e.to];if(!a||!b)return;
-      const dx=b.x-a.x,dy=b.y-a.y;
-      let d=Math.hypot(dx,dy);if(d<1)d=1;
-      const f=(d-150)*0.014;
-      fX[a.idx]+=dx/d*f;fY[a.idx]+=dy/d*f;
-      fX[b.idx]-=dx/d*f;fY[b.idx]-=dy/d*f;
-    });
-    nodes.forEach(n=>{
-      const df=Math.hypot(fX[n.idx],fY[n.idx]);
-      const cl=df>temp?temp/df:1;
-      n.x+=fX[n.idx]*cl;n.y+=fY[n.idx]*cl;
-      n.x+=(cx-n.x)*0.004;n.y+=(cy-n.y)*0.004;
-    });
-  }
+  // 节点=收尾的知识点，按课程序排列（filter 保序）；同 id 去重
+  const nodes=(g.nodes||[]).filter(n=>learned[n.id]).filter((n,i,arr)=>arr.findIndex(m=>m.id===n.id)===i);
+  const ctxEdges=(g.edges||[]).filter(e=>e.type==='context'&&learned[e.from]&&learned[e.to]);
   try{
     window.__graphErr='drawing';
+    await new Promise(r=>setTimeout(r,60)); // 布局兜底。不用 rAF：后台页 rAF 会被浏览器节流暂停
     const cv=$('graphCanvas');
-    if(!cv||!cv.clientWidth){await new Promise(r=>setTimeout(r,60));} // 布局兜底。不用 rAF：后台页面 rAF 会被浏览器节流暂停
+    if(!cv||!cv.clientWidth){await new Promise(r=>setTimeout(r,60));}
     if(!cv||!cv.clientWidth)throw new Error('画布无尺寸');
     const dpr=window.devicePixelRatio||1;
     cv.width=cv.clientWidth*dpr;cv.height=cv.clientHeight*dpr;
     const ctx=cv.getContext('2d');ctx.scale(dpr,dpr);
     ctx.clearRect(0,0,cv.clientWidth,cv.clientHeight);
-    if(!nodes.length){ // 空地图：资格未到（没收尾的 / 练习没做完的都不入图）
+    if(!nodes.length){
       ctx.fillStyle='#6B7684';ctx.font='14px system-ui';ctx.textAlign='center';
       const msg=exAllDone?'收尾过的知识点会落进这张地图——今天的课还没收尾':'把今天的练习做完，学过的知识点就会落进这张地图';
       ctx.fillText(msg,cv.clientWidth/2,cv.clientHeight/2);
       cv.onclick=null;
+      window.__graphErr='';
       return;
     }
-    const px=x=>Math.max(36,Math.min(cv.clientWidth-36,x));
-    const py=y=>Math.max(36,Math.min(cv.clientHeight-56,y));
-    edges.forEach(e=>{
-      const a=nodes.find(n=>n.id===e.from),b=nodes.find(n=>n.id===e.to);if(!a||!b)return;
-      const isCtx=e.type==='context';
-      const mx=(px(a.x)+px(b.x))/2,my=(py(a.y)+py(b.y))/2;
-      if(isCtx){
-        // 强边：练习中真实发生过的知识调用（蓝色，越粗=调用越多）
-        ctx.strokeStyle='rgba(0,113,227,.75)';
-        ctx.lineWidth=Math.min(1.2+((e.weight||1)-1)*1.4,5);
-      }else{
-        // 弱边：课程先后顺序（教学序列）
-        ctx.strokeStyle='#C9D1D9';ctx.lineWidth=1.2;
-      }
-      ctx.beginPath();ctx.moveTo(px(a.x),py(a.y));ctx.lineTo(px(b.x),py(b.y));ctx.stroke();
-      if(isCtx){
-        ctx.fillStyle='rgba(0,113,227,.9)';ctx.font='11px system-ui';ctx.textAlign='center';
-        ctx.fillText('×'+(e.weight||1),mx,my-4);
-      }
+    const W=cv.clientWidth,H=cv.clientHeight;
+    const mL=80,mR=80,axisY=H*0.70;
+    const step=nodes.length>1?(W-mL-mR)/(nodes.length-1):0;
+    nodes.forEach((n,i)=>{n.x=mL+i*step;n.y=axisY;});
+    const byId={};nodes.forEach(n=>byId[n.id]=n);
+    // 轴线（课程先后=节点在轴上的位置，顺序即先后）
+    ctx.strokeStyle='#D5DBE1';ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(mL-30,axisY);ctx.lineTo(W-mR+30,axisY);ctx.stroke();
+    // 语境调用弧线（画在节点之下）：蓝色，越频繁越高越粗，弧顶标 ×N
+    ctxEdges.forEach(e=>{
+      const a=byId[e.from],b=byId[e.to];if(!a||!b||a===b)return;
+      const wgt=e.weight||1;
+      const lift=Math.min(70+wgt*30,H*0.44);
+      ctx.strokeStyle='rgba(0,113,227,'+Math.min(.5+wgt*.1,.92)+')';
+      ctx.lineWidth=Math.min(1.6+wgt*1.2,6.5);
+      ctx.beginPath();
+      ctx.moveTo(a.x,a.y-13);
+      ctx.quadraticCurveTo((a.x+b.x)/2,axisY-lift,b.x,b.y-13);
+      ctx.stroke();
+      ctx.fillStyle='#0071e3';ctx.font='600 13px system-ui';ctx.textAlign='center';
+      ctx.fillText('×'+wgt,(a.x+b.x)/2,axisY-lift+6);
     });
+    // 节点+交错标签
     GNODES=[];
-    nodes.forEach(n=>{
-      const x=px(n.x),y=py(n.y);
-      ctx.beginPath();ctx.arc(x,y,16,0,7);
-      ctx.fillStyle=(n.status==='done')?'#101B29':'#B7C4D2';
-      ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
-      ctx.fillStyle='#101B29';ctx.font='12px system-ui';ctx.textAlign='center';
-      const t=String(n.title||'');ctx.fillText(t.length>9?t.slice(0,9)+'…':t,x,y+32);
-      GNODES.push({id:n.id,x:x,y:y});
+    nodes.forEach((n,i)=>{
+      ctx.beginPath();ctx.arc(n.x,n.y,13,0,7);
+      ctx.fillStyle='#1d1d1f';ctx.fill();
+      ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
+      const t=String(n.title||'');
+      const label=t.length>8?t.slice(0,8)+'…':t;
+      ctx.fillStyle='#1d1d1f';ctx.font='12.5px system-ui';ctx.textAlign='center';
+      ctx.fillText(label,n.x,axisY+32+(i%2)*22);
+      GNODES.push({id:n.id,x:n.x,y:n.y});
     });
     window.__graphErr='';
   }catch(err){const m=String(err&&err.message||err);window.__graphErr=m;toast('关联图渲染失败：'+m)}
@@ -554,7 +533,7 @@ async function renderGraph(){
   cv.onclick=ev=>{
     const rect=cv.getBoundingClientRect();
     const mx=ev.clientX-rect.left,my=ev.clientY-rect.top;
-    const hit=GNODES.find(n=>Math.hypot(n.x-mx,n.y-my)<=18);
+    const hit=GNODES.find(n=>Math.hypot(n.x-mx,n.y-my)<=17);
     if(hit)jumpLesson(hit.id);else toast('这个知识点还没开课——完成前序知识它就来了');
   };
 }
