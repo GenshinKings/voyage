@@ -7,13 +7,13 @@ package server
 
 import (
 	_ "embed"
-	"strings"
 	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"outpost2/internal/ability"
@@ -76,8 +76,8 @@ type Reading struct {
 	ID          string `json:"id"`
 	Title       string `json:"title"`
 	URL         string `json:"url"`
-	Content     string `json:"content"`            // 正文（中文整理/翻译，Markdown）
-	Original    string `json:"original,omitempty"` // 英文原文（如有）
+	Content     string `json:"content"`               // 正文（中文整理/翻译，Markdown）
+	Original    string `json:"original,omitempty"`    // 英文原文（如有）
 	Translation string `json:"translation,omitempty"` // Original 的中文翻译（按需生成缓存）
 	Done        bool   `json:"done"`
 	ReadAt      string `json:"readAt,omitempty"`
@@ -85,17 +85,19 @@ type Reading struct {
 
 // Server 应用壳。
 type Server struct {
-	Dir       string               `json:"dir"`
-	Goals     []Goal               `json:"goals"`
-	Plan      *scheduler.TodayPlan `json:"plan,omitempty"`
-	Done      Completed            `json:"done"`
-	Ledger    *evidence.Ledger     `json:"ledger"`
-	Bandit    *bandit.Bandit       `json:"bandit"`
-	Ability   *ability.Tracker     `json:"ability"`
-	Exercises []exercise.Exercise  `json:"exercises"` // 今天的实操练习（助教按实时进度出）
-	Readings  []Reading            `json:"readings"`  // 阅读材料（阅读管理器主体）
-	Tutor     *tutor.Tutor         `json:"-"`
-	Exer      *exercise.Engine     `json:"-"`
+	Dir        string               `json:"dir"`
+	Goals      []Goal               `json:"goals"`
+	Plan       *scheduler.TodayPlan `json:"plan,omitempty"`
+	Done       Completed            `json:"done"`
+	Ledger     *evidence.Ledger     `json:"ledger"`
+	Bandit     *bandit.Bandit       `json:"bandit"`
+	Ability    *ability.Tracker     `json:"ability"`
+	Exercises  []exercise.Exercise  `json:"exercises"`  // 今天的实操练习（助教按实时进度出）
+	Readings   []Reading            `json:"readings"`   // 阅读材料（阅读管理器主体）
+	PracBias   map[string]int       `json:"pracBias"`   // 科目→难度偏置（楼梯式 DDA：±80 内）
+	PracStreak map[string]int       `json:"pracStreak"` // 科目→连对计数（bias 上探的依据）
+	Tutor      *tutor.Tutor         `json:"-"`
+	Exer       *exercise.Engine     `json:"-"`
 }
 
 func (s *Server) load(path string, v any) bool {
@@ -315,13 +317,17 @@ func (s *Server) Handlers() http.Handler {
 		writeJSON(w, s.RefreshPlan())
 	})
 	mux.HandleFunc("/api/complete-main", func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ Title string `json:"title"` }
+		var req struct {
+			Title string `json:"title"`
+		}
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		s.CompleteMain(req.Title)
 		writeJSON(w, map[string]any{"ok": true})
 	})
 	mux.HandleFunc("/api/complete-review", func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ ID string `json:"id"` }
+		var req struct {
+			ID string `json:"id"`
+		}
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		s.Done.Reviews = append(s.Done.Reviews, req.ID)
 		s.saveState()
@@ -337,7 +343,9 @@ func (s *Server) Handlers() http.Handler {
 		writeJSON(w, map[string]any{"ok": true})
 	})
 	mux.HandleFunc("/api/subject", func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ Name string `json:"name"` }
+		var req struct {
+			Name string `json:"name"`
+		}
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		if strings.TrimSpace(req.Name) == "" {
 			http.Error(w, "科目名不能为空", 400)
@@ -358,7 +366,9 @@ func (s *Server) Handlers() http.Handler {
 		writeJSON(w, cur)
 	})
 	mux.HandleFunc("/api/tutor/open", func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ NodeID string `json:"nodeId"` }
+		var req struct {
+			NodeID string `json:"nodeId"`
+		}
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		lesson := findLesson(s, req.NodeID)
 		if lesson == nil {
@@ -406,30 +416,62 @@ func (s *Server) Handlers() http.Handler {
 			http.Error(w, "LLM 未配置（outpost2-data/llm.json）", 400)
 			return
 		}
-		var topics []string
+		arms := []string{}
+		digests := map[string]string{}
+		curSub := ""
 		if s.Tutor != nil {
 			for _, l := range s.Tutor.Curriculum().Lessons {
 				sess := s.Tutor.Load(l.ID)
 				if sess == nil {
 					continue // 只从和助教聊天过程中真正学过的知识点出题
 				}
-				topics = append(topics, l.Subject+" / "+l.Title+"\n  课上讲了："+sessionDigest(sess))
+				arms = append(arms, l.ID)
+				digests[l.ID] = sessionDigest(sess)
+				curSub = l.Subject
 			}
 		}
-		if len(topics) == 0 {
+		if len(arms) == 0 {
 			http.Error(w, "先去上今天的课——聊过的内容才会出练习", 400)
 			return
+		}
+		// 策略层 v1：Thompson 采样选题——高奖励的知识点多出（利用），低后验的也会被采到（探索）
+		picked := s.Bandit.PickN("practice", arms, 3)
+		byID := map[string]tutor.Lesson{}
+		for _, l := range s.Tutor.Curriculum().Lessons {
+			byID[l.ID] = l
+		}
+		ordered := make([]string, 0, len(picked))
+		for _, id := range picked {
+			if l, ok := byID[id]; ok {
+				ordered = append(ordered, l.Subject+" / "+l.Title+"\n  课上讲了："+digests[id])
+			}
 		}
 		// 难度自适应 v1（分层架构：能力模型→策略）：按当前 Elo 难度带约束题面难度
 		diffNote := ""
 		if s.Ability != nil {
 			lo, hi := s.Ability.DifficultyBand("practice")
-			diffNote = fmt.Sprintf("\n\n学习者当前能力：Elo≈%.0f。所有题面难度必须落在 Elo %.0f–%.0f 区间（对应预期正确率约 50%%–85%%）：不出明显超纲的题，也不出送分题。", s.Ability.Rating("practice"), lo, hi)
+			tone := "按区间正常出题"
+			if s.PracBias != nil {
+				if s.PracBias[curSub] >= 40 {
+					tone = "学习者近期连对——在区间内上探偏难（贴上沿）"
+				} else if s.PracBias[curSub] <= -40 {
+					tone = "学习者近期受挫——压到区间下沿，给足提示"
+				}
+			}
+			diffNote = fmt.Sprintf("\n\n学习者当前能力：Elo≈%.0f。所有题面难度必须落在 Elo %.0f–%.0f 区间（对应预期正确率约 50%%–85%%），%s：不出明显超纲的题，也不出送分题。", s.Ability.Rating("practice"), lo, hi, tone)
 		}
-		list, err := s.Exer.Generate(topics, diffNote)
+		list, err := s.Exer.Generate(ordered, diffNote)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
+		}
+		for i := range list { // 回填臂归属：批改结果将作为该知识点的奖励回写
+			if i < len(picked) {
+				list[i].LessonID = picked[i]
+				if l, ok := byID[picked[i]]; ok {
+					list[i].Subject = l.Subject
+				}
+			}
 		}
 		s.Exercises = list
 		s.saveState()
@@ -464,6 +506,36 @@ func (s *Server) Handlers() http.Handler {
 			}
 			if first && s.Ability != nil {
 				s.Ability.Answer("practice", s.Ability.Rating("practice"), done)
+			}
+			// 策略更新（在线训练）：批改结果即奖励；楼梯式难度调整（连对上探/受挫回落）
+			rw := 0.1
+			if done {
+				rw = 1.0
+			}
+			if s.Exercises[i].LessonID != "" {
+				s.Bandit.Settle("practice", s.Exercises[i].LessonID, rw)
+			}
+			if sub := s.Exercises[i].Subject; sub != "" {
+				if s.PracBias == nil {
+					s.PracBias = map[string]int{}
+				}
+				if s.PracStreak == nil {
+					s.PracStreak = map[string]int{}
+				}
+				if done {
+					s.PracStreak[sub]++
+					if s.PracStreak[sub] >= 3 {
+						if s.PracBias[sub] < 80 {
+							s.PracBias[sub] += 40
+						}
+						s.PracStreak[sub] = 0
+					}
+				} else {
+					if s.PracBias[sub] > -80 {
+						s.PracBias[sub] -= 40
+					}
+					s.PracStreak[sub] = 0
+				}
 			}
 			if done { // 实操完成=「用过」级履历
 				s.Ledger.Record(s.Exercises[i].ID, s.Exercises[i].Title, evidence.Used, time.Now(), "practice", "")

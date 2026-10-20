@@ -43,6 +43,29 @@ func (b *Bandit) Pick(contextKey string, arms []string) int {
 	return best
 }
 
+// PickN Thompson 采样排序取前 n 个臂（不重复）——用于「一次出多道题，覆盖多个知识点」。
+// 低后验的臂也会按概率被采到（探索），高奖励的臂大概率排前（利用），自动平衡。
+func (b *Bandit) PickN(contextKey string, arms []string, n int) []string {
+	type row struct {
+		arm string
+		s   float64
+	}
+	rows := make([]row, 0, len(arms))
+	for _, a := range arms {
+		ab := b.ensure(contextKey + "|" + a)
+		rows = append(rows, row{a, betaSample(b.Rng, ab[0], ab[1])})
+	}
+	sort.Slice(rows, func(i, j int) bool { return rows[i].s > rows[j].s })
+	if n > len(rows) {
+		n = len(rows)
+	}
+	out := make([]string, 0, n)
+	for i := 0; i < n; i++ {
+		out = append(out, rows[i].arm)
+	}
+	return out
+}
+
 // Settle 结算某次选择的奖励（0-1）。未选过的臂不结算。
 func (b *Bandit) Settle(contextKey, arm string, reward float64) {
 	if reward < 0 {

@@ -16,7 +16,9 @@ type Exercise struct {
 	ID       string        `json:"id"`
 	Title    string        `json:"title"`
 	Topic    string        `json:"topic"`
-	Status   string        `json:"status"` // active/done
+	Subject  string        `json:"subject,omitempty"`  // 归属科目（难度策略用）
+	LessonID string        `json:"lessonId,omitempty"` // 归属知识点（bandit 奖励结算的臂）
+	Status   string        `json:"status"`             // active/done
 	Messages []llm.Message `json:"messages"`
 }
 
@@ -57,10 +59,10 @@ func (e *Engine) Generate(topics []string, difficultyNote string) ([]Exercise, e
 			continue
 		}
 		out = append(out, Exercise{
-			ID:     now.Format("0102-150405") + fmt.Sprintf("-%02d", i+1),
-			Title:  firstNonEmpty(r.Title, "实操练习"),
-			Topic:  r.Topic,
-			Status: "active",
+			ID:       now.Format("0102-150405") + fmt.Sprintf("-%02d", i+1),
+			Title:    firstNonEmpty(r.Title, "实操练习"),
+			Topic:    r.Topic,
+			Status:   "active",
 			Messages: []llm.Message{{Role: "assistant", Content: "【实操练习】" + r.Problem + "\n\n（把你的解法/算式/代码直接发给我，我来批改。）"}},
 		})
 	}
