@@ -3,9 +3,34 @@ package server
 // server_test.go — 应用壳测试：种子装配 → 计划 → 完成 → 自报 → 履历联动 → 证据页。
 import (
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"outpost2/internal/evidence"
 )
+
+// 履历跨重启不丢：ledger.json 是单一真相源，state.json 怎么变都吞不掉履历（事故 2026-10-20）。
+func TestLedgerSurvivesRestart(t *testing.T) {
+	dir := t.TempDir()
+	// 第一次启动：Record 一条 + 只写 ledger.json（模拟真实 Record 路径）
+	s1 := NewServer(dir)
+	s1.Ledger.Record("L-1", "线性回归与梯度下降", evidence.Known, time.Now(), "tutor:机器学习", "")
+	s1.save("ledger.json", s1.Ledger)
+	// 重启加载（state.json 里没有 ledger 副本——v3.3 之前的事故形态）
+	s2 := NewServer(dir)
+	if got := s2.Ledger.List(); len(got) != 1 || got[0].ID != "L-1" {
+		t.Fatalf("重启后履历丢失: %+v", got)
+	}
+	// ledger.json 缺失时优雅降级为空账本而不是启动失败
+	os.Remove(filepath.Join(dir, "ledger.json"))
+	s3 := NewServer(dir)
+	if s3.Ledger == nil || len(s3.Ledger.List()) != 0 {
+		t.Fatal("缺失 ledger.json 应降级为空账本")
+	}
+}
 
 func TestServerDailyLoop(t *testing.T) {
 	s := NewServer(t.TempDir())

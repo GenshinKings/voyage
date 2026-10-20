@@ -89,7 +89,7 @@ type Server struct {
 	Goals      []Goal               `json:"goals"`
 	Plan       *scheduler.TodayPlan `json:"plan,omitempty"`
 	Done       Completed            `json:"done"`
-	Ledger     *evidence.Ledger     `json:"ledger"`
+	Ledger     *evidence.Ledger     `json:"-"` // 履历单一真相源=ledger.json（Record 时落盘）；state.json 不存副本——此前双写不一致导致重启即丢履历（事故 2026-10-20）
 	Bandit     *bandit.Bandit       `json:"bandit"`
 	Ability    *ability.Tracker     `json:"ability"`
 	Exercises  []exercise.Exercise  `json:"exercises"`  // 今天的实操练习（助教按实时进度出）
@@ -126,6 +126,8 @@ func NewServer(dir string) *Server {
 		s.Exer = &exercise.Engine{Client: client}
 	}
 	loaded := s.load("state.json", s)
+	// 履历从单一真相源恢复（此前只信 state.json 的过期副本，重启即丢——事故 2026-10-20）
+	s.load("ledger.json", &s.Ledger)
 	// 阅读材料合并：内容以 readings.json（教务策展，覆盖式）为准，Done/翻译缓存以 state.json 为准
 	persisted := s.Readings
 	s.load("readings.json", &s.Readings)
