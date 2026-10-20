@@ -129,7 +129,7 @@ a:hover{text-decoration:underline}
     <div id="chatOuter"><div id="guideCard"></div><div id="chat"></div></div>
     <div id="readView" class="hidden"></div>
     <div id="sediment" class="hidden"></div>
-    <div id="graphWrap" class="hidden"><div class="gLegend">圆=知识点 · 线=先后关系 · 越深=学得越扎实 · 点圆回到对话</div><canvas id="graphCanvas"></canvas></div>
+    <div id="graphWrap" class="hidden"><div class="gLegend">圆=收尾的知识点 · <span style="color:#0071e3;font-weight:600">━</span> 练习中真实调用的连接（×N=次数） · <span style="color:#b8c0c8">━</span> 课程先后 · 点圆回到对话</div><canvas id="graphCanvas"></canvas></div>
   </div>
   <div class="inputbar">
     <div id="chatbox">
@@ -521,8 +521,21 @@ async function renderGraph(){
     const py=y=>Math.max(36,Math.min(cv.clientHeight-56,y));
     edges.forEach(e=>{
       const a=nodes.find(n=>n.id===e.from),b=nodes.find(n=>n.id===e.to);if(!a||!b)return;
-      ctx.strokeStyle='#C9D1D9';ctx.lineWidth=1.2;ctx.beginPath();
-      ctx.moveTo(px(a.x),py(a.y));ctx.lineTo(px(b.x),py(b.y));ctx.stroke();
+      const isCtx=e.type==='context';
+      const mx=(px(a.x)+px(b.x))/2,my=(py(a.y)+py(b.y))/2;
+      if(isCtx){
+        // 强边：练习中真实发生过的知识调用（蓝色，越粗=调用越多）
+        ctx.strokeStyle='rgba(0,113,227,.75)';
+        ctx.lineWidth=Math.min(1.2+((e.weight||1)-1)*1.4,5);
+      }else{
+        // 弱边：课程先后顺序（教学序列）
+        ctx.strokeStyle='#C9D1D9';ctx.lineWidth=1.2;
+      }
+      ctx.beginPath();ctx.moveTo(px(a.x),py(a.y));ctx.lineTo(px(b.x),py(b.y));ctx.stroke();
+      if(isCtx){
+        ctx.fillStyle='rgba(0,113,227,.9)';ctx.font='11px system-ui';ctx.textAlign='center';
+        ctx.fillText('×'+(e.weight||1),mx,my-4);
+      }
     });
     GNODES=[];
     nodes.forEach(n=>{

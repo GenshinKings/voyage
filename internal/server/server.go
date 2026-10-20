@@ -98,6 +98,8 @@ type Server struct {
 	Readings   []Reading            `json:"readings"`   // 阅读材料（阅读管理器主体）
 	PracBias   map[string]int       `json:"pracBias"`   // 科目→难度偏置（楼梯式 DDA：±80 内）
 	PracStreak map[string]int       `json:"pracStreak"` // 科目→连对计数（bias 上探的依据）
+	// 真实知识连接："核心ID->语境ID"→语境式练习真实调用次数——关联图的强边来源
+	ContextEdges map[string]int     `json:"contextEdges"`
 	Tutor      *tutor.Tutor         `json:"-"`
 	Exer       *exercise.Engine     `json:"-"`
 }
@@ -456,6 +458,15 @@ func (s *Server) Handlers() http.Handler {
 				contextPool = append(contextPool, id)
 			}
 		}
+		// 真实知识连接累积：每道语境式练习 = 核心与语境之间的一次真实调用（关联图强边）
+		if s.ContextEdges == nil {
+			s.ContextEdges = map[string]int{}
+		}
+		for i, id := range picked {
+			if len(contextPool) > 0 {
+				s.ContextEdges[id+"->"+contextPool[i%len(contextPool)]]++
+			}
+		}
 		ordered := make([]string, 0, len(picked))
 		for i, id := range picked {
 			l := byID[id]
@@ -629,26 +640,24 @@ func (s *Server) Handlers() http.Handler {
 	})
 	mux.HandleFunc("/api/graph", func(w http.ResponseWriter, _ *http.Request) {
 		nodes := []map[string]any{}
-		edges := []map[string]string{}
+		edges := []map[string]any{}
 		if s.Tutor != nil {
 			cur := s.Tutor.Curriculum()
 			for i, l := range cur.Lessons {
-				depth := 1
-				if l.Status == "done" {
-					depth = 1 // 知道级（试验中）
-				}
-				nodes = append(nodes, map[string]any{"id": l.ID, "title": l.Title, "depth": depth, "subject": l.Subject, "status": l.Status})
+				nodes = append(nodes, map[string]any{"id": l.ID, "title": l.Title, "depth": 1, "subject": l.Subject, "status": l.Status})
 				if i > 0 && cur.Lessons[i-1].Subject == l.Subject {
-					edges = append(edges, map[string]string{"from": cur.Lessons[i-1].ID, "to": l.ID})
+					// 弱边：课程先后顺序（教学序列，非知识本身的连接）
+					edges = append(edges, map[string]any{"from": cur.Lessons[i-1].ID, "to": l.ID, "type": "sequence"})
 				}
-				found := false
-				for _, nd := range nodes {
-					if nd["id"] == l.ID {
-						found = true
-					}
-				}
-				_ = found
 			}
+		}
+		// 强边：语境式练习真实发生过的知识调用（次数=权重）——图从目录可视化变成大脑使用记录
+		for pair, n := range s.ContextEdges {
+			parts := strings.SplitN(pair, "->", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			edges = append(edges, map[string]any{"from": parts[0], "to": parts[1], "type": "context", "weight": n})
 		}
 		for _, p := range s.Ledger.List() {
 			nodes = append(nodes, map[string]any{"id": p.ID, "title": p.Title, "depth": int(p.Depth), "subject": "evidence", "status": "done"})
