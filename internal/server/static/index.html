@@ -334,8 +334,11 @@ function renderSidebar(){
   ex.forEach(e=>{
     const el=document.createElement('div');
     el.className='lp'+(e.status==='done'?' done':'')+(EXER===e.id?' on':'');
-    const ref=(e.topic||'').split(' / ').slice(1).join(' / ');
-    el.innerHTML='<span class="st">'+(e.status==='done'?'✓':'·')+'</span><span>'+esc(e.title)+(ref?'<div class="lp-sub">巩固：'+esc(ref)+'</div>':'')+'</span>';
+    const ref=(e.topic||'').trim();
+    let sub='';
+    if(ref)sub='主线：'+ref;
+    if(e.context)sub+=(sub?' · ':'')+'语境：'+esc(e.context);
+    el.innerHTML='<span class="st">'+(e.status==='done'?'✓':'·')+'</span><span>'+esc(e.title)+(sub?'<div class="lp-sub">'+sub+'</div>':'')+'</span>';
     el.onclick=()=>openExercise(e.id);
     list.appendChild(el);
   });

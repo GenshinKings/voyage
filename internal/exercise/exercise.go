@@ -12,10 +12,13 @@ import (
 
 // Exercise 一道实操练习：助教按实时进度出题，学习者作答，助教批改。
 // [PASS] 收尾与教学同构；完成即记「用过」级履历。
+// 语境式练习（i+1）：题面主线考察核心知识点，解题路径自然穿过语境知识点——
+// 旧概念在新语境中被调用（Krashen 可理解性输入 / 螺旋式课程），不做背诵式复习。
 type Exercise struct {
 	ID       string        `json:"id"`
 	Title    string        `json:"title"`
 	Topic    string        `json:"topic"`
+	Context  string        `json:"context,omitempty"`  // 语境知识点（解题必经的旧概念）
 	Subject  string        `json:"subject,omitempty"`  // 归属科目（难度策略用）
 	LessonID string        `json:"lessonId,omitempty"` // 归属知识点（bandit 奖励结算的臂）
 	Status   string        `json:"status"`             // active/done
@@ -30,10 +33,11 @@ type Engine struct {
 type rawEx struct {
 	Title   string `json:"title"`
 	Topic   string `json:"topic"`
+	Context string `json:"context"`
 	Problem string `json:"problem"`
 }
 
-// Generate 按当前在学的知识点出 3 道实操题。difficultyNote 为空串则不加难度约束。
+// Generate 按当前在学的知识点出 3 道语境式实操题。difficultyNote 为空串则不加难度约束。
 func (e *Engine) Generate(topics []string, difficultyNote string) ([]Exercise, error) {
 	if e.Client == nil {
 		return nil, fmt.Errorf("LLM 未配置（outpost2-data/llm.json）")
@@ -41,9 +45,10 @@ func (e *Engine) Generate(topics []string, difficultyNote string) ([]Exercise, e
 	if len(topics) == 0 {
 		return nil, fmt.Errorf("还没有可出题的知识点——先开课")
 	}
-	system := `你是实操练习出题助教。下面给出学习者正在学的知识点，以及每个知识点「课上实际讲过的内容摘要」。
-只出能考这些讲过的内容的题——对话里没教到的概念一律不碰。出 3 道实操练习题：动手算、动手写一小段代码或命令、或真实场景决策——不要背诵默写题。
-输出 JSON：{"exercises":[{"title":"不超过12个字","topic":"对应知识点","problem":"完整题面：任务+已知条件+要求产出，不要包含答案"}]}`
+	system := `你是实操练习出题助教。给出的每道题都有「核心知识点」（题面主线考察它）与「语境知识点」（解题路径必须自然经过它）。
+语境式出题原则：像一篇 90% 词汇都认识的英语文章——旧概念在新语境中被自然调用就能巩固，不要在题面里重新讲解语境概念。
+只出课上讲过的内容——对话里没教到的概念一律不碰。出实操题：动手算、动手写一小段代码或命令、或真实场景决策——不要背诵默写题。
+输出 JSON：{"exercises":[{"title":"不超过12个字","topic":"核心知识点","context":"用到的语境知识点","problem":"完整题面：任务+已知条件+要求产出，不要包含答案"}]}`
 	raw, err := e.Client.ChatJSON(system, []llm.Message{{Role: "user", Content: "正在学的知识点与课上讲过的内容：\n" + strings.Join(topics, "\n\n") + difficultyNote}})
 	if err != nil {
 		return nil, err
@@ -58,12 +63,17 @@ func (e *Engine) Generate(topics []string, difficultyNote string) ([]Exercise, e
 		if strings.TrimSpace(r.Problem) == "" {
 			continue
 		}
+		opening := "【实操练习】" + r.Problem + "\n\n（把你的解法/算式/代码直接发给我，我来批改。）"
+		if strings.TrimSpace(r.Context) != "" {
+			opening = "【实操练习 · 语境式】主线考察「" + r.Topic + "」，解题会自然用到「" + r.Context + "」。\n\n" + r.Problem + "\n\n（把你的解法/算式/代码直接发给我，我来批改。）"
+		}
 		out = append(out, Exercise{
 			ID:       now.Format("0102-150405") + fmt.Sprintf("-%02d", i+1),
 			Title:    firstNonEmpty(r.Title, "实操练习"),
 			Topic:    r.Topic,
+			Context:  strings.TrimSpace(r.Context),
 			Status:   "active",
-			Messages: []llm.Message{{Role: "assistant", Content: "【实操练习】" + r.Problem + "\n\n（把你的解法/算式/代码直接发给我，我来批改。）"}},
+			Messages: []llm.Message{{Role: "assistant", Content: opening}},
 		})
 	}
 	if len(out) == 0 {

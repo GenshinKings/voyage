@@ -4,6 +4,10 @@
 > 同一条教训在 3 个不同工作日出现 → 转正进 AGENTS.md 硬规则区（见晋升通道）。
 > 只记「修完又返工/不该合/验证太糙/静默失败」类教训；一次性笔误不入。
 
+## 2026-10-20（续）
+
+9. 关键配置文件的消失要立刻可感知：llm.json 从工作目录消失（原因未明）导致 LLM 全线瘫痪才发现；恢复源=1.x SQLite settings 表。教训：Serve 启动时若 LLM 配置缺失应在方向卡/toast 常驻提示，而不是等出题 400 |Seen 1×
+
 ## 2026-10-20
 
 1. 数据必须单一真相源 | Ledger 双写不一致：Record 只落 ledger.json，state.json 副本从未更新，重启加载只信 state.json → 用户履历被吞 | commit 32886bc + TestLedgerSurvivesRestart | Seen 1×

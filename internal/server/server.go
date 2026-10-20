@@ -16,6 +16,8 @@ import (
 	"strings"
 	"time"
 
+	"slices"
+
 	"outpost2/internal/ability"
 	"outpost2/internal/bandit"
 	"outpost2/internal/evidence"
@@ -446,11 +448,24 @@ func (s *Server) Handlers() http.Handler {
 		for _, l := range s.Tutor.Curriculum().Lessons {
 			byID[l.ID] = l
 		}
-		ordered := make([]string, 0, len(picked))
-		for _, id := range picked {
-			if l, ok := byID[id]; ok {
-				ordered = append(ordered, l.Subject+" / "+l.Title+"\n  课上讲了："+digests[id])
+		// 语境配对（i+1 语境式练习）：核心之外的更早收尾知识点作为语境——
+		// 旧概念在新题的解题路径中被自然调用（最早学的优先），不做背诵式复习
+		contextPool := []string{}
+		for _, id := range arms {
+			if !slices.Contains(picked, id) {
+				contextPool = append(contextPool, id)
 			}
+		}
+		ordered := make([]string, 0, len(picked))
+		for i, id := range picked {
+			l := byID[id]
+			entry := "核心知识点：" + l.Subject + " / " + l.Title + "\n  课上讲了：" + digests[id]
+			if len(contextPool) > 0 {
+				ctxID := contextPool[i%len(contextPool)]
+				cl := byID[ctxID]
+				entry += "\n语境知识点（解题路径须自然经过它，不要重新讲解）：" + cl.Subject + " / " + cl.Title + "\n  课上讲了：" + digests[ctxID]
+			}
+			ordered = append(ordered, entry)
 		}
 		// 难度自适应 v1（分层架构：能力模型→策略）：按当前 Elo 难度带约束题面难度
 		diffNote := ""
@@ -471,11 +486,17 @@ func (s *Server) Handlers() http.Handler {
 			http.Error(w, err.Error(), 500)
 			return
 		}
-		for i := range list { // 回填臂归属：批改结果将作为该知识点的奖励回写
+		for i := range list { // 回填臂归属与语境：批改结果将作为该知识点的奖励回写
 			if i < len(picked) {
 				list[i].LessonID = picked[i]
 				if l, ok := byID[picked[i]]; ok {
 					list[i].Subject = l.Subject
+				}
+			}
+			if len(contextPool) > 0 {
+				ctxID := contextPool[i%len(contextPool)]
+				if l, ok := byID[ctxID]; ok {
+					list[i].Context = l.Title
 				}
 			}
 		}
