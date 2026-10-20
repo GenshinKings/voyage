@@ -147,7 +147,7 @@ function updateChrome(v){
   $('chatbox').style.display=(v==='learn'&&!HIST)?'flex':'none';
   const dis=!!HIST;$('input').disabled=dis;
   const b=$('chatbox').querySelector('button');if(b)b.disabled=dis;
-  $('input').placeholder=HIST?'历史对话只读':(EXER?'写下解法/算式，或直接贴本地文件路径交作业…':'回答检查题，或问点什么…（Enter 发送）');
+  $('input').placeholder=HIST?'历史对话只读':(EXER?'写下解法/算式，或直接贴本地文件路径交作业…':(LASTVERDICT?'本节已收尾——可继续追问，或左侧选下一个':'回答检查题，或问点什么…（Enter 发送）'));
 }
 function switchTab(v){
   curView=v;
@@ -227,7 +227,6 @@ async function send(){
   if(HIST)return;
   if(EXER)return sendExercise($('input').value.trim());
   if(!CURRENT){toast('先回答今天的检查题，或点一道练习');return}
-  if(LASTVERDICT){toast('这一节已收尾——左侧选下一个知识点');return}
   const text=$('input').value.trim();if(!text)return;
   $('input').value='';
   const c=$('chat');c.insertAdjacentHTML('beforeend','<div class="msg u"><div class="bubble">'+esc(text)+'</div></div>');
@@ -236,9 +235,11 @@ async function send(){
   try{
     const r=await api('/api/tutor/send',{nodeId:CURRENT,text});
     const tmp=$('tmpwait');if(tmp)tmp.closest('.msg').remove();
+    const sess=STATE.sessions[CURRENT];
+    if(sess)sess.messages.push({role:'user',content:text},{role:'assistant',content:r.reply});
     c.insertAdjacentHTML('beforeend','<div class="msg a"><div class="bubble">'+fmtContent(r.reply)+'</div></div>');
     $('view').scrollTop=$('view').scrollHeight;
-    if(r.verdict){LASTVERDICT=true;await loadState();toast(r.verdict==='partial'?'本节收尾（半懂记录在案）——下一节来了':'本节收尾——履历已记「知道」，下一节来了')}
+    if(r.verdict&&!LASTVERDICT){LASTVERDICT=true;await loadState();toast(r.verdict==='partial'?'本节收尾（半懂记录在案）——下一节来了':'本节收尾——履历已记「知道」，可继续追问，或选下一个')}
   }catch(e){const tmp=$('tmpwait');if(tmp)tmp.closest('.msg').remove();toast('失败：'+e.message)}
 }
 

@@ -39,6 +39,7 @@ func TestSubjectDecomposeAndFlow(t *testing.T) {
 		`{"nodes":[{"title":"映射的定义","brief":"能说出映射与函数的关系"},{"title":"单射与满射","brief":"能判别两类映射"},{"title":"复合映射","brief":"能计算 g∘f"}]}`,
 		"开场讲解+检查题：映射和函数什么关系？",
 		"答对了！加深一下：类型论里的映射呢？\n[PASS]",
+		"你说得对，类型论的映射就是函数的推广。还想问什么都可以。",
 	}}
 	tu := &Tutor{Dir: dir, Client: mc}
 
@@ -85,9 +86,13 @@ func TestSubjectDecomposeAndFlow(t *testing.T) {
 	if next := tu.TodayLesson(); next == nil || next.ID == today.ID {
 		t.Fatalf("今日应推进: %+v", next)
 	}
-	v2, _ := tu.Send(*today, "再讲讲？")
-	if v2.Kind != "pass" || !strings.Contains(v2.Reply, "收尾") {
-		t.Fatalf("已收尾会话应温和拒绝: %+v", v2)
+	// 收尾后不锁对话：继续输入走陪聊（不重复判定、不出收尾标记）
+	v2, _ := tu.Send(*today, "再讲讲类型论？")
+	if v2.Kind != "" {
+		t.Fatalf("收尾后陪聊不应再判定: %+v", v2)
+	}
+	if s := tu.Load(today.ID); s == nil || s.Messages[len(s.Messages)-1].Content != mc.replies[3] {
+		t.Fatalf("陪聊回复应落盘: %+v", s)
 	}
 }
 

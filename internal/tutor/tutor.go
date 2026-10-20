@@ -61,6 +61,7 @@ const teachSystem = `你是前哨 2.0 的 AI 助教，正在一对一把一个�
 - 只教当前知识点；学习者岔开话题，温和拉回「我们先把《当前知识点》收尾」。
 - 每条回复 ≤250 字；永远以让学习者动一次脑/动一次手收尾。
 - [PASS] 与 [PASS:partial] 必须单独成行，前后不要加别的字。
+- 加深追问必须单独成一条消息并等学习者回答：绝不在同一条消息里既抛新问题又给收尾标记。收尾标记只出现在学习者回答完你最后一次追问之后的那条回复里。
 - 收尾自查：判定 [PASS]/[PASS:partial] 时，如果这个知识点还有你完全没讲到、学习者也没问到的要点，在标记行之前先输出一行「【还有没讲的：某某要点——要继续学吗？】」等学习者决定；都讲到了就不加这一行。`
 
 // ---------- 课程 ----------
@@ -257,7 +258,8 @@ func (t *Tutor) Send(lesson Lesson, userText string) (Verdict, error) {
 		return Verdict{}, fmt.Errorf("会话不存在（先 open）")
 	}
 	if s.Verdict != "" {
-		return Verdict{Kind: s.Verdict, Reply: "这一节已经收尾了。去学习页领下一个知识点吧。"}, nil
+		// 收尾后不锁对话：学习者可能在回答收尾前的加深追问，或继续追问
+		return t.followup(s, userText)
 	}
 	if t.Client == nil {
 		return Verdict{}, fmt.Errorf("LLM 未配置")
@@ -279,6 +281,25 @@ func (t *Tutor) Send(lesson Lesson, userText string) (Verdict, error) {
 	}
 	t.save(s)
 	return Verdict{Kind: kind, Reply: reply}, nil
+}
+
+// followup 收尾后的陪聊：学习者可能在回答收尾前的加深追问，或继续追问。
+// 正常回应，但不改变判定、不再输出收尾标记（履历已记，不重复）。
+func (t *Tutor) followup(s *Session, userText string) (Verdict, error) {
+	if t.Client == nil {
+		return Verdict{}, fmt.Errorf("LLM 未配置")
+	}
+	sys := `这个知识点已经学习收尾。学习者还在继续输入——可能是在回答你收尾前的加深追问，也可能是新问题。
+正常回应：如果他在回答你的追问，判断对错并点评；如果是新问题，直接解答。≤250 字，保持助教口吻。
+不要再输出 [PASS] 或 [PASS:partial] 标记（履历已记录，不重复）。`
+	s.Messages = append(s.Messages, llm.Message{Role: "user", Content: userText})
+	reply, err := t.Client.Chat(sys, s.Messages)
+	if err != nil {
+		return Verdict{}, err
+	}
+	s.Messages = append(s.Messages, llm.Message{Role: "assistant", Content: reply})
+	t.save(s)
+	return Verdict{Kind: "", Reply: reply}, nil
 }
 
 // MarkLessonDone 课程状态推进（履历由调用方写）。
