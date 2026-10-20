@@ -313,7 +313,7 @@ func (s *Server) Handlers() http.Handler {
 		}
 		writeJSON(w, map[string]any{
 			"plan": s.Plan, "done": s.Done, "goals": s.Goals,
-			"exercises": s.Exercises, "readings": s.Readings,
+			"exercises": s.Exercises, "readings": s.Readings, "contextEdges": s.ContextEdges,
 			"ledger": s.Ledger.List(), "counts": map[string]int{"known": k, "used": u, "done": d},
 			"graduation": map[string]any{"state": string(g), "reason": gReason},
 			"curriculum": curriculum, "today": today, "sessions": sessions,
@@ -660,7 +660,16 @@ func (s *Server) Handlers() http.Handler {
 			edges = append(edges, map[string]any{"from": parts[0], "to": parts[1], "type": "context", "weight": n})
 		}
 		for _, p := range s.Ledger.List() {
-			nodes = append(nodes, map[string]any{"id": p.ID, "title": p.Title, "depth": int(p.Depth), "subject": "evidence", "status": "done"})
+			dup := false
+			for _, nd := range nodes {
+				if nd["id"] == p.ID {
+					dup = true
+					break
+				}
+			}
+			if !dup { // 履历条目若与课程知识点同 id（收尾记录），不重复画节点
+				nodes = append(nodes, map[string]any{"id": p.ID, "title": p.Title, "depth": int(p.Depth), "subject": "evidence", "status": "done"})
+			}
 		}
 		writeJSON(w, map[string]any{"nodes": nodes, "edges": edges})
 	})
