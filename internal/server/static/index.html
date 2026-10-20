@@ -493,7 +493,7 @@ async function renderGraph(){
     // 度=真实调用热度（强边权重和）——节点大小与标签亮度都编码它
     const heat={};nodes.forEach(n=>heat[n.id]=0);
     ctxEdges.forEach(e=>{if(heat[e.from]!==undefined)heat[e.from]+= (e.weight||1);if(heat[e.to]!==undefined)heat[e.to]+=(e.weight||1);});
-    const rad=id=>{const h=heat[id]||0;return Math.min(14+h*2.2,30);};
+    const rad=id=>{const h=heat[id]||0;return 4.5+Math.min(h,8)*0.35;};
     const fX=nodes.map(()=>0),fY=nodes.map(()=>0);
     for(let it=0;it<380;it++){
       const temp=90*(1-it/380)+5;
@@ -532,63 +532,36 @@ async function renderGraph(){
     // ---- 绘制（可被 hover 状态重复调用）----
     const draw=()=>{
       ctx.clearRect(0,0,W,H);
-      // 点阵背景（Apple subtle grid）
-      ctx.fillStyle='rgba(0,0,0,.045)';
-      for(let gx=20;gx<W;gx+=26)for(let gy=20;gy<H;gy+=26){ctx.beginPath();ctx.arc(gx,gy,1,0,7);ctx.fill();}
-      const focus=GRAPH_MOUSE; // hover 的节点 id 或 null
-      const isDim=id=>focus&&id!==focus&&!(ctxEdges.some(e=>(e.from===focus&&e.to===id)||(e.to===focus&&e.from===id))||seqEdges.some(e=>(e.from===focus&&e.to===id)||(e.to===focus&&e.from===id)));
-      // 曲线边（先边后节点）
-      const drawEdge=(e,color,width,curve)=>{
+      const focus=GRAPH_MOUSE;
+      const adj=id=>focus&&(id===focus||ctxEdges.some(e=>(e.from===focus&&e.to===id)||(e.to===focus&&e.from===id))||seqEdges.some(e=>(e.from===focus&&e.to===id)||(e.to===focus&&e.from===id)));
+      // 边：默认若有若无；hover 时焦点连线变蓝
+      const edge=(e,color,width)=>{
         const a=byId[e.from],b=byId[e.to];if(!a||!b)return;
-        const dim=isDim(e.from)||isDim(e.to);
-        ctx.strokeStyle=dim?'rgba(0,0,0,.05)':color;
-        ctx.lineWidth=dim?1:width;
-        const mx=(a.x+b.x)/2,my=(a.y+b.y)/2;
-        const nx=-(b.y-a.y),ny=(b.x-a.x);
-        const nl=Math.hypot(nx,ny)||1;
-        ctx.beginPath();ctx.moveTo(a.x,a.y);
-        ctx.quadraticCurveTo(mx+nx/nl*curve,my+ny/nl*curve,b.x,b.y);
-        ctx.stroke();
+        const on=focus&&(e.from===focus||e.to===focus);
+        ctx.globalAlpha=focus?(on?1:0.06):1;
+        ctx.strokeStyle=on?'#0071e3':color;
+        ctx.lineWidth=on?1.6:width;
+        ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+        ctx.globalAlpha=1;
       };
-      seqEdges.forEach(e=>drawEdge(e,'rgba(0,0,0,.13)',1.5,14));
-      ctxEdges.forEach(e=>{
-        const wgt=e.weight||1;
-        const a=byId[e.from],b=byId[e.to];
-        const dim=isDim(e.from)||isDim(e.to);
-        drawEdge(e,dim?'rgba(0,113,227,.08)':'rgba(0,113,227,'+Math.min(.55+wgt*.08,.9)+')',Math.min(2+wgt*1.2,6),26);
-        if(!dim){
-          const mx=(a.x+b.x)/2,my=(a.y+b.y)/2;
-          ctx.fillStyle='#0071e3';ctx.font='600 13px system-ui';ctx.textAlign='center';
-          ctx.fillText('×'+wgt,mx,my-8);
-        }
-      });
-      // 节点（大小=热度）+ 标签（白色 halo）
+      seqEdges.forEach(e=>edge(e,'rgba(0,0,0,.07)',1));
+      ctxEdges.forEach(e=>edge(e,'rgba(0,0,0,.16)',1));
+      // 节点：小圆点 + 下方细字标签（未 hover 时安静灰）
       GNODES=[];
       nodes.forEach(n=>{
         const r=rad(n.id);
-        const dim=isDim(n.id);
-        ctx.globalAlpha=dim?0.16:1;
-        // 柔影
-        ctx.beginPath();ctx.arc(n.x+2,n.y+3,r+1,0,7);
-        ctx.fillStyle='rgba(0,0,0,.10)';ctx.fill();
-        // 节点体
-        const grad=ctx.createRadialGradient(n.x-r*0.35,n.y-r*0.4,r*0.2,n.x,n.y,r);
-        grad.addColorStop(0,'#4a5568');grad.addColorStop(1,'#1d2430');
+        const on=focus&&(n.id===focus||adj(n.id));
+        const dim=focus&&!on;
+        ctx.globalAlpha=focus?(on?1:0.1):0.85;
         ctx.beginPath();ctx.arc(n.x,n.y,r,0,7);
-        ctx.fillStyle=grad;ctx.fill();
-        ctx.strokeStyle='#fff';ctx.lineWidth=2.5;ctx.stroke();
-        if(focus===n.id){
-          ctx.strokeStyle='rgba(0,113,227,.9)';ctx.lineWidth=2.5;
-          ctx.beginPath();ctx.arc(n.x,n.y,r+5,0,7);ctx.stroke();
-        }
-        // 标签（白 halo 描边保证可读）
+        ctx.fillStyle=focus&&n.id===focus?'#0071e3':(on?'#3b82c4':'#98a1ab');
+        ctx.fill();
         const t=String(n.title||'');
-        const label=t.length>10?t.slice(0,10)+'…':t;
-        ctx.font='600 13px system-ui';ctx.textAlign='center';
-        ctx.lineWidth=4;ctx.strokeStyle='rgba(255,255,255,.92)';
-        ctx.strokeText(label,n.x,n.y+r+18);
-        ctx.fillStyle='#1d1d1f';
-        ctx.fillText(label,n.x,n.y+r+18);
+        const label=t.length>16?t.slice(0,16)+'…':t;
+        ctx.font=(focus&&n.id===focus)?'600 12.5px system-ui':'12px system-ui';
+        ctx.fillStyle=focus?(n.id===focus?'#1d1d1f':(adj(n.id)?'#0071e3':'rgba(0,0,0,.3)')):'#6f7883';
+        ctx.textAlign='center';
+        ctx.fillText(label,n.x,n.y+r+14);
         ctx.globalAlpha=1;
         GNODES.push({id:n.id,x:n.x,y:n.y,r:r});
       });
@@ -604,7 +577,7 @@ async function renderGraph(){
     cv.onmousemove=ev=>{
       const rect=cv.getBoundingClientRect();
       const mx=ev.clientX-rect.left,my=ev.clientY-rect.top;
-      const hit=GNODES.find(n=>Math.hypot(n.x-mx,n.y-my)<=n.r+8);
+      const hit=GNODES.find(n=>Math.hypot(n.x-mx,n.y-my)<=Math.max(n.r+8,12));
       const changed=(hit?hit.id:null)!==GRAPH_MOUSE;
       GRAPH_MOUSE=hit?hit.id:null;
       if(changed)draw();
@@ -628,7 +601,7 @@ async function renderGraph(){
   cv2.onclick=ev=>{
     const rect=cv2.getBoundingClientRect();
     const mx=ev.clientX-rect.left,my=ev.clientY-rect.top;
-    const hit=GNODES.find(n=>Math.hypot(n.x-mx,n.y-my)<=n.r+8);
+    const hit=GNODES.find(n=>Math.hypot(n.x-mx,n.y-my)<=Math.max(n.r+8,12));
     if(hit)jumpLesson(hit.id);else toast('这个知识点还没开课——完成前序知识它就来了');
   };
 }
