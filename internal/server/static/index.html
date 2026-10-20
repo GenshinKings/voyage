@@ -28,6 +28,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Micr
 #subjFoot b{color:var(--ink);font-weight:600}
 .grouplabel{font-size:11px;letter-spacing:.05em;color:var(--mut);margin:14px 8px 4px;font-weight:600}
 .lp{padding:8px 11px;border-radius:8px;cursor:pointer;font-size:13.5px;margin-bottom:1px;display:flex;align-items:center;gap:8px;transition:background 120ms ease-out,transform 100ms ease-out;user-select:none}
+.lp .lp-sub{font-size:11px;color:var(--mut);font-weight:400;margin-top:1px;letter-spacing:0}
 .lp:hover{background:var(--chip)}
 .lp:active{transform:scale(.98)}
 .lp .st{font-size:11px;flex-shrink:0;width:14px;color:var(--mut)}
@@ -299,7 +300,8 @@ function renderSidebar(){
   ex.forEach(e=>{
     const el=document.createElement('div');
     el.className='lp'+(e.status==='done'?' done':'')+(EXER===e.id?' on':'');
-    el.innerHTML='<span class="st">'+(e.status==='done'?'✓':'·')+'</span><span>'+esc(e.title)+'</span>';
+    const ref=(e.topic||'').split(' / ').slice(1).join(' / ');
+    el.innerHTML='<span class="st">'+(e.status==='done'?'✓':'·')+'</span><span>'+esc(e.title)+(ref?'<div class="lp-sub">巩固：'+esc(ref)+'</div>':'')+'</span>';
     el.onclick=()=>openExercise(e.id);
     list.appendChild(el);
   });

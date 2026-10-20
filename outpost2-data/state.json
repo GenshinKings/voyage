@@ -80,74 +80,13 @@
     },
     "K": 64
   },
-  "exercises": [
-    {
-      "id": "1020-082703-01",
-      "title": "判断学习类型",
-      "topic": "监督/无监督/强化学习",
-      "status": "active",
-      "messages": [
-        {
-          "role": "assistant",
-          "content": "【实操练习】某电商有三个任务：A. 用历史订单中已标注“是否退货”的记录训练模型预测新订单是否退货；B. 把十万条用户购买记录按消费金额和频次自动分成若干群体，事先不知道分几类、也没有标签；C. 一个推荐机器人不断尝试不同推荐策略，用户点击就获得奖励、不点击就没奖励，逐渐调整策略。请分别指出 A、B、C 各属于监督学习、无监督学习还是强化学习，并用一句话说明每个判断的依据（关键词是“有没有标签”“有没有奖励反馈”）。\n\n（把你的解法/算式/代码直接发给我，我来批改。）"
-        }
-      ]
-    },
-    {
-      "id": "1020-082703-02",
-      "title": "计算训练集准确率",
-      "topic": "监督学习与过拟合",
-      "status": "active",
-      "messages": [
-        {
-          "role": "assistant",
-          "content": "【实操练习】一个二分类模型在 10 个训练样本上的预测如下（真实标签 / 预测标签）：(1,1)、(1,1)、(1,0)、(1,1)、(0,0)、(0,1)、(0,0)、(0,0)、(1,1)、(0,0)。请算出该模型在训练集上的准确率（写出分子和分母），并回答：如果模型在训练集上准确率 100%，但在新测试集上只有 60%，这更可能是欠拟合还是过拟合？请结合“小孩背答案”的直觉说明理由。\n\n（把你的解法/算式/代码直接发给我，我来批改。）"
-        }
-      ]
-    },
-    {
-      "id": "1020-082703-03",
-      "title": "划分训练测试集",
-      "topic": "监督学习评估",
-      "status": "active",
-      "messages": [
-        {
-          "role": "assistant",
-          "content": "【实操练习】你拿到 1000 条带标签的水果数据。有人提议用全部 1000 条训练模型，然后又在同样的 1000 条上评估准确率，得到 98%。请回答：(1) 这样评估有什么问题？(2) 请给出一种更合理的做法，并说明训练集和测试集大致各用多少条。要求用一两句话写清楚“为什么留出的数据能检验泛化”。\n\n（把你的解法/算式/代码直接发给我，我来批改。）"
-        }
-      ]
-    },
-    {
-      "id": "1020-082703-04",
-      "title": "用代码分监督与无监督",
-      "topic": "监督与无监督学习",
-      "status": "active",
-      "messages": [
-        {
-          "role": "assistant",
-          "content": "【实操练习】下面是一段 Python 伪代码，数据里有特征 X 和标签 y。请判断每一段属于监督学习还是无监督学习，并说明依据：\n模型A.fit(X, y)\n模型B.fit(X)\n并补全一句：如果任务目标是“给没有标签的新数据分组”，你应该用 A 还是 B？如果目标是“预测已知标签的新样本”，应该用哪个？要求写出你判断时看的关键参数。\n\n（把你的解法/算式/代码直接发给我，我来批改。）"
-        }
-      ]
-    },
-    {
-      "id": "1020-082703-05",
-      "title": "过拟合场景决策",
-      "topic": "过拟合",
-      "status": "active",
-      "messages": [
-        {
-          "role": "assistant",
-          "content": "【实操练习】一个团队训练识别猫的模型：训练集准确率 99%，验证集准确率 65%。数据只有 200 张猫图。请列出两条可能导致过拟合的原因（从数据量和模型复杂度角度），并给出两条对应的改进措施。要求每条的表述是“原因→措施”的形式，且措施要能实际操作（例如增加数据、降低模型复杂度等）。\n\n（把你的解法/算式/代码直接发给我，我来批改。）"
-        }
-      ]
-    }
-  ],
+  "exercises": [],
   "readings": [
     {
       "id": "R-20261020-headroom",
       "title": "Headroom：给 AI Agent 的 token 压缩层（76k★）",
       "url": "https://github.com/headroomlabs-ai/headroom",
-      "content": "# Headroom\n\n\u003e 在工具输出、日志、文件和 RAG 分块到达 LLM 之前压缩它们。\n\nHeadroom 对 AI agent 读取的一切内容（工具输出、日志、RAG 分块、文件、对话历史）在到达 LLM 前进行压缩——「同样的答案，零头的 token」。压缩完全在本地运行，不会把 prompt 或文件内容发到外部。官方示例：10,144 → 1,260 tokens，同样找到了那个 FATAL。\n\n## 它能做什么\n\n- **Library**：Python / TypeScript 里直接 `compress(messages)`\n- **Proxy**：`headroom proxy --port 8787`，零代码改动\n- **Agent 包装**：一条命令包装 claude / codex / grok / copilot / cursor / aider 等\n- **MCP server**：提供 `headroom_compress`、`headroom_retrieve`、`headroom_stats` 三个工具\n- **跨 agent 记忆**：Claude、Codex、Gemini、Grok 共享存储，自动去重\n- **headroom learn**：挖掘失败会话，把修正写回 CLAUDE.local.md 等文件\n- **输出 token 精简**：还能精简模型自己的输出\n- **可逆（CCR）**：原文本地缓存，模型可按需取回全文\n\n## 工作原理\n\n数据流：Agent → Headroom（本地）→ LLM。核心组件：\n\n- **ContentRouter**：检测内容类型并选择压缩器\n- **SmartCrusher / CodeCompressor / Kompress-v2-base**：分别处理 JSON、源码、散文\n- **CacheAligner**：标记会破坏 KV-cache 前缀的易变内容，不改写 prompt\n- **CCR**：本地保存原文，模型通过 `headroom_retrieve` 取回全文\n\n## 60 秒上手\n\n```\n# 1 安装\nuv tool install --python 3.13 \"headroom-ai[all]\"\npip install \"headroom-ai[all]\"\nnpm install headroom-ai   # 仅 TypeScript SDK\n\n# 2 选一种模式\nheadroom deploy\nheadroom wrap claude\nheadroom proxy --port 8787\n# 或 Python 内联：from headroom import compress\n\n# 3 检查节省\nheadroom doctor\nheadroom perf\nheadroom dashboard\n```\n\nPython 内联示例：\n\n```python\nfrom headroom import compress\nfrom openai import OpenAI\n\nmessages = [{\"role\": \"user\", \"content\": \"Analyze these results\"}]\nresult = compress(messages, model=\"gpt-4o\")\nclient = OpenAI()\nresponse = client.chat.completions.create(model=\"gpt-4o\", messages=result.messages)\nprint(f\"Saved {result.tokens_saved} tokens ({result.compression_ratio:.0%})\")\n```\n\n## 和你正在学的关联\n\nheadroom 的 MCP server 形态就是你正在学的 MCP 协议的现成案例：它把「压缩」做成三个 MCP 工具（压缩/取回/统计）暴露给 agent。上下文工程（域 F）的核心课题之一就是「在有限 context 里放最有信息量的内容」——压缩是手段，信息密度是目的。",
+      "content": "# Headroom\n\n> 在工具输出、日志、文件和 RAG 分块到达 LLM 之前压缩它们。\n\nHeadroom 对 AI agent 读取的一切内容（工具输出、日志、RAG 分块、文件、对话历史）在到达 LLM 前进行压缩——「同样的答案，零头的 token」。压缩完全在本地运行，不会把 prompt 或文件内容发到外部。官方示例：10,144 → 1,260 tokens，同样找到了那个 FATAL。\n\n## 它能做什么\n\n- **Library**：Python / TypeScript 里直接 `compress(messages)`\n- **Proxy**：`headroom proxy --port 8787`，零代码改动\n- **Agent 包装**：一条命令包装 claude / codex / grok / copilot / cursor / aider 等\n- **MCP server**：提供 `headroom_compress`、`headroom_retrieve`、`headroom_stats` 三个工具\n- **跨 agent 记忆**：Claude、Codex、Gemini、Grok 共享存储，自动去重\n- **headroom learn**：挖掘失败会话，把修正写回 CLAUDE.local.md 等文件\n- **输出 token 精简**：还能精简模型自己的输出\n- **可逆（CCR）**：原文本地缓存，模型可按需取回全文\n\n## 工作原理\n\n数据流：Agent → Headroom（本地）→ LLM。核心组件：\n\n- **ContentRouter**：检测内容类型并选择压缩器\n- **SmartCrusher / CodeCompressor / Kompress-v2-base**：分别处理 JSON、源码、散文\n- **CacheAligner**：标记会破坏 KV-cache 前缀的易变内容，不改写 prompt\n- **CCR**：本地保存原文，模型通过 `headroom_retrieve` 取回全文\n\n## 60 秒上手\n\n```\n# 1 安装\nuv tool install --python 3.13 \"headroom-ai[all]\"\npip install \"headroom-ai[all]\"\nnpm install headroom-ai   # 仅 TypeScript SDK\n\n# 2 选一种模式\nheadroom deploy\nheadroom wrap claude\nheadroom proxy --port 8787\n# 或 Python 内联：from headroom import compress\n\n# 3 检查节省\nheadroom doctor\nheadroom perf\nheadroom dashboard\n```\n\nPython 内联示例：\n\n```python\nfrom headroom import compress\nfrom openai import OpenAI\n\nmessages = [{\"role\": \"user\", \"content\": \"Analyze these results\"}]\nresult = compress(messages, model=\"gpt-4o\")\nclient = OpenAI()\nresponse = client.chat.completions.create(model=\"gpt-4o\", messages=result.messages)\nprint(f\"Saved {result.tokens_saved} tokens ({result.compression_ratio:.0%})\")\n```\n\n## 和你正在学的关联\n\nheadroom 的 MCP server 形态就是你正在学的 MCP 协议的现成案例：它把「压缩」做成三个 MCP 工具（压缩/取回/统计）暴露给 agent。上下文工程（域 F）的核心课题之一就是「在有限 context 里放最有信息量的内容」——压缩是手段，信息密度是目的。",
       "done": false
     }
   ]

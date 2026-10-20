@@ -421,9 +421,13 @@ func (s *Server) Handlers() http.Handler {
 		curSub := ""
 		if s.Tutor != nil {
 			for _, l := range s.Tutor.Curriculum().Lessons {
+				// 练习=收尾之后的巩固：只从收尾过（done）的知识点出题，与关联图资格一致
+				if l.Status != "done" {
+					continue
+				}
 				sess := s.Tutor.Load(l.ID)
 				if sess == nil {
-					continue // 只从和助教聊天过程中真正学过的知识点出题
+					continue
 				}
 				arms = append(arms, l.ID)
 				digests[l.ID] = sessionDigest(sess)
@@ -431,7 +435,7 @@ func (s *Server) Handlers() http.Handler {
 			}
 		}
 		if len(arms) == 0 {
-			http.Error(w, "先去上今天的课——聊过的内容才会出练习", 400)
+			http.Error(w, "先把今天的课收尾——收尾过的知识点才有练习", 400)
 			return
 		}
 		// 策略层 v1：Thompson 采样选题——高奖励的知识点多出（利用），低后验的也会被采到（探索）
