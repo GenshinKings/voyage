@@ -46,6 +46,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Micr
 #chat{max-width:736px;margin:0 auto;padding:0 28px 130px}
 .msg{margin:14px 0;display:flex;animation:msgIn 260ms cubic-bezier(.2,.8,.2,1)}
 @keyframes msgIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+#guideCard{max-width:736px;margin:6px auto 2px;padding:0 28px}
+#guideCard .gc{background:var(--card);border-radius:12px;padding:14px 18px;box-shadow:0 1px 2px rgba(0,0,0,.05),0 0 0 1px rgba(0,0,0,.03)}
+#guideCard .gc-top{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+#guideCard .gc-prog{font-size:13px;font-weight:600;color:var(--ink)}
+#guideCard .gc-prog b{font-size:15px}
+#guideCard .gc-anchor{font-size:12px;color:var(--mut)}
+#guideCard .gc-brief{font-size:13px;color:var(--mut);margin-top:5px;line-height:1.6}
+#guideCard .gc-brief b{color:var(--ink)}
+#guideCard .gc-next{font-size:13.5px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(0,0,0,.06);line-height:1.6}
+#guideCard .gc-next b{color:var(--pink);font-weight:600}
 .msg .bubble{max-width:78%;padding:11px 15px;border-radius:18px;font-size:14.5px;line-height:1.7;white-space:pre-wrap;word-break:break-word}
 .msg.a .bubble{background:var(--card);box-shadow:0 1px 2px rgba(0,0,0,.05),0 0 0 1px rgba(0,0,0,.03);border-bottom-left-radius:6px}
 .msg.u{justify-content:flex-end}
@@ -116,7 +126,7 @@ a:hover{text-decoration:underline}
 <div id="main">
   <div id="topbar"><div><div class="kicker" id="kicker">LEARNING · 对话式教学</div><h1 id="lessonTitle">今天丢来的</h1></div><div style="display:flex;gap:8px;flex-shrink:0"><button id="todayClass" class="backbtn hidden" style="border-color:var(--line);color:var(--mut)" onclick="openTodayClass()">今天的课</button><button id="backToday" class="backbtn hidden" onclick="backToday()">← 跳回今日知识点</button></div></div>
   <div id="view">
-    <div id="chatOuter"><div id="chat"></div></div>
+    <div id="chatOuter"><div id="guideCard"></div><div id="chat"></div></div>
     <div id="readView" class="hidden"></div>
     <div id="sediment" class="hidden"></div>
     <div id="graphWrap" class="hidden"><div class="gLegend">圆=知识点 · 线=先后关系 · 越深=学得越扎实 · 点圆回到对话</div><canvas id="graphCanvas"></canvas></div>
@@ -279,7 +289,31 @@ async function sendExercise(text){
 async function loadState(){
   STATE=await api('/api/state');
   renderSidebar();
+  renderGuide();
   if(!CURRENT&&!HIST&&!EXER&&STATE.today){if(!openCached(STATE.today.id))openLesson(STATE.today.id)}
+}
+// 方向卡：我在哪 · 为什么学这个 · 接下来做什么（规则驱动，零延迟）
+function renderGuide(){
+  const gc=$('guideCard');if(!gc)return;
+  if(!STATE.curriculum||!(STATE.curriculum.lessons||[]).length){gc.innerHTML='';return}
+  const lessons=STATE.curriculum.lessons||[];
+  const doneN=lessons.filter(l=>l.status==='done').length;
+  const today=STATE.today;
+  const idx=lessons.findIndex(l=>today&&l.id===today.id);
+  const cur=idx>=0?lessons[idx]:null;
+  const prev=idx>0?lessons[idx-1]:null;
+  const ex=STATE.exercises||[];
+  const exLeft=ex.filter(e=>e.status!=='done').length;
+  const unread=(STATE.readings||[]).filter(r=>!r.done).length;
+  // 状态驱动的下一步建议（宪法节奏：不催、给方向）
+  let next;
+  if(doneN===0)next='答对这一节的检查题——收尾后，练习和<b>关联图</b>都会解锁';
+  else if(exLeft>0)next='<b>'+exLeft+' 道练习</b>在等你——做完它们，收尾的知识点就落进关联图';
+  else if(unread>0)next='今天的练习清空了——去 <b>阅读</b> '+unread+' 篇待读材料，或继续推进下一节';
+  else next='今天全部完成——继续推进是加分项，休息也是正当的';
+  const anchor=prev?(prev.status==='done'?'承接你已收尾的《'+esc(prev.title)+'》✓':'前一节《'+esc(prev.title)+'》还没收尾'):'这是这门课的起点';
+  const brief=cur&&cur.brief?'<div class="gc-brief">学完它能：<b>'+esc(cur.brief)+'</b></div>':'';
+  gc.innerHTML='<div class="gc"><div class="gc-top"><span class="gc-prog"><b>'+(idx+1)+'/'+lessons.length+'</b> · '+esc(cur?cur.subject:'')+'</span><span class="gc-anchor">'+anchor+'</span></div>'+brief+'<div class="gc-next">接下来：'+next+'</div></div>';
 }
 let GEN=0;
 function renderSidebar(){
