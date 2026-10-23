@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"outpost2/internal/llm"
+	"outpost2/internal/profile"
 )
 
 // Exercise 一道实操练习：助教按实时进度出题，学习者作答，助教批改。
@@ -27,24 +28,26 @@ type Exercise struct {
 
 // Engine 出题+批改。生产 Client=*llm.Client；测试可注入 mock。
 // AgentsPath=用户约束文件（AGENTS.md），每次调用热读，优先级高于内置纪律。
+// ProfilePath=学习者画像（热读注入——出题贴合背景与目标场景）。
 type Engine struct {
-	Client     llm.ChatClient
-	AgentsPath string
+	Client      llm.ChatClient
+	AgentsPath  string
+	ProfilePath string
 }
 
 func (e *Engine) withAgents(system string) string {
-	if e.AgentsPath == "" {
-		return system
+	var head string
+	if e.AgentsPath != "" {
+		if b, err := os.ReadFile(e.AgentsPath); err == nil {
+			if a := strings.TrimSpace(string(b)); a != "" {
+				head += "【出题与批改行为约束（用户自定义，优先级最高，与下列默认纪律冲突时以此为准）】\n" + a + "\n\n"
+			}
+		}
 	}
-	b, err := os.ReadFile(e.AgentsPath)
-	if err != nil {
-		return system
+	if p := profile.Block(e.ProfilePath); p != "" {
+		head += p + "\n\n"
 	}
-	a := strings.TrimSpace(string(b))
-	if a == "" {
-		return system
-	}
-	return "【出题与批改行为约束（用户自定义，优先级最高，与下列默认纪律冲突时以此为准）】\n" + a + "\n\n" + system
+	return head + system
 }
 
 type rawEx struct {
@@ -66,7 +69,7 @@ func (e *Engine) Generate(topics []string, difficultyNote string) ([]Exercise, e
 语境式出题原则：像一篇 90% 词汇都认识的英语文章——旧概念在新语境中被自然调用就能巩固，不要在题面里重新讲解语境概念。
 只出课上讲过的内容——对话里没教到的概念一律不碰。出实操题：动手算、动手写一小段代码或命令、或真实场景决策——不要背诵默写题。
 输出 JSON：{"exercises":[{"title":"不超过12个字","topic":"核心知识点","context":"用到的语境知识点","problem":"完整题面：任务+已知条件+要求产出，不要包含答案"}]}`
-	raw, err := e.Client.ChatJSON(system, []llm.Message{{Role: "user", Content: "正在学的知识点与课上讲过的内容：\n" + strings.Join(topics, "\n\n") + difficultyNote}})
+	raw, err := e.Client.ChatJSON(e.withAgents(system), []llm.Message{{Role: "user", Content: "正在学的知识点与课上讲过的内容：\n" + strings.Join(topics, "\n\n") + difficultyNote}})
 	if err != nil {
 		return nil, err
 	}

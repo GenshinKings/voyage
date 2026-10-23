@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"outpost2/internal/llm"
+	"outpost2/internal/profile"
 )
 
 // Lesson 课程里的一个知识点。
@@ -46,9 +47,10 @@ type Session struct {
 
 // Tutor 教学引擎。
 type Tutor struct {
-	Dir        string         // 数据目录（tutor/ 子目录存会话）
-	Client     llm.ChatClient // 生产=*llm.Client；测试可注入 mock
-	AgentsPath string         // AGENTS.md 约束文件路径（每次调用热读，用户可编辑，改完即生效）
+	Dir         string         // 数据目录（tutor/ 子目录存会话）
+	Client      llm.ChatClient // 生产=*llm.Client；测试可注入 mock
+	AgentsPath  string         // AGENTS.md 约束文件路径（每次调用热读，用户可编辑，改完即生效）
+	ProfilePath string         // 学习者画像 memory/profile.md（热读注入——背景/时间/目标跨会话连续）
 }
 
 // agents 读取用户自定义约束（AGENTS.md）。缺失/失败返回空（默认纪律兜底）。
@@ -63,13 +65,16 @@ func (t *Tutor) agents() string {
 	return strings.TrimSpace(string(b))
 }
 
-// withAgents 把用户约束前置到 system prompt——冲突时以 AGENTS.md 为准。
+// withAgents 把用户约束与学习者画像前置到 system prompt——冲突时 AGENTS.md 优先，画像供个性化参考。
 func (t *Tutor) withAgents(system string) string {
-	a := t.agents()
-	if a == "" {
-		return system
+	var head string
+	if a := t.agents(); a != "" {
+		head += "【教师行为约束（用户自定义，优先级最高，与下列默认纪律冲突时以此为准）】\n" + a + "\n\n"
 	}
-	return "【教师行为约束（用户自定义，优先级最高，与下列默认纪律冲突时以此为准）】\n" + a + "\n\n" + system
+	if p := profile.Block(t.ProfilePath); p != "" {
+		head += p + "\n\n"
+	}
+	return head + system
 }
 
 const teachSystem = `你是前哨 2.0 的 AI 助教，正在一对一把一个知识点教给学习者。

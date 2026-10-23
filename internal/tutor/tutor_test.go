@@ -2,10 +2,12 @@ package tutor
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"outpost2/internal/llm"
+	"outpost2/internal/profile"
 )
 
 // mockClient 确定性 LLM：replies[0]=课程分解 JSON（ChatJSON 用），此后按调用次序轮转。
@@ -103,7 +105,7 @@ func TestRetryBeforePass(t *testing.T) {
 		`{"nodes":[{"title":"A","brief":"b"}]}`,
 		"开场+检查题",
 		"不对，误区在……再试一次？", // 第 1 答 → 追问
-		"这次对了\n[PASS]",           // 第 2 答 → PASS
+		"这次对了\n[PASS]",  // 第 2 答 → PASS
 	}}
 	tu := &Tutor{Dir: dir, Client: mc}
 	cur, _ := tu.StartSubject("科目Y")
@@ -211,5 +213,59 @@ func TestNormalizeFallback(t *testing.T) {
 	tu2 := &Tutor{Dir: t.TempDir()}
 	if got := tu2.normalizeSubject("拍照"); got != "拍照" {
 		t.Fatalf("无 LLM 应回退原名: %s", got)
+	}
+}
+
+func TestWithAgentsProfileInjection(t *testing.T) {
+	dir := t.TempDir()
+	agentsPath := filepath.Join(dir, "AGENTS.md")
+	profPath := profile.Ensure(dir)
+
+	// 纯模板（无正文）+ 无 AGENTS → system 原样
+	tu := &Tutor{Dir: dir, ProfilePath: profPath}
+	if got := tu.withAgents("SYS"); got != "SYS" {
+		t.Fatalf("空画像+无约束应原样返回: %q", got)
+	}
+
+	// 有 AGENTS、画像为空 → 只注入约束
+	if err := os.WriteFile(agentsPath, []byte("不要超纲"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tu.AgentsPath = agentsPath
+	if got := tu.withAgents("SYS"); !strings.Contains(got, "不要超纲") || strings.Contains(got, "后端工程师") {
+		t.Fatalf("应只注入约束: %q", got)
+	}
+
+	// 两者都有 → 约束在前、画像其后、system 最后
+	if err := profile.Save(profPath, profile.Title+"\n\n- 后端工程师\n"); err != nil {
+		t.Fatal(err)
+	}
+	got := tu.withAgents("SYS")
+	ia, ip := strings.Index(got, "不要超纲"), strings.Index(got, "后端工程师")
+	if ia < 0 || ip < 0 || ia > ip {
+		t.Fatalf("约束应先于画像: %q", got)
+	}
+	if !strings.HasSuffix(got, "SYS") {
+		t.Fatal("system prompt 应保持在最后")
+	}
+}
+
+func TestDistillProfile(t *testing.T) {
+	dir := t.TempDir()
+	mc := &mockClient{replies: []string{profile.Title + "\n\n- 后端工程师，目标转 FDE\n- 每周 ~7 小时\n"}}
+	tu := &Tutor{Dir: dir, Client: mc, ProfilePath: profile.Ensure(dir)}
+	sess := &DirectionSession{Messages: []llm.Message{
+		{Role: "user", Content: "我是后端工程师，想转 FDE"},
+		{Role: "assistant", Content: "每周能投入多少时间？"},
+		{Role: "user", Content: "每周大概 7 小时"},
+	}}
+	if err := tu.DistillProfile(sess); err != nil {
+		t.Fatal(err)
+	}
+	if got := profile.Load(tu.ProfilePath); !strings.Contains(got, "FDE") {
+		t.Fatalf("蒸馏画像应落盘: %q", got)
+	}
+	if err := tu.DistillProfile(nil); err == nil {
+		t.Fatal("无会话记录应报错")
 	}
 }

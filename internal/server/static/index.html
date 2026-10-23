@@ -514,11 +514,15 @@ function renderSettings(){
     h+='<input id="pfModel" placeholder="模型名，如 deepseek-chat">';
     h+='<input id="pfKey" type="password" placeholder="API Key（编辑已有配置时留空=沿用旧 key）">';
     h+='<button class="backbtn" onclick="saveModel()" style="margin-top:8px">保存并启用</button></div>';
+    h+='<div class="grouplabel" style="margin:20px 0 6px">学习者画像（每次教学/出题注入：按你的背景打比方、按目标定侧重；方向讨论同步后自动沉淀，可手编）</div>';
+    h+='<textarea id="profileEdit" spellcheck="false"></textarea>';
+    h+='<button class="backbtn" onclick="saveProfile()" style="margin-top:8px">保存画像</button>';
     h+='<div class="grouplabel" style="margin:20px 0 6px">AGENTS.md — 助教行为约束（每次调用注入，改完即生效）</div>';
     h+='<textarea id="agentsEdit" spellcheck="false">'+esc(d.agents||'')+'</textarea>';
     h+='<button class="backbtn" onclick="saveAgents()" style="margin-top:8px">保存约束</button>';
     v.innerHTML=h;
     v.querySelectorAll('.act-model').forEach(b=>{b.onclick=()=>activateModel(b.dataset.name);});
+    api('/api/profile').then(p=>{const el=document.getElementById('profileEdit');if(el)el.value=p.content||'';}).catch(()=>{});
   }).catch(e=>{v.innerHTML='<div class="empty">'+esc(e.message)+'</div>';});
 }
 async function saveModel(){
@@ -540,6 +544,12 @@ async function saveAgents(){
   try{
     await api('/api/agents',{content:document.getElementById('agentsEdit').value});
     toast('约束已保存——下一次 AI 调用即生效');
+  }catch(e){toast('失败：'+e.message)}
+}
+async function saveProfile(){
+  try{
+    await api('/api/profile',{content:document.getElementById('profileEdit').value});
+    toast('画像已保存——下一次教学/出题即生效');
   }catch(e){toast('失败：'+e.message)}
 }
 

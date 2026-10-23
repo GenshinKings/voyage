@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -24,6 +25,7 @@ import (
 	"outpost2/internal/exercise"
 	"outpost2/internal/graduation"
 	"outpost2/internal/llm"
+	"outpost2/internal/profile"
 	"outpost2/internal/sandbox"
 	"outpost2/internal/scheduler"
 	"outpost2/internal/tutor"
@@ -101,10 +103,11 @@ type Server struct {
 	// 真实知识连接："核心ID->语境ID"→语境式练习真实调用次数——关联图的强边来源
 	ContextEdges map[string]int `json:"contextEdges"`
 	// 模型配置口：多 Profile 热切换（key 只落本地 llm.json，0600，不入仓库）
-	LLMStore   *llm.Store       `json:"-"`
-	AgentsPath string           `json:"-"` // AGENTS.md 约束文件（每次 LLM 调用热读）
-	Tutor      *tutor.Tutor     `json:"-"`
-	Exer       *exercise.Engine `json:"-"`
+	LLMStore    *llm.Store       `json:"-"`
+	AgentsPath  string           `json:"-"` // AGENTS.md 约束文件（每次 LLM 调用热读）
+	ProfilePath string           `json:"-"` // 学习者画像 memory/profile.md（热读注入 + 方向同步时自动沉淀）
+	Tutor       *tutor.Tutor     `json:"-"`
+	Exer        *exercise.Engine `json:"-"`
 }
 
 func (s *Server) load(path string, v any) bool {
@@ -126,7 +129,7 @@ func (s *Server) save(path string, v any) {
 
 // NewServer 装配：缺 goals 时写入种子（90 天冲刺三产出物）。
 func NewServer(dir string) *Server {
-	s := &Server{Dir: dir, Ledger: evidence.New(), Bandit: bandit.New(time.Now().UnixNano()), Ability: ability.New(), AgentsPath: filepath.Join(dir, "AGENTS.md")}
+	s := &Server{Dir: dir, Ledger: evidence.New(), Bandit: bandit.New(time.Now().UnixNano()), Ability: ability.New(), AgentsPath: filepath.Join(dir, "AGENTS.md"), ProfilePath: profile.Ensure(dir)}
 	// 模型配置口：llm.json 多 Profile（兼容旧单配置自动迁移）；AGENTS.md 用户约束（缺失写默认模板）
 	if st, err := llm.LoadStore(filepath.Join(dir, "llm.json")); err == nil {
 		s.LLMStore = st
@@ -195,8 +198,8 @@ func (s *Server) rebuildLLM() {
 		return
 	}
 	client := llm.NewClient(p.Config())
-	s.Tutor = &tutor.Tutor{Dir: s.Dir, Client: client, AgentsPath: s.AgentsPath}
-	s.Exer = &exercise.Engine{Client: client, AgentsPath: s.AgentsPath}
+	s.Tutor = &tutor.Tutor{Dir: s.Dir, Client: client, AgentsPath: s.AgentsPath, ProfilePath: s.ProfilePath}
+	s.Exer = &exercise.Engine{Client: client, AgentsPath: s.AgentsPath, ProfilePath: s.ProfilePath}
 }
 
 func (s *Server) readAgents() string {
@@ -731,10 +734,20 @@ func (s *Server) Handlers() http.Handler {
 			http.Error(w, "提案不完整", 400)
 			return
 		}
+		// 蒸馏输入要在 ResetDirection 删文件前快照
+		sess := s.Tutor.LoadDirection()
 		cur := s.Tutor.SetSubjectWithLessons(req.Subject, req.Lessons)
 		s.Exercises = nil // 新方向 = 今日练习作废重出
 		s.Tutor.ResetDirection()
 		s.saveState()
+		// 方向讨论里的背景/时间/目标沉淀为学习者画像（异步，失败不影响开课）
+		if t := s.Tutor; sess != nil && len(sess.Messages) > 0 {
+			go func() {
+				if err := t.DistillProfile(sess); err != nil {
+					log.Printf("学习者画像沉淀失败（不影响开课）: %v", err)
+				}
+			}()
+		}
 		writeJSON(w, map[string]any{"ok": true, "curriculum": map[string]any{"subjects": cur.Subjects, "lessons": cur.Lessons}})
 	})
 	mux.HandleFunc("/api/llm/profiles", func(w http.ResponseWriter, _ *http.Request) {
@@ -800,6 +813,21 @@ func (s *Server) Handlers() http.Handler {
 			return
 		}
 		writeJSON(w, map[string]any{"content": s.readAgents()})
+	})
+	mux.HandleFunc("/api/profile", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			var req struct {
+				Content string `json:"content"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&req)
+			if err := profile.Save(s.ProfilePath, req.Content); err != nil {
+				http.Error(w, err.Error(), 500)
+				return
+			}
+			writeJSON(w, map[string]any{"ok": true})
+			return
+		}
+		writeJSON(w, map[string]any{"content": profile.Load(s.ProfilePath)})
 	})
 	mux.HandleFunc("/api/graph", func(w http.ResponseWriter, _ *http.Request) {
 		nodes := []map[string]any{}

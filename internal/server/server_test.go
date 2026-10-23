@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"outpost2/internal/evidence"
+	"outpost2/internal/profile"
 )
 
 // 履历跨重启不丢：ledger.json 是单一真相源，state.json 怎么变都吞不掉履历（事故 2026-10-20）。
@@ -79,5 +80,33 @@ func TestServerDailyLoop(t *testing.T) {
 	h.ServeHTTP(r3, httptest.NewRequest("GET", "/evidence.html", nil))
 	if !strings.Contains(r3.Body.String(), "学习履历") {
 		t.Fatal("证据页应渲染")
+	}
+}
+
+// 学习者画像：首启建模板 → /api/profile 写读回环 → 重启不丢（画像也是持久事实）。
+func TestProfileHandlerRoundtrip(t *testing.T) {
+	dir := t.TempDir()
+	s := NewServer(dir)
+	if s.ProfilePath == "" {
+		t.Fatal("NewServer 应初始化画像路径")
+	}
+	h := s.Handlers()
+	// GET 初始为模板（正文空）
+	r := httptest.NewRecorder()
+	h.ServeHTTP(r, httptest.NewRequest("GET", "/api/profile", nil))
+	if r.Code != 200 {
+		t.Fatalf("GET /api/profile 失败: %d", r.Code)
+	}
+	// POST 写入
+	body := `{"content":"# 学习者画像\n\n- 后端工程师\n"}`
+	r2 := httptest.NewRecorder()
+	h.ServeHTTP(r2, httptest.NewRequest("POST", "/api/profile", strings.NewReader(body)))
+	if r2.Code != 200 {
+		t.Fatalf("POST /api/profile 失败: %d", r2.Code)
+	}
+	// 重启后仍在
+	s2 := NewServer(dir)
+	if got := profile.Load(s2.ProfilePath); !strings.Contains(got, "后端工程师") {
+		t.Fatalf("重启后画像丢失: %q", got)
 	}
 }
