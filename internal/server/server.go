@@ -102,6 +102,8 @@ type Server struct {
 	PracStreak map[string]int       `json:"pracStreak"` // 科目→连对计数（bias 上探的依据）
 	// 真实知识连接："核心ID->语境ID"→语境式练习真实调用次数——关联图的强边来源
 	ContextEdges map[string]int `json:"contextEdges"`
+	// 错题回归（Magpie 思想）：答错的知识点记入错题本，下次出题优先出换场景变式——自适应让人看得见
+	WrongHits map[string]*WrongHit `json:"wrongHits"`
 	// 模型配置口：多 Profile 热切换（key 只落本地 llm.json，0600，不入仓库）
 	LLMStore    *llm.Store       `json:"-"`
 	AgentsPath  string           `json:"-"` // AGENTS.md 约束文件（每次 LLM 调用热读）
@@ -173,6 +175,50 @@ func NewServer(dir string) *Server {
 }
 
 func (s *Server) saveState() { s.save("state.json", s) }
+
+// WrongHit 一条错题记录：练习首次作答失败时记入；之后任一题通过该知识点即转已巩固。
+type WrongHit struct {
+	Topic   string    `json:"topic"`
+	Subject string    `json:"subject,omitempty"`
+	Count   int       `json:"count"`
+	Pending bool      `json:"pending"` // 尚未做对过——出题时优先变式重出
+	LastAt  time.Time `json:"lastAt"`
+}
+
+func wrongKey(subject, topic string) string {
+	return subject + "|" + strings.TrimSpace(topic)
+}
+
+// recordWrongHit 练习首次作答失败 → 记入错题本。
+func (s *Server) recordWrongHit(subject, topic string) {
+	topic = strings.TrimSpace(topic)
+	if topic == "" {
+		return
+	}
+	if s.WrongHits == nil {
+		s.WrongHits = map[string]*WrongHit{}
+	}
+	k := wrongKey(subject, topic)
+	h := s.WrongHits[k]
+	if h == nil {
+		h = &WrongHit{Topic: topic, Subject: subject}
+		s.WrongHits[k] = h
+	}
+	h.Count++
+	h.Pending = true
+	h.LastAt = time.Now()
+}
+
+// pendingWrongTopics 科目下待巩固的错题知识点（空科目=全部）。
+func (s *Server) pendingWrongTopics(subject string) []string {
+	out := []string{}
+	for _, h := range s.WrongHits {
+		if h.Pending && (subject == "" || h.Subject == subject) {
+			out = append(out, h.Topic)
+		}
+	}
+	return out
+}
 
 func sessMessages(sess *tutor.DirectionSession) []llm.Message {
 	if sess == nil {
@@ -384,6 +430,7 @@ func (s *Server) Handlers() http.Handler {
 		writeJSON(w, map[string]any{
 			"plan": s.Plan, "done": s.Done, "goals": s.Goals,
 			"exercises": s.Exercises, "readings": s.Readings, "contextEdges": s.ContextEdges,
+			"wrongHits": s.WrongHits,
 			"ledger": s.Ledger.List(), "counts": map[string]int{"known": k, "used": u, "done": d},
 			"graduation": map[string]any{"state": string(g), "reason": gReason},
 			"curriculum": curriculum, "today": today, "sessions": sessions,
@@ -562,6 +609,11 @@ func (s *Server) Handlers() http.Handler {
 			}
 			diffNote = fmt.Sprintf("\n\n学习者当前能力：Elo≈%.0f。所有题面难度必须落在 Elo %.0f–%.0f 区间（对应预期正确率约 50%%–85%%），%s：不出明显超纲的题，也不出送分题。", s.Ability.Rating("practice"), lo, hi, tone)
 		}
+		// 错题回归（Magpie 思想）：曾做错的知识点优先出换场景变式——它记得你错过的题
+		wrongList := s.pendingWrongTopics(curSub)
+		if len(wrongList) > 0 {
+			diffNote += "\n\n【错题回归】以下知识点学习者曾做错——优先以其中 1-2 个为核心知识点出变式题：换一个新场景、考同一个点，难度不升：\n- " + strings.Join(wrongList, "\n- ")
+		}
 		list, err := s.Exer.Generate(ordered, diffNote)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
@@ -578,6 +630,12 @@ func (s *Server) Handlers() http.Handler {
 				ctxID := contextPool[i%len(contextPool)]
 				if l, ok := byID[ctxID]; ok {
 					list[i].Context = l.Title
+				}
+			}
+			for _, w := range wrongList { // 错题回归题打标（前端「巩固」标签）
+				if strings.TrimSpace(list[i].Topic) == w {
+					list[i].Review = true
+					break
 				}
 			}
 		}
@@ -614,6 +672,15 @@ func (s *Server) Handlers() http.Handler {
 			}
 			if first && s.Ability != nil {
 				s.Ability.Answer("practice", s.Ability.Rating("practice"), done)
+			}
+			// 错题回归：首次作答失败记入错题本（下次出题变式重出）；通过即转已巩固
+			sub, topic := s.Exercises[i].Subject, s.Exercises[i].Topic
+			if done {
+				if h := s.WrongHits[wrongKey(sub, topic)]; h != nil {
+					h.Pending = false
+				}
+			} else if first {
+				s.recordWrongHit(sub, topic)
 			}
 			// 策略更新（在线训练）：批改结果即奖励；楼梯式难度调整（连对上探/受挫回落）
 			rw := 0.1

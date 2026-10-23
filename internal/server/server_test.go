@@ -83,6 +83,36 @@ func TestServerDailyLoop(t *testing.T) {
 	}
 }
 
+// 错题回归闭环：首次答错 → 记入错题本（pending）→ 出题清单包含它 → 做对后转已巩固。
+func TestWrongHitReinforceLoop(t *testing.T) {
+	s := NewServer(t.TempDir())
+	// 同一知识点错两次：计数累计，pending
+	s.recordWrongHit("机器学习", "混淆矩阵")
+	s.recordWrongHit("机器学习", "混淆矩阵")
+	h := s.WrongHits[wrongKey("机器学习", "混淆矩阵")]
+	if h == nil || h.Count != 2 || !h.Pending {
+		t.Fatalf("错题应记入并 pending: %+v", h)
+	}
+	// 出题清单：本含错题、他科不含
+	got := s.pendingWrongTopics("机器学习")
+	if len(got) != 1 || got[0] != "混淆矩阵" {
+		t.Fatalf("待巩固清单应含混淆矩阵: %v", got)
+	}
+	if len(s.pendingWrongTopics("摄影")) != 0 {
+		t.Fatal("他科不应看到机器学习的错题")
+	}
+	// 空知识点不入账
+	s.recordWrongHit("机器学习", "  ")
+	if len(s.WrongHits) != 1 {
+		t.Fatal("空知识点不应入账")
+	}
+	// 做对 → 转已巩固，出题清单清空
+	h.Pending = false
+	if len(s.pendingWrongTopics("机器学习")) != 0 {
+		t.Fatal("做对后不应再出现在待巩固清单")
+	}
+}
+
 // 学习者画像：首启建模板 → /api/profile 写读回环 → 重启不丢（画像也是持久事实）。
 func TestProfileHandlerRoundtrip(t *testing.T) {
 	dir := t.TempDir()

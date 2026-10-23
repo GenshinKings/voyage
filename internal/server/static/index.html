@@ -61,6 +61,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Micr
 #guideCard .gc-brief b{color:var(--ink)}
 #guideCard .gc-next{font-size:13.5px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(0,0,0,.06);line-height:1.6}
 #guideCard .gc-next b{color:var(--pink);font-weight:600}
+#guideCard .gc-profile{font-size:11.5px;color:var(--mut);margin-top:6px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#guideCard .gc-profile:hover{color:var(--ink)}
+.rtag{display:inline-block;font-size:10px;color:var(--pink);border:1px solid rgba(251,114,153,.35);border-radius:6px;padding:0 5px;margin-right:5px;vertical-align:1.5px;font-weight:600}
 .msg .bubble{max-width:78%;padding:11px 15px;border-radius:18px;font-size:14.5px;line-height:1.7;white-space:pre-wrap;word-break:break-word}
 .msg.a .bubble{background:var(--card);box-shadow:0 1px 2px rgba(0,0,0,.05),0 0 0 1px rgba(0,0,0,.03);border-bottom-left-radius:6px}
 .msg.u{justify-content:flex-end}
@@ -338,7 +341,13 @@ function renderGuide(){
   else next='今天全部完成——继续推进是加分项，休息也是正当的';
   const anchor=prev?(prev.status==='done'?'承接你已收尾的《'+esc(prev.title)+'》✓':'前一节《'+esc(prev.title)+'》还没收尾'):'这是这门课的起点';
   const brief=cur&&cur.brief?'<div class="gc-brief">学完它能：<b>'+esc(cur.brief)+'</b></div>':'';
-  gc.innerHTML='<div class="gc"><div class="gc-top"><span class="gc-prog"><b>'+(idx+1)+'/'+lessons.length+'</b> · '+esc(cur?cur.subject:'')+'</span><span class="gc-anchor">'+anchor+'</span></div>'+brief+'<div class="gc-next">接下来：'+next+'</div></div>';
+  gc.innerHTML='<div class="gc"><div class="gc-top"><span class="gc-prog"><b>'+(idx+1)+'/'+lessons.length+'</b> · '+esc(cur?cur.subject:'')+'</span><span class="gc-anchor">'+anchor+'</span></div>'+brief+'<div class="gc-profile" id="profileLine" title="点击查看/编辑学习者画像" onclick="switchTab(\'set\')"></div><div class="gc-next">接下来：'+next+'</div></div>';
+  // 画像上墙：助教记得你（v4.5 学习者画像，异步填充，点击进设置编辑）
+  api('/api/profile').then(p=>{
+    const lines=(p.content||'').split('\n').filter(l=>l.trim().indexOf('-')===0).map(l=>l.trim().slice(1).trim()).filter(Boolean);
+    const el=document.getElementById('profileLine');
+    if(el&&lines.length)el.textContent='助教记得你：'+lines.slice(0,3).join(' · ');
+  }).catch(()=>{});
 }
 let GEN=0;
 function renderSidebar(){
@@ -363,7 +372,7 @@ function renderSidebar(){
     let sub='';
     if(ref)sub='主线：'+ref;
     if(e.context)sub+=(sub?' · ':'')+'语境：'+esc(e.context);
-    el.innerHTML='<span class="st">'+(e.status==='done'?'✓':'·')+'</span><span>'+esc(e.title)+(sub?'<div class="lp-sub">'+sub+'</div>':'')+'</span>';
+    el.innerHTML='<span class="st">'+(e.status==='done'?'✓':'·')+'</span><span>'+(e.review?'<span class="rtag">巩固</span>':'')+esc(e.title)+(sub?'<div class="lp-sub">'+sub+'</div>':'')+'</span>';
     el.onclick=()=>openExercise(e.id);
     list.appendChild(el);
   });
@@ -384,7 +393,7 @@ function openExercise(id){
   leaveHistory();
   EXER=id;CURRENT=null;
   $('lessonTitle').textContent=e.title;
-  $('kicker').textContent='PRACTICE · 实操练习';
+  $('kicker').textContent='PRACTICE · 实操练习'+(e.review?' · 错题回归':'');
   renderChat(e.messages);
   switchTab('learn');
 }

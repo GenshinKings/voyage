@@ -22,6 +22,7 @@ type Exercise struct {
 	Context  string        `json:"context,omitempty"`  // 语境知识点（解题必经的旧概念）
 	Subject  string        `json:"subject,omitempty"`  // 归属科目（难度策略用）
 	LessonID string        `json:"lessonId,omitempty"` // 归属知识点（bandit 奖励结算的臂）
+	Review   bool          `json:"review,omitempty"`   // 错题回归题（核心知识点曾做错，换场景重出）
 	Status   string        `json:"status"`             // active/done
 	Messages []llm.Message `json:"messages"`
 }
