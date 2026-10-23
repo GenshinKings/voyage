@@ -8,6 +8,8 @@
 
 10. 横切机制接入必须以「调用点清单」收口 | v4.2 称「tutor/exercise 全调用点接入」AGENTS.md 约束，但 exercise.Generate 的 ChatJSON 漏包 withAgents——出题调用一直在约束外裸奔，直到本次接画像注入（同一个汇聚点）才发现；根因：两包各有一份 withAgents，没有唯一汇聚点 | commit 本次 | Seen 1×
 
+11. push 挂死≠网络问题，先查 credential helper 链 | 系统级 gitconfig 配的是 helper-selector（弹 GUI 窗问用哪个真 helper），后台运行时窗口没人点→push 永久挂起且无任何输出；修法：`git config --global credential.helper manager` 绕开 selector。另：GitHub 直连 443 会被重置，push 必须走 clash 代理（127.0.0.1:7897，`-c http.proxy`），POST 上传常被节点卡死→后台循环重试（代理/直连交替）最终能过 | commit 本次 | Seen 1×
+
 ## 2026-10-20（续）
 
 9. 关键配置文件的消失要立刻可感知：llm.json 从工作目录消失（原因未明）导致 LLM 全线瘫痪才发现；恢复源=1.x SQLite settings 表。教训：Serve 启动时若 LLM 配置缺失应在方向卡/toast 常驻提示，而不是等出题 400 |Seen 1×
