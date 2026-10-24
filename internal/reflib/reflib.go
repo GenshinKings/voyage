@@ -9,6 +9,7 @@ package reflib
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,6 +21,9 @@ const DirName = "kb"
 // IndexFile 清单文件名（位于 kb/ 内）。
 const IndexFile = "index.json"
 
+// NavFile 导航文件名（位于 kb/ 内，人读的库存总览，每次入库自动更新）。
+const NavFile = "导航.md"
+
 // Doc 一篇参考资料的清单条目。
 type Doc struct {
 	ID     string `json:"id"`            // 如 20261024-security-audit-skill
@@ -28,7 +32,8 @@ type Doc struct {
 	Domain string `json:"domain,omitempty"`
 	Date   string `json:"date,omitempty"`   // 抓取日期 2026-10-24
 	Digest string `json:"digest,omitempty"` // 一句话摘要（≤60 字，注入用）
-	File   string `json:"file"`             // kb/ 内的文件名
+	File   string `json:"file,omitempty"`   // kb/ 内的文件名（库内文档）
+	Path   string `json:"path,omitempty"`   // 本地磁盘路径（外部资料引用，原文不拷贝）
 }
 
 // Index 参考库清单。
@@ -70,26 +75,39 @@ func SaveIndex(dir string, idx Index) error {
 	return os.Rename(tmp, filepath.Join(dir, IndexFile))
 }
 
-// Add 入库一篇原文：写 md 文件 + 清单幂等追加/更新（按 ID 去重，重复入库=覆盖）。
+// Add 入库一条参考资料（按 ID 幂等，重复入库=覆盖）：
+//   - 库内文档：d.Path 为空 → 写 md 文件到 kb/（content 为原文）；
+//   - 外部资料：d.Path 给本地路径 → 只登记引用，原文留在原地不拷贝。
+//
+// 两种方式都会更新清单并自动重生成导航.md（用户 2026-10-24 指令：加新东西导航自动更新）。
 func Add(dir string, d Doc, content string) error {
 	if strings.TrimSpace(d.ID) == "" || strings.TrimSpace(d.Title) == "" {
 		return os.ErrInvalid
 	}
-	if d.File == "" {
-		d.File = SanitizeID(d.ID) + ".md"
-	}
-	if err := os.WriteFile(filepath.Join(dir, d.File), []byte(content), 0o644); err != nil {
-		return err
+	if d.Path == "" {
+		if d.File == "" {
+			d.File = SanitizeID(d.ID) + ".md"
+		}
+		if err := os.WriteFile(filepath.Join(dir, d.File), []byte(content), 0o644); err != nil {
+			return err
+		}
 	}
 	idx := LoadIndex(dir)
+	updated := false
 	for i := range idx.Docs {
 		if idx.Docs[i].ID == d.ID {
 			idx.Docs[i] = d
-			return SaveIndex(dir, idx)
+			updated = true
+			break
 		}
 	}
-	idx.Docs = append(idx.Docs, d)
-	return SaveIndex(dir, idx)
+	if !updated {
+		idx.Docs = append(idx.Docs, d)
+	}
+	if err := SaveIndex(dir, idx); err != nil {
+		return err
+	}
+	return SyncNav(dir)
 }
 
 // Digest 清单的注入文本（教学 system 用）：每篇一行「- 《标题》：摘要」。
@@ -112,6 +130,85 @@ func Digest(dir string, max int) string {
 		n++
 	}
 	return strings.TrimSpace(b.String())
+}
+
+// SyncNav 从清单重新生成 导航.md（首次使用=建骨架；每次入库后自动更新）。
+// 人读总览：库内文档与外部资料分开列，含摘要/日期/域/路径——AI 助教的「可教知识」
+// 全景在这里，教学注入用的清单摘要（Digest）与其同源（index.json）。
+func SyncNav(dir string) error {
+	if dir == "" {
+		return os.ErrInvalid
+	}
+	idx := LoadIndex(dir)
+	internal, external := 0, 0
+	for _, d := range idx.Docs {
+		if strings.TrimSpace(d.Title) == "" {
+			continue
+		}
+		if d.Path != "" {
+			external++
+		} else {
+			internal++
+		}
+	}
+	var b strings.Builder
+	b.WriteString("# 教学参考库导航\n\n")
+	b.WriteString("> 自动生成：每次入库自动更新，勿手编（数据源 index.json；入库用 tools/kb_save.py）。\n")
+	b.WriteString("> AI 助教每次教学注入本库清单（标题+摘要）——随时知道「我们有哪些可教的知识」。\n\n")
+	b.WriteString(fmt.Sprintf("库内文档 %d 篇 · 外部资料 %d 处\n\n", internal, external))
+	if internal+external == 0 {
+		b.WriteString("（暂无条目——第一篇用 `python tools/kb_save.py` 入库，或登记 G 盘等本地现成资料）\n")
+	}
+	if internal > 0 {
+		b.WriteString("## 库内文档（kb/*.md）\n\n")
+		for _, d := range idx.Docs {
+			if d.Path != "" || strings.TrimSpace(d.Title) == "" {
+				continue
+			}
+			writeNavEntry(&b, d)
+			b.WriteString("  原文：`" + d.File + "`")
+			if d.URL != "" {
+				b.WriteString(" ｜ 来源：" + d.URL)
+			}
+			b.WriteString("\n")
+		}
+		b.WriteString("\n")
+	}
+	if external > 0 {
+		b.WriteString("## 外部资料（路径引用，原文在本地磁盘）\n\n")
+		for _, d := range idx.Docs {
+			if d.Path == "" || strings.TrimSpace(d.Title) == "" {
+				continue
+			}
+			writeNavEntry(&b, d)
+			b.WriteString("  路径：`" + d.Path + "`\n")
+		}
+		b.WriteString("\n")
+	}
+	tmp := filepath.Join(dir, NavFile+".tmp")
+	if err := os.WriteFile(tmp, []byte(b.String()), 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, filepath.Join(dir, NavFile))
+}
+
+// writeNavEntry 导航条目公共部分：「- 《标题》— 摘要（日期 · 域 X）」。
+func writeNavEntry(b *strings.Builder, d Doc) {
+	b.WriteString("- 《" + d.Title + "》")
+	if d.Digest != "" {
+		b.WriteString(" — " + d.Digest)
+	}
+	var meta []string
+	if d.Date != "" {
+		meta = append(meta, d.Date)
+	}
+	if d.Domain != "" {
+		meta = append(meta, "域 "+d.Domain)
+	}
+	if len(meta) > 0 {
+		b.WriteString("（" + strings.Join(meta, " · ") + "）")
+	}
+	b.WriteString("\n")
 }
 
 // SanitizeID 清洗 id 为安全文件名成分（字母/数字/-/_，其余丢弃）。
