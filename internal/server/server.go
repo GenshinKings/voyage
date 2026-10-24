@@ -140,6 +140,18 @@ func (s *Server) loadFetchConf() {
 	s.Gh = ghfetch.New(conf.Proxy)
 }
 
+// truncateNote 进货提示截断（开场注入的体量控制：报告全文在设置页，教学只带摘要）。
+func truncateNote(report string) string {
+	report = strings.TrimSpace(report)
+	if report == "" {
+		return ""
+	}
+	if len(report) > 500 {
+		report = report[:500] + "…（全文见设置页·内容进货）"
+	}
+	return report
+}
+
 func (s *Server) saveFetchConf() {
 	if s.FetchConf != nil {
 		s.save("fetch.json", s.FetchConf)
@@ -175,6 +187,10 @@ func NewServer(dir string) *Server {
 		_ = os.WriteFile(s.AgentsPath, []byte(defaultAgentsMD), 0o644)
 	}
 	s.rebuildLLM()
+	// 今日进货提示 → 助教开场带一次（AI 主导：收尾时主动推荐延伸材料）
+	if s.Tutor != nil && s.FetchConf != nil && s.FetchConf.LastRun == time.Now().Format("2006-01-02") {
+		s.Tutor.FetchNote = truncateNote(s.FetchConf.LastReport)
+	}
 	loaded := s.load("state.json", s)
 	// 履历从单一真相源恢复（此前只信 state.json 的过期副本，重启即丢——事故 2026-10-20）
 	s.load("ledger.json", &s.Ledger)
@@ -514,6 +530,9 @@ func (s *Server) RunCurate() error {
 				s.FetchConf.LastReport = "进货失败: " + err.Error()
 			} else {
 				s.FetchConf.LastReport = report
+				if s.Tutor != nil {
+					s.Tutor.FetchNote = truncateNote(report) // 进货完成 → 下一节开场由助教主动推荐
+				}
 			}
 		}
 		s.fetchMu.Unlock()
@@ -1202,6 +1221,15 @@ func (s *Server) Handlers() http.Handler {
 			resp["proxy"], resp["hour"], resp["lastRun"], resp["lastReport"] =
 				s.FetchConf.Proxy, s.FetchConf.Hour, s.FetchConf.LastRun, s.FetchConf.LastReport
 		}
+		// 今日进货统计（方向卡「今日进货」行的数据源）
+		today := time.Now().Format("2006-01-02")
+		var titles []string
+		for _, d := range reflib.LoadIndex(s.RefDir).Docs {
+			if strings.HasPrefix(d.ID, "gh-") && d.Date == today && strings.TrimSpace(d.Title) != "" {
+				titles = append(titles, d.Title)
+			}
+		}
+		resp["todayItems"], resp["todayTitles"] = len(titles), titles
 		writeJSON(w, resp)
 	})
 	mux.HandleFunc("/api/fetch/config", func(w http.ResponseWriter, r *http.Request) {

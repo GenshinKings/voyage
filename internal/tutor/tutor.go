@@ -54,6 +54,7 @@ type Tutor struct {
 	ProfilePath string         // 学习者画像 memory/profile.md（热读注入——背景/时间/目标跨会话连续）
 	RefDir      string         // 教学参考库 kb/（教务抓取的原文资料，热读注入清单——讲解优先依据原文）
 	Tools       []Tool         // 助教可用工具（server 组装：GitHub 抓取/入库/阅读；nil=无工具）
+	FetchNote   string         // 今日进货提示（server 注入；开场带给助教一次——收尾时主动推荐延伸材料，用后清空防重复）
 }
 
 // agents 读取用户自定义约束（AGENTS.md）。缺失/失败返回空（默认纪律兜底）。
@@ -268,6 +269,11 @@ func (t *Tutor) StartOrResume(lesson Lesson) (*Session, bool, error) {
 	sys := teachSystem
 	user := fmt.Sprintf("知识点：《%s》——%s\n科目：%s\n现在开始教学：输出你的开场（讲解+检查题）。",
 		lesson.Title, lesson.Brief, lesson.Subject)
+	if t.FetchNote != "" {
+		// AI 主导（宪法操作原则）：助教知道今天进了什么货，收尾时主动推荐延伸
+		user += "\n\n【今日进货】以下是你刚抓取入库的学习材料——若与本次知识点相关，收尾时主动推荐给学习者（说清为什么值得读/做）；无关则不提：\n" + t.FetchNote
+		t.FetchNote = "" // 只带一次，防每课重复推销
+	}
 	s.Messages = append(s.Messages, llm.Message{Role: "user", Content: user})
 	reply, err := t.Client.Chat(t.withAgents(sys), s.Messages)
 	if err != nil {
