@@ -8,6 +8,7 @@ import (
 
 	"outpost2/internal/llm"
 	"outpost2/internal/profile"
+	"outpost2/internal/reflib"
 )
 
 // mockClient 确定性 LLM：replies[0]=课程分解 JSON（ChatJSON 用），此后按调用次序轮转。
@@ -244,6 +245,27 @@ func TestWithAgentsProfileInjection(t *testing.T) {
 	ia, ip := strings.Index(got, "不要超纲"), strings.Index(got, "后端工程师")
 	if ia < 0 || ip < 0 || ia > ip {
 		t.Fatalf("约束应先于画像: %q", got)
+	}
+	if !strings.HasSuffix(got, "SYS") {
+		t.Fatal("system prompt 应保持在最后")
+	}
+}
+
+func TestWithAgentsRefLibInjection(t *testing.T) {
+	dir := t.TempDir()
+	refDir := reflib.Ensure(dir)
+	tu := &Tutor{Dir: dir, ProfilePath: profile.Ensure(dir), RefDir: refDir}
+	// 空参考库 → 不注入
+	if got := tu.withAgents("SYS"); strings.Contains(got, "教学参考库") {
+		t.Fatalf("空参考库不应注入: %q", got)
+	}
+	// 入库一篇 → 注入标题与摘要
+	if err := reflib.Add(refDir, reflib.Doc{ID: "20261024-demo", Title: "安全审计 Skill", Digest: "六阶段流水线"}, "# 原文"); err != nil {
+		t.Fatal(err)
+	}
+	got := tu.withAgents("SYS")
+	if !strings.Contains(got, "教学参考库") || !strings.Contains(got, "《安全审计 Skill》") || !strings.Contains(got, "六阶段流水线") {
+		t.Fatalf("应注入参考库清单: %q", got)
 	}
 	if !strings.HasSuffix(got, "SYS") {
 		t.Fatal("system prompt 应保持在最后")

@@ -11,6 +11,7 @@ import (
 
 	"outpost2/internal/evidence"
 	"outpost2/internal/profile"
+	"outpost2/internal/reflib"
 )
 
 // 履历跨重启不丢：ledger.json 是单一真相源，state.json 怎么变都吞不掉履历（事故 2026-10-20）。
@@ -138,5 +139,22 @@ func TestProfileHandlerRoundtrip(t *testing.T) {
 	s2 := NewServer(dir)
 	if got := profile.Load(s2.ProfilePath); !strings.Contains(got, "后端工程师") {
 		t.Fatalf("重启后画像丢失: %q", got)
+	}
+}
+
+// 教学参考库：NewServer 建 kb/ 目录 + /api/reflib 暴露清单（教务入库后前端可见）。
+func TestRefLibHandler(t *testing.T) {
+	dir := t.TempDir()
+	s := NewServer(dir)
+	if s.RefDir == "" {
+		t.Fatal("NewServer 应初始化参考库目录")
+	}
+	if err := reflib.Add(s.RefDir, reflib.Doc{ID: "x", Title: "参考一篇"}, "正文"); err != nil {
+		t.Fatal(err)
+	}
+	r := httptest.NewRecorder()
+	s.Handlers().ServeHTTP(r, httptest.NewRequest("GET", "/api/reflib", nil))
+	if r.Code != 200 || !strings.Contains(r.Body.String(), "参考一篇") {
+		t.Fatalf("/api/reflib 应返回清单: %d %s", r.Code, r.Body.String())
 	}
 }

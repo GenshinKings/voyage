@@ -17,6 +17,7 @@ import (
 
 	"outpost2/internal/llm"
 	"outpost2/internal/profile"
+	"outpost2/internal/reflib"
 )
 
 // Lesson 课程里的一个知识点。
@@ -51,6 +52,7 @@ type Tutor struct {
 	Client      llm.ChatClient // 生产=*llm.Client；测试可注入 mock
 	AgentsPath  string         // AGENTS.md 约束文件路径（每次调用热读，用户可编辑，改完即生效）
 	ProfilePath string         // 学习者画像 memory/profile.md（热读注入——背景/时间/目标跨会话连续）
+	RefDir      string         // 教学参考库 kb/（教务抓取的原文资料，热读注入清单——讲解优先依据原文）
 }
 
 // agents 读取用户自定义约束（AGENTS.md）。缺失/失败返回空（默认纪律兜底）。
@@ -65,11 +67,15 @@ func (t *Tutor) agents() string {
 	return strings.TrimSpace(string(b))
 }
 
-// withAgents 把用户约束与学习者画像前置到 system prompt——冲突时 AGENTS.md 优先，画像供个性化参考。
+// withAgents 把用户约束、教学参考库、学习者画像前置到 system prompt——
+// 冲突时 AGENTS.md 优先；参考库管「教什么才不脱轨」；画像管「怎么讲贴合这个人」。
 func (t *Tutor) withAgents(system string) string {
 	var head string
 	if a := t.agents(); a != "" {
 		head += "【教师行为约束（用户自定义，优先级最高，与下列默认纪律冲突时以此为准）】\n" + a + "\n\n"
+	}
+	if k := reflib.Digest(t.RefDir, 30); k != "" {
+		head += "【教学参考库（教务精选抓取的原文资料；讲解这些主题时优先依据原文、保持准确不脱轨，引用注明《标题》）】\n" + k + "\n\n"
 	}
 	if p := profile.Block(t.ProfilePath); p != "" {
 		head += p + "\n\n"

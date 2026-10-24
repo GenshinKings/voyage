@@ -26,6 +26,7 @@ import (
 	"outpost2/internal/graduation"
 	"outpost2/internal/llm"
 	"outpost2/internal/profile"
+	"outpost2/internal/reflib"
 	"outpost2/internal/sandbox"
 	"outpost2/internal/scheduler"
 	"outpost2/internal/tutor"
@@ -108,6 +109,7 @@ type Server struct {
 	LLMStore    *llm.Store       `json:"-"`
 	AgentsPath  string           `json:"-"` // AGENTS.md 约束文件（每次 LLM 调用热读）
 	ProfilePath string           `json:"-"` // 学习者画像 memory/profile.md（热读注入 + 方向同步时自动沉淀）
+	RefDir      string           `json:"-"` // 教学参考库 kb/（教务抓取的原文，教学注入清单）
 	Tutor       *tutor.Tutor     `json:"-"`
 	Exer        *exercise.Engine `json:"-"`
 }
@@ -131,7 +133,7 @@ func (s *Server) save(path string, v any) {
 
 // NewServer 装配：缺 goals 时写入种子（90 天冲刺三产出物）。
 func NewServer(dir string) *Server {
-	s := &Server{Dir: dir, Ledger: evidence.New(), Bandit: bandit.New(time.Now().UnixNano()), Ability: ability.New(), AgentsPath: filepath.Join(dir, "AGENTS.md"), ProfilePath: profile.Ensure(dir)}
+	s := &Server{Dir: dir, Ledger: evidence.New(), Bandit: bandit.New(time.Now().UnixNano()), Ability: ability.New(), AgentsPath: filepath.Join(dir, "AGENTS.md"), ProfilePath: profile.Ensure(dir), RefDir: reflib.Ensure(dir)}
 	// 模型配置口：llm.json 多 Profile（兼容旧单配置自动迁移）；AGENTS.md 用户约束（缺失写默认模板）
 	if st, err := llm.LoadStore(filepath.Join(dir, "llm.json")); err == nil {
 		s.LLMStore = st
@@ -244,7 +246,7 @@ func (s *Server) rebuildLLM() {
 		return
 	}
 	client := llm.NewClient(p.Config())
-	s.Tutor = &tutor.Tutor{Dir: s.Dir, Client: client, AgentsPath: s.AgentsPath, ProfilePath: s.ProfilePath}
+	s.Tutor = &tutor.Tutor{Dir: s.Dir, Client: client, AgentsPath: s.AgentsPath, ProfilePath: s.ProfilePath, RefDir: s.RefDir}
 	s.Exer = &exercise.Engine{Client: client, AgentsPath: s.AgentsPath, ProfilePath: s.ProfilePath}
 }
 
@@ -431,7 +433,7 @@ func (s *Server) Handlers() http.Handler {
 			"plan": s.Plan, "done": s.Done, "goals": s.Goals,
 			"exercises": s.Exercises, "readings": s.Readings, "contextEdges": s.ContextEdges,
 			"wrongHits": s.WrongHits,
-			"ledger": s.Ledger.List(), "counts": map[string]int{"known": k, "used": u, "done": d},
+			"ledger":    s.Ledger.List(), "counts": map[string]int{"known": k, "used": u, "done": d},
 			"graduation": map[string]any{"state": string(g), "reason": gReason},
 			"curriculum": curriculum, "today": today, "sessions": sessions,
 		})
@@ -895,6 +897,9 @@ func (s *Server) Handlers() http.Handler {
 			return
 		}
 		writeJSON(w, map[string]any{"content": profile.Load(s.ProfilePath)})
+	})
+	mux.HandleFunc("/api/reflib", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, reflib.LoadIndex(s.RefDir))
 	})
 	mux.HandleFunc("/api/graph", func(w http.ResponseWriter, _ *http.Request) {
 		nodes := []map[string]any{}
