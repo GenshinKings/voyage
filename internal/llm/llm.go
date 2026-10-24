@@ -101,9 +101,38 @@ func LoadConfig(path string) (Config, error) {
 	return c, err
 }
 
+// Message 对话消息。扩展 function calling：assistant 可带 ToolCalls，
+// 工具结果以 Role="tool" + ToolCallID 回传（会话持久化向后兼容，旧字段不变）。
 type Message struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role       string     `json:"role"`
+	Content    string     `json:"content,omitempty"`
+	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
+	ToolCallID string     `json:"tool_call_id,omitempty"`
+}
+
+// Tool 暴露给模型的工具（JSON schema 参数声明）。
+type Tool struct {
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	Parameters  map[string]any `json:"parameters"`
+}
+
+// ToolCall 模型发起的一次工具调用（ArgsRaw 为 JSON 字符串，Args() 反序列化）。
+type ToolCall struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	ArgsRaw string `json:"args"`
+}
+
+// Args 把调用参数反序列化到 v。
+func (tc ToolCall) Args(v any) error {
+	return json.Unmarshal([]byte(tc.ArgsRaw), v)
+}
+
+// ToolClient 支持 function calling 的客户端（*Client 实现；mock 可选实现——
+// 不实现则调用方回退普通 Chat，教学/进货循环自动降级）。
+type ToolClient interface {
+	ChatTools(system string, msgs []Message, tools []Tool) (content string, calls []ToolCall, err error)
 }
 
 type Client struct {
@@ -115,18 +144,107 @@ func NewClient(cfg Config) *Client {
 	return &Client{Config: cfg, HTTP: &http.Client{Timeout: 180 * time.Second}}
 }
 
+// ---------- wire 格式（OpenAI chat API）----------
+
 type chatRequest struct {
-	Model    string    `json:"model"`
-	Messages []Message `json:"messages"`
+	Model    string        `json:"model"`
+	Messages []wireMessage `json:"messages"`
+	Tools    []any         `json:"tools,omitempty"`
+}
+
+type wireToolCall struct {
+	ID       string `json:"id"`
+	Type     string `json:"type"`
+	Function struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	} `json:"function"`
+}
+
+type wireMessage struct {
+	Role       string         `json:"role"`
+	Content    *string        `json:"content"`
+	ToolCalls  []wireToolCall `json:"tool_calls,omitempty"`
+	ToolCallID string         `json:"tool_call_id,omitempty"`
+}
+
+func toWire(m Message) wireMessage {
+	w := wireMessage{Role: m.Role, ToolCallID: m.ToolCallID}
+	if m.Content != "" {
+		s := m.Content
+		w.Content = &s
+	}
+	for _, tc := range m.ToolCalls {
+		var wt wireToolCall
+		wt.ID, wt.Type, wt.Function.Name, wt.Function.Arguments = tc.ID, "function", tc.Name, tc.ArgsRaw
+		w.ToolCalls = append(w.ToolCalls, wt)
+	}
+	return w
+}
+
+func fromWire(w wireMessage) Message {
+	m := Message{Role: w.Role, ToolCallID: w.ToolCallID}
+	if w.Content != nil {
+		m.Content = *w.Content
+	}
+	for _, tc := range w.ToolCalls {
+		m.ToolCalls = append(m.ToolCalls, ToolCall{ID: tc.ID, Name: tc.Function.Name, ArgsRaw: tc.Function.Arguments})
+	}
+	return m
 }
 
 type chatResponse struct {
 	Choices []struct {
-		Message Message `json:"message"`
+		Message wireMessage `json:"message"`
 	} `json:"choices"`
 	Error *struct {
 		Message string `json:"message"`
 	} `json:"error"`
+}
+
+func (c *Client) post(body []byte) (wireMessage, error) {
+	url := c.Config.BaseURL + "/chat/completions"
+	req, err := http.NewRequest("POST", url, bytes.NewReader(body))
+	if err != nil {
+		return wireMessage{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.Config.Key)
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return wireMessage{}, err
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	var lr chatResponse
+	if err := json.Unmarshal(b, &lr); err != nil {
+		return wireMessage{}, fmt.Errorf("响应解析失败（HTTP %d）: %w", resp.StatusCode, err)
+	}
+	if lr.Error != nil && lr.Error.Message != "" {
+		// 消息序列指纹：排障时能立刻看出是哪一帧形状不被服务端接受
+		return wireMessage{}, fmt.Errorf("LLM API 错误: %s [消息序列: %s]", lr.Error.Message, strings.Join(lr2seq(body), ","))
+	}
+	if len(lr.Choices) == 0 {
+		return wireMessage{}, fmt.Errorf("LLM 返回为空（HTTP %d）", resp.StatusCode)
+	}
+	return lr.Choices[0].Message, nil
+}
+
+// lr2seq 从请求体提取消息角色序列（assistant 带 tool_calls 标注 +tc N）。
+func lr2seq(body []byte) []string {
+	var req chatRequest
+	if json.Unmarshal(body, &req) != nil {
+		return []string{"?"}
+	}
+	out := make([]string, 0, len(req.Messages))
+	for _, m := range req.Messages {
+		s := m.Role
+		if len(m.ToolCalls) > 0 {
+			s += fmt.Sprintf("(+tc%d)", len(m.ToolCalls))
+		}
+		out = append(out, s)
+	}
+	return out
 }
 
 // Chat 多轮对话（system + 历史 + 本题）。
@@ -134,32 +252,51 @@ func (c *Client) Chat(system string, msgs []Message) (string, error) {
 	if c.Config.Key == "" {
 		return "", fmt.Errorf("LLM 未配置（outpost2-data/llm.json）")
 	}
-	all := append([]Message{{Role: "system", Content: system}}, msgs...)
+	all := []wireMessage{{Role: "system", Content: &system}}
+	for _, m := range msgs {
+		all = append(all, toWire(m))
+	}
 	body, _ := json.Marshal(chatRequest{Model: c.Config.Model, Messages: all})
-	url := c.Config.BaseURL + "/chat/completions"
-	req, err := http.NewRequest("POST", url, bytes.NewReader(body))
+	wm, err := c.post(body)
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.Config.Key)
-	resp, err := c.HTTP.Do(req)
+	if wm.Content == nil {
+		return "", nil
+	}
+	return *wm.Content, nil
+}
+
+// ChatTools 带 function calling 的对话：返回模型的文本内容（可为空）与工具调用清单。
+// tools 为空时退化为普通 Chat（不发 tools 字段——部分服务端拒绝空数组）。
+func (c *Client) ChatTools(system string, msgs []Message, tools []Tool) (string, []ToolCall, error) {
+	if c.Config.Key == "" {
+		return "", nil, fmt.Errorf("LLM 未配置（outpost2-data/llm.json）")
+	}
+	all := []wireMessage{{Role: "system", Content: &system}}
+	for _, m := range msgs {
+		all = append(all, toWire(m))
+	}
+	req := chatRequest{Model: c.Config.Model, Messages: all}
+	if len(tools) > 0 {
+		for _, t := range tools {
+			req.Tools = append(req.Tools, map[string]any{
+				"type": "function",
+				"function": map[string]any{
+					"name":        t.Name,
+					"description": t.Description,
+					"parameters":  t.Parameters,
+				},
+			})
+		}
+	}
+	body, _ := json.Marshal(req)
+	wm, err := c.post(body)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
-	defer resp.Body.Close()
-	b, _ := io.ReadAll(resp.Body)
-	var lr chatResponse
-	if err := json.Unmarshal(b, &lr); err != nil {
-		return "", fmt.Errorf("响应解析失败（HTTP %d）: %w", resp.StatusCode, err)
-	}
-	if lr.Error != nil && lr.Error.Message != "" {
-		return "", fmt.Errorf("LLM API 错误: %s", lr.Error.Message)
-	}
-	if len(lr.Choices) == 0 {
-		return "", fmt.Errorf("LLM 返回为空（HTTP %d）", resp.StatusCode)
-	}
-	return lr.Choices[0].Message.Content, nil
+	m := fromWire(wm)
+	return m.Content, m.ToolCalls, nil
 }
 
 // ChatJSON 要求 JSON 输出并剥围栏。

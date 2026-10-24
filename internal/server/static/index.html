@@ -272,7 +272,11 @@ function endsClosed(sess){return (sess.messages||[]).some(m=>m.role==='assistant
 
 function renderChat(msgs){
   const c=$('chat');c.innerHTML='';
-  (msgs||[]).forEach(m=>{c.insertAdjacentHTML('beforeend','<div class="msg '+(m.role==='assistant'?'a':'u')+'"><div class="bubble">'+fmtContent(m.content)+'</div></div>')});
+  (msgs||[]).forEach(m=>{
+    if(m.role==='tool')return;          // 工具结果帧：内部数据，不入聊天气泡
+    if(!m.content)return;               // 纯工具调用帧（无文本）
+    c.insertAdjacentHTML('beforeend','<div class="msg '+(m.role==='assistant'?'a':'u')+'"><div class="bubble">'+fmtContent(m.content)+'</div></div>');
+  });
   $('view').scrollTop=$('view').scrollHeight;
 }
 
@@ -526,12 +530,15 @@ function renderSettings(){
     h+='<div class="grouplabel" style="margin:20px 0 6px">学习者画像（每次教学/出题注入：按你的背景打比方、按目标定侧重；方向讨论同步后自动沉淀，可手编）</div>';
     h+='<textarea id="profileEdit" spellcheck="false"></textarea>';
     h+='<button class="backbtn" onclick="saveProfile()" style="margin-top:8px">保存画像</button>';
+    h+='<div class="grouplabel" style="margin:20px 0 6px">内容进货（AI 助教自动从 GitHub 抓学习材料：定时 + 手动）</div>';
+    h+='<div id="fetchBox" style="font-size:12px;color:var(--mut)">加载中…</div>';
     h+='<div class="grouplabel" style="margin:20px 0 6px">AGENTS.md — 助教行为约束（每次调用注入，改完即生效）</div>';
     h+='<textarea id="agentsEdit" spellcheck="false">'+esc(d.agents||'')+'</textarea>';
     h+='<button class="backbtn" onclick="saveAgents()" style="margin-top:8px">保存约束</button>';
     v.innerHTML=h;
     v.querySelectorAll('.act-model').forEach(b=>{b.onclick=()=>activateModel(b.dataset.name);});
     api('/api/profile').then(p=>{const el=document.getElementById('profileEdit');if(el)el.value=p.content||'';}).catch(()=>{});
+    renderFetchBox();
   }).catch(e=>{v.innerHTML='<div class="empty">'+esc(e.message)+'</div>';});
 }
 async function saveModel(){
@@ -559,6 +566,34 @@ async function saveProfile(){
   try{
     await api('/api/profile',{content:document.getElementById('profileEdit').value});
     toast('画像已保存——下一次教学/出题即生效');
+  }catch(e){toast('失败：'+e.message)}
+}
+/* ---------- 内容进货：GitHub 自动抓取（定时+手动） ---------- */
+function renderFetchBox(){
+  const el=document.getElementById('fetchBox');if(!el)return;
+  api('/api/fetch').then(d=>{
+    const tools=d.toolsReady?'<span style="color:#3a9d5d">工具就绪</span>':'<span style="color:#c25b4e">未就绪（先配好模型）</span>';
+    let h='<div>状态：'+(d.running?'<b>抓取进行中…</b>':tools)+' ｜ 每日 '+d.hour+' 点自动抓取</div>';
+    h+='<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">';
+    h+='<input id="fetchProxy" placeholder="HTTP 代理（如 http://127.0.0.1:7897，直连留空）" style="flex:1;min-width:200px" value="'+esc(d.proxy||'')+'">';
+    h+='<input id="fetchHour" type="number" min="0" max="23" value="'+(d.hour??7)+'" style="width:52px" title="每日抓取时刻">';
+    h+='<button class="backbtn" onclick="saveFetchConf()">保存设置</button>';
+    h+='<button class="backbtn" onclick="runFetch()" '+(d.running?'disabled':'')+' style="border-color:var(--pink);color:var(--pink)">'+(d.running?'抓取中…':'立即抓取')+'</button></div>';
+    if(d.lastRun)h+='<div style="margin-top:6px">上次进货 '+esc(d.lastRun)+'：</div><pre style="white-space:pre-wrap;font-size:11.5px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px;margin-top:4px">'+esc(d.lastReport||'（无报告）')+'</pre>';
+    el.innerHTML=h;
+  }).catch(e=>{el.innerHTML='<div class="empty">'+esc(e.message)+'</div>'});
+}
+async function saveFetchConf(){
+  try{
+    await api('/api/fetch/config',{proxy:val('fetchProxy'),hour:parseInt(val('fetchHour'))||7});
+    toast('进货设置已保存');renderFetchBox();
+  }catch(e){toast('失败：'+e.message)}
+}
+async function runFetch(){
+  try{
+    await api('/api/fetch/run',{});
+    toast('进货已开始——AI 助教正在抓 GitHub，完成后报告出现在下方');
+    setTimeout(renderFetchBox,1500);
   }catch(e){toast('失败：'+e.message)}
 }
 

@@ -2,6 +2,7 @@ package server
 
 // server_test.go — 应用壳测试：种子装配 → 计划 → 完成 → 自报 → 履历联动 → 证据页。
 import (
+	"encoding/json"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -10,8 +11,10 @@ import (
 	"time"
 
 	"outpost2/internal/evidence"
+	"outpost2/internal/llm"
 	"outpost2/internal/profile"
 	"outpost2/internal/reflib"
+	"outpost2/internal/tutor"
 )
 
 // 履历跨重启不丢：ledger.json 是单一真相源，state.json 怎么变都吞不掉履历（事故 2026-10-20）。
@@ -157,4 +160,63 @@ func TestRefLibHandler(t *testing.T) {
 	if r.Code != 200 || !strings.Contains(r.Body.String(), "参考一篇") {
 		t.Fatalf("/api/reflib 应返回清单: %d %s", r.Code, r.Body.String())
 	}
+}
+
+// 内容进货：配置回环（fetch.json 持久化）+ 注入 mock 助教真跑一次进货（工具落参考库+报告落盘）。
+func TestFetchCurate(t *testing.T) {
+	dir := t.TempDir()
+	s := NewServer(dir)
+	h := s.Handlers()
+	// 配置代理与时刻
+	r := httptest.NewRecorder()
+	h.ServeHTTP(r, httptest.NewRequest("POST", "/api/fetch/config", strings.NewReader(`{"proxy":"http://127.0.0.1:7897","hour":8}`)))
+	if r.Code != 200 {
+		t.Fatalf("config 失败: %d", r.Code)
+	}
+	// GET 状态
+	r2 := httptest.NewRecorder()
+	h.ServeHTTP(r2, httptest.NewRequest("GET", "/api/fetch", nil))
+	if !strings.Contains(r2.Body.String(), "7897") || !strings.Contains(r2.Body.String(), `"hour":8`) {
+		t.Fatalf("状态应含代理与时刻: %s", r2.Body.String())
+	}
+	// 重启后配置仍在
+	s2 := NewServer(dir)
+	if s2.FetchConf.Proxy != "http://127.0.0.1:7897" || s2.FetchConf.Hour != 8 {
+		t.Fatalf("fetch.json 未持久化: %+v", s2.FetchConf)
+	}
+	// 注入 mock 助教（先调 kb_save 工具再收口）→ 真跑一次进货
+	s2.Tutor = &tutor.Tutor{Dir: dir, Client: &curatorMock{}, RefDir: s2.RefDir}
+	report, err := s2.doCurate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(report, "进货完成") {
+		t.Fatalf("报告不对: %q", report)
+	}
+	if idx := reflib.LoadIndex(s2.RefDir); len(idx.Docs) == 0 {
+		t.Fatal("进货应已入库参考库")
+	}
+	// LLM 未配置时 RunCurate 应拒绝
+	s3 := NewServer(t.TempDir())
+	s3.Tutor = nil
+	if err := s3.RunCurate(); err == nil {
+		t.Fatal("无 LLM 应拒绝进货")
+	}
+}
+
+// curatorMock 只会调 kb_save 工具然后收口（无网络）。
+type curatorMock struct{}
+
+func (m *curatorMock) Chat(system string, msgs []llm.Message) (string, error) { return "ok", nil }
+func (m *curatorMock) ChatJSON(system string, msgs []llm.Message) (string, error) {
+	return "{}", nil
+}
+func (m *curatorMock) ChatTools(system string, msgs []llm.Message, tools []llm.Tool) (string, []llm.ToolCall, error) {
+	for _, msg := range msgs { // 已有工具结果 → 收口
+		if msg.Role == "tool" {
+			return "进货完成：本轮存了 1 篇。", nil, nil
+		}
+	}
+	args, _ := json.Marshal(map[string]string{"title": "进货测试仓库", "digest": "测试用", "content": "# 测试"})
+	return "", []llm.ToolCall{{ID: "c1", Name: "kb_save", ArgsRaw: string(args)}}, nil
 }

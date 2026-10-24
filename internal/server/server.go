@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"slices"
@@ -23,6 +24,7 @@ import (
 	"outpost2/internal/bandit"
 	"outpost2/internal/evidence"
 	"outpost2/internal/exercise"
+	"outpost2/internal/ghfetch"
 	"outpost2/internal/graduation"
 	"outpost2/internal/llm"
 	"outpost2/internal/profile"
@@ -112,6 +114,36 @@ type Server struct {
 	RefDir      string           `json:"-"` // 教学参考库 kb/（教务抓取的原文，教学注入清单）
 	Tutor       *tutor.Tutor     `json:"-"`
 	Exer        *exercise.Engine `json:"-"`
+
+	// 内容进货（用户 2026-10-25 决策）：助教带 GitHub 抓取工具，定时+按钮触发
+	FetchConf    *FetchConfig    `json:"-"` // fetch.json：代理/时刻/上次报告
+	Gh           *ghfetch.Client `json:"-"` // GitHub 抓取客户端（代理从 FetchConf）
+	fetchMu      sync.Mutex      `json:"-"`
+	fetchRunning bool            `json:"-"`
+}
+
+// FetchConfig fetch.json：内容进货的配置与运行状态。
+type FetchConfig struct {
+	Proxy      string `json:"proxy"`                // HTTP 代理（如 http://127.0.0.1:7897；空=直连）
+	Hour       int    `json:"hour"`                 // 每日抓取时刻（0-23，默认 7）
+	LastRun    string `json:"lastRun,omitempty"`    // 上次运行日期 2006-01-02
+	LastReport string `json:"lastReport,omitempty"` // 上次进货报告（助教输出）
+}
+
+func (s *Server) loadFetchConf() {
+	conf := &FetchConfig{Hour: 7}
+	_ = s.load("fetch.json", conf)
+	if conf.Hour < 0 || conf.Hour > 23 {
+		conf.Hour = 7
+	}
+	s.FetchConf = conf
+	s.Gh = ghfetch.New(conf.Proxy)
+}
+
+func (s *Server) saveFetchConf() {
+	if s.FetchConf != nil {
+		s.save("fetch.json", s.FetchConf)
+	}
 }
 
 func (s *Server) load(path string, v any) bool {
@@ -134,6 +166,7 @@ func (s *Server) save(path string, v any) {
 // NewServer 装配：缺 goals 时写入种子（90 天冲刺三产出物）。
 func NewServer(dir string) *Server {
 	s := &Server{Dir: dir, Ledger: evidence.New(), Bandit: bandit.New(time.Now().UnixNano()), Ability: ability.New(), AgentsPath: filepath.Join(dir, "AGENTS.md"), ProfilePath: profile.Ensure(dir), RefDir: reflib.Ensure(dir)}
+	s.loadFetchConf()
 	// 模型配置口：llm.json 多 Profile（兼容旧单配置自动迁移）；AGENTS.md 用户约束（缺失写默认模板）
 	if st, err := llm.LoadStore(filepath.Join(dir, "llm.json")); err == nil {
 		s.LLMStore = st
@@ -246,8 +279,267 @@ func (s *Server) rebuildLLM() {
 		return
 	}
 	client := llm.NewClient(p.Config())
-	s.Tutor = &tutor.Tutor{Dir: s.Dir, Client: client, AgentsPath: s.AgentsPath, ProfilePath: s.ProfilePath, RefDir: s.RefDir}
+	s.Tutor = &tutor.Tutor{Dir: s.Dir, Client: client, AgentsPath: s.AgentsPath, ProfilePath: s.ProfilePath, RefDir: s.RefDir, Tools: s.buildFetchTools()}
 	s.Exer = &exercise.Engine{Client: client, AgentsPath: s.AgentsPath, ProfilePath: s.ProfilePath}
+}
+
+// buildFetchTools 助教的 GitHub 进货工具组（Gh 未配置=无工具，教学自动降级为纯对话）。
+func (s *Server) buildFetchTools() []tutor.Tool {
+	if s.Gh == nil {
+		return nil
+	}
+	trunc := func(tag, out string) string {
+		if len(out) > 20000 {
+			return out[:20000] + "\n…（" + tag + "已截断）"
+		}
+		return out
+	}
+	repoList := func(repos []ghfetch.Repo) string {
+		var b strings.Builder
+		for i, r := range repos {
+			fmt.Fprintf(&b, "%d. %s ★%d", i+1, r.FullName, r.Stars)
+			if r.Lang != "" {
+				b.WriteString(" [" + r.Lang + "]")
+			}
+			if r.Desc != "" {
+				b.WriteString(" " + r.Desc)
+			}
+			b.WriteString("\n   " + r.URL + "\n")
+		}
+		return b.String()
+	}
+	return []tutor.Tool{
+		{
+			Name: "gh_trending", Description: "抓 GitHub 今日热门仓库榜（可选语言过滤，如 go/python）",
+			Schema: map[string]any{"type": "object", "properties": map[string]any{
+				"language": map[string]any{"type": "string", "description": "语言过滤，可留空"}},
+				"required": []string{}},
+			Fn: func(args json.RawMessage) (string, error) {
+				var req struct {
+					Language string `json:"language"`
+				}
+				_ = json.Unmarshal(args, &req)
+				repos, err := s.Gh.Trending(req.Language)
+				if err != nil {
+					return "", err
+				}
+				return trunc("列表", repoList(repos)), nil
+			},
+		},
+		{
+			Name: "gh_search", Description: "按关键词定向搜索 GitHub 仓库（支持 GitHub 搜索语法，如「机器学习 tutorial language:Python」）",
+			Schema: map[string]any{"type": "object", "properties": map[string]any{
+				"query": map[string]any{"type": "string"},
+				"n":     map[string]any{"type": "integer", "description": "条数 1-20，默认 10"}},
+				"required": []string{"query"}},
+			Fn: func(args json.RawMessage) (string, error) {
+				var req struct {
+					Query string `json:"query"`
+					N     int    `json:"n"`
+				}
+				_ = json.Unmarshal(args, &req)
+				if strings.TrimSpace(req.Query) == "" {
+					return "", fmt.Errorf("query 不能为空")
+				}
+				repos, err := s.Gh.Search(req.Query, req.N)
+				if err != nil {
+					return "", err
+				}
+				return trunc("列表", repoList(repos)), nil
+			},
+		},
+		{
+			Name: "gh_browse", Description: "看一个仓库的概览与文件树（判断 README 之外还有什么可学的源文件）",
+			Schema: map[string]any{"type": "object", "properties": map[string]any{
+				"repo": map[string]any{"type": "string", "description": "owner/repo"}},
+				"required": []string{"repo"}},
+			Fn: func(args json.RawMessage) (string, error) {
+				var req struct {
+					Repo string `json:"repo"`
+				}
+				_ = json.Unmarshal(args, &req)
+				d, err := s.Gh.Detail(req.Repo)
+				if err != nil {
+					return "", err
+				}
+				tree, err := s.Gh.Tree(req.Repo)
+				if err != nil {
+					return "", err
+				}
+				var b strings.Builder
+				fmt.Fprintf(&b, "%s ★%d\n%s\n默认分支：%s\n\n文件树（%d 个文件）：\n", req.Repo, d.Stars, d.Desc, d.DefaultBranch, len(tree))
+				for _, p := range tree {
+					b.WriteString("  " + p + "\n")
+				}
+				return trunc("文件树", b.String()), nil
+			},
+		},
+		{
+			Name: "gh_fetch_file", Description: "抓仓库里的一个文本文件全文（README/示例代码/教程文档；branch 留空=默认分支；二进制拒收、64KB 截断）",
+			Schema: map[string]any{"type": "object", "properties": map[string]any{
+				"repo":   map[string]any{"type": "string"},
+				"path":   map[string]any{"type": "string"},
+				"branch": map[string]any{"type": "string", "description": "可留空"}},
+				"required": []string{"repo", "path"}},
+			Fn: func(args json.RawMessage) (string, error) {
+				var req struct {
+					Repo, Path, Branch string
+				}
+				_ = json.Unmarshal(args, &req)
+				branch := req.Branch
+				if branch == "" {
+					d, err := s.Gh.Detail(req.Repo)
+					if err != nil {
+						return "", err
+					}
+					branch = d.DefaultBranch
+				}
+				out, err := s.Gh.Raw(req.Repo, branch, req.Path)
+				if err != nil {
+					return "", err
+				}
+				return trunc("文件", out), nil
+			},
+		},
+		{
+			Name: "kb_save", Description: "把一份学习材料存入教学参考库（content 传全文=库内文档；source_path 传本地路径=外部引用；两者留一）",
+			Schema: map[string]any{"type": "object", "properties": map[string]any{
+				"title":       map[string]any{"type": "string", "description": "人读标题"},
+				"digest":      map[string]any{"type": "string", "description": "一句话摘要≤60字：学完能做什么"},
+				"content":     map[string]any{"type": "string", "description": "全文（库内文档）"},
+				"source_path": map[string]any{"type": "string", "description": "本地路径（外部引用）"},
+				"url":         map[string]any{"type": "string"},
+				"domain":      map[string]any{"type": "string", "description": "六域 A-F，可留空"}},
+				"required": []string{"title", "digest"}},
+			Fn: func(args json.RawMessage) (string, error) {
+				var req struct {
+					Title, Digest, Content, SourcePath, URL, Domain string
+				}
+				_ = json.Unmarshal(args, &req)
+				if strings.TrimSpace(req.Title) == "" || strings.TrimSpace(req.Digest) == "" {
+					return "", fmt.Errorf("title 与 digest 必填")
+				}
+				d := reflib.Doc{
+					ID:    "gh-" + time.Now().Format("0102") + "-" + reflib.SanitizeID(req.Title),
+					Title: req.Title, URL: req.URL, Domain: req.Domain,
+					Date: time.Now().Format("2006-01-02"), Digest: req.Digest,
+					Path: req.SourcePath,
+				}
+				if err := reflib.Add(s.RefDir, d, req.Content); err != nil {
+					return "", err
+				}
+				return "已入库教学参考库：" + d.ID + "（导航已更新）", nil
+			},
+		},
+		{
+			Name: "add_reading", Description: "把最值得深读的一份材料加进学习者的阅读清单",
+			Schema: map[string]any{"type": "object", "properties": map[string]any{
+				"title": map[string]any{"type": "string"},
+				"url":   map[string]any{"type": "string"},
+				"why":   map[string]any{"type": "string", "description": "为什么值得读（1-2 句）"}},
+				"required": []string{"title", "why"}},
+			Fn: func(args json.RawMessage) (string, error) {
+				var req struct {
+					Title, URL, Why string
+				}
+				_ = json.Unmarshal(args, &req)
+				if strings.TrimSpace(req.Title) == "" {
+					return "", fmt.Errorf("title 必填")
+				}
+				r := Reading{ID: "gh-" + time.Now().Format("0102-150405"), Title: req.Title, URL: req.URL}
+				if req.Why != "" {
+					r.Content = "**为什么值得读：**" + req.Why
+				}
+				s.Readings = append(s.Readings, r)
+				s.save("readings.json", s.Readings) // fetch 增量写回（教务覆盖式更新时以文件为准，Done 状态由 state 合并保留）
+				s.saveState()
+				return "已加入阅读清单：" + req.Title, nil
+			},
+		},
+	}
+}
+
+// curateContext 进货员的学习者上下文（科目/进度/库里已有——防重复进货）。
+func (s *Server) curateContext() string {
+	var b strings.Builder
+	if s.Tutor != nil {
+		cur := s.Tutor.Curriculum()
+		if len(cur.Subjects) > 0 {
+			fmt.Fprintf(&b, "- 当前在学科目：%s\n", strings.Join(cur.Subjects, "、"))
+		}
+		var done []string
+		for _, l := range cur.Lessons {
+			if l.Status == "done" {
+				done = append(done, l.Title)
+			}
+		}
+		if len(done) > 0 {
+			fmt.Fprintf(&b, "- 已收尾的知识点：%s\n", strings.Join(done, "、"))
+		}
+	}
+	var titles []string
+	for _, d := range reflib.LoadIndex(s.RefDir).Docs {
+		titles = append(titles, d.Title)
+	}
+	if len(titles) > 0 {
+		fmt.Fprintf(&b, "- 参考库已有（勿重复入库）：%s\n", strings.Join(titles, "；"))
+	}
+	if b.Len() == 0 {
+		return "（新用户：还没有在学科目与库存——从 Trending 通用好东西里挑）"
+	}
+	return b.String()
+}
+
+// RunCurate 触发一次内容进货（异步；同一时刻只跑一份）。
+func (s *Server) RunCurate() error {
+	s.fetchMu.Lock()
+	defer s.fetchMu.Unlock()
+	if s.fetchRunning {
+		return fmt.Errorf("抓取进行中")
+	}
+	if s.Tutor == nil {
+		return fmt.Errorf("LLM 未配置（outpost2-data/llm.json）")
+	}
+	if len(s.buildFetchTools()) == 0 {
+		return fmt.Errorf("抓取工具未就绪")
+	}
+	s.fetchRunning = true
+	go func() {
+		report, err := s.doCurate()
+		s.fetchMu.Lock()
+		s.fetchRunning = false
+		if s.FetchConf != nil {
+			s.FetchConf.LastRun = time.Now().Format("2006-01-02")
+			if err != nil {
+				s.FetchConf.LastReport = "进货失败: " + err.Error()
+			} else {
+				s.FetchConf.LastReport = report
+			}
+		}
+		s.fetchMu.Unlock()
+		s.saveFetchConf()
+	}()
+	return nil
+}
+
+func (s *Server) doCurate() (string, error) {
+	return s.Tutor.CurateOnce(s.curateContext(), s.buildFetchTools())
+}
+
+// StartFetchLoop 每日定时进货（serve 启动时开一个低频检查协程：命中配置时刻且当日未跑则触发）。
+func (s *Server) StartFetchLoop() {
+	go func() {
+		for {
+			time.Sleep(15 * time.Minute)
+			if s.FetchConf == nil || s.Tutor == nil {
+				continue
+			}
+			now := time.Now()
+			if now.Hour() == s.FetchConf.Hour && s.FetchConf.LastRun != now.Format("2006-01-02") {
+				_ = s.RunCurate()
+			}
+		}
+	}()
 }
 
 func (s *Server) readAgents() string {
@@ -901,6 +1193,44 @@ func (s *Server) Handlers() http.Handler {
 	mux.HandleFunc("/api/reflib", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, reflib.LoadIndex(s.RefDir))
 	})
+	mux.HandleFunc("/api/fetch", func(w http.ResponseWriter, _ *http.Request) {
+		s.fetchMu.Lock()
+		running := s.fetchRunning
+		s.fetchMu.Unlock()
+		resp := map[string]any{"running": running, "toolsReady": len(s.buildFetchTools()) > 0}
+		if s.FetchConf != nil {
+			resp["proxy"], resp["hour"], resp["lastRun"], resp["lastReport"] =
+				s.FetchConf.Proxy, s.FetchConf.Hour, s.FetchConf.LastRun, s.FetchConf.LastReport
+		}
+		writeJSON(w, resp)
+	})
+	mux.HandleFunc("/api/fetch/config", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Proxy string `json:"proxy"`
+			Hour  *int   `json:"hour"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		if s.FetchConf == nil {
+			s.FetchConf = &FetchConfig{Hour: 7}
+		}
+		s.FetchConf.Proxy = strings.TrimSpace(req.Proxy)
+		if req.Hour != nil && *req.Hour >= 0 && *req.Hour <= 23 {
+			s.FetchConf.Hour = *req.Hour
+		}
+		s.Gh = ghfetch.New(s.FetchConf.Proxy)
+		s.saveFetchConf()
+		if s.Tutor != nil { // 工具组随新客户端重建
+			s.Tutor.Tools = s.buildFetchTools()
+		}
+		writeJSON(w, map[string]any{"ok": true})
+	})
+	mux.HandleFunc("/api/fetch/run", func(w http.ResponseWriter, _ *http.Request) {
+		if err := s.RunCurate(); err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true, "note": "进货已开始——助教正在抓取，报告稍后出现在这里"})
+	})
 	mux.HandleFunc("/api/graph", func(w http.ResponseWriter, _ *http.Request) {
 		nodes := []map[string]any{}
 		edges := []map[string]any{}
@@ -1007,6 +1337,7 @@ func firstFile(c *sandbox.BreakCase) string {
 // Serve 启动本地服务并返回实际地址。
 func Serve(addr string) (*Server, error) {
 	s := NewServer(filepath.Join(".", "outpost2-data"))
+	s.StartFetchLoop() // 内容进货定时器（命中 fetch.json.hour 且当日未跑则触发）
 	go func() { _ = http.ListenAndServe(addr, s.Handlers()) }()
 	time.Sleep(200 * time.Millisecond)
 	return s, nil

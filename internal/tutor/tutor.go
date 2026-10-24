@@ -53,6 +53,7 @@ type Tutor struct {
 	AgentsPath  string         // AGENTS.md 约束文件路径（每次调用热读，用户可编辑，改完即生效）
 	ProfilePath string         // 学习者画像 memory/profile.md（热读注入——背景/时间/目标跨会话连续）
 	RefDir      string         // 教学参考库 kb/（教务抓取的原文资料，热读注入清单——讲解优先依据原文）
+	Tools       []Tool         // 助教可用工具（server 组装：GitHub 抓取/入库/阅读；nil=无工具）
 }
 
 // agents 读取用户自定义约束（AGENTS.md）。缺失/失败返回空（默认纪律兜底）。
@@ -298,11 +299,11 @@ func (t *Tutor) Send(lesson Lesson, userText string) (Verdict, error) {
 		return Verdict{}, fmt.Errorf("LLM 未配置")
 	}
 	s.Messages = append(s.Messages, llm.Message{Role: "user", Content: userText})
-	reply, err := t.Client.Chat(t.withAgents(teachSystem), s.Messages)
+	reply, conv, err := t.runAgent(t.withAgents(teachSystem), s.Messages, t.Tools)
 	if err != nil {
 		return Verdict{}, err
 	}
-	s.Messages = append(s.Messages, llm.Message{Role: "assistant", Content: reply})
+	s.Messages = conv // 含工具帧的完整对话（教学上下文不丢）
 	kind := ""
 	if strings.Contains(reply, "[PASS:partial]") {
 		kind = "partial"

@@ -4,6 +4,12 @@
 > 同一条教训在 3 个不同工作日出现 → 转正进 AGENTS.md 硬规则区（见晋升通道）。
 > 只记「修完又返工/不该合/验证太糙/静默失败」类教训；一次性笔误不入。
 
+## 2026-10-25
+
+12. 外部页面抓取必须配「真连诊断测试」| trending 解析对 fixture 全绿但真连 0 条——GitHub 把 repo 链接的尾斜杠去掉了（hrefRe 假设 /"结尾），且 svg path 数据里的数字会污染星数提取 | 修法：live_test.go（GHFETCH_LIVE=1 环境开关）+ 失败时 dump 真实页面对比 + 正则放宽（article 类含 Box-row 即可、尾斜杠可选、</svg> 之后再取数）| Seen 1×
+
+13. tool 帧的 content 永远不能是空串 | LLM API（DeepSeek）要求 tool 消息 content 必须是字符串——工具返回 "" 被 Message.Content omitempty 序列化成 null →「content should be a string or a list」400 | 修法：runAgent 里空结果替换为「（工具执行成功但无输出）」；并在 API 错误里附消息序列指纹（system,user,assistant(+tc2),tool…）排障 | Seen 1×
+
 ## 2026-10-23
 
 10. 横切机制接入必须以「调用点清单」收口 | v4.2 称「tutor/exercise 全调用点接入」AGENTS.md 约束，但 exercise.Generate 的 ChatJSON 漏包 withAgents——出题调用一直在约束外裸奔，直到本次接画像注入（同一个汇聚点）才发现；根因：两包各有一份 withAgents，没有唯一汇聚点 | commit 本次 | Seen 1×
