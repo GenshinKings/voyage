@@ -204,6 +204,36 @@ func TestFetchCurate(t *testing.T) {
 	}
 }
 
+// 笔记工作区：NewServer 建 notes/ 目录 + /api/notes 列表与诊断状态 + 巡检按钮拒绝无 LLM。
+func TestNotesHandler(t *testing.T) {
+	dir := t.TempDir()
+	s := NewServer(dir)
+	if s.NotesDir == "" {
+		t.Fatal("NewServer 应初始化笔记目录")
+	}
+	os.WriteFile(filepath.Join(s.NotesDir, "线性回归.md"), []byte("梯度下降就是往低处走"), 0o644)
+	h := s.Handlers()
+	r := httptest.NewRecorder()
+	h.ServeHTTP(r, httptest.NewRequest("GET", "/api/notes", nil))
+	if r.Code != 200 || !strings.Contains(r.Body.String(), "线性回归.md") {
+		t.Fatalf("/api/notes 应返回笔记列表: %d %s", r.Code, r.Body.String())
+	}
+	// 无 LLM → 巡检拒绝
+	s.Tutor = nil
+	r2 := httptest.NewRecorder()
+	h.ServeHTTP(r2, httptest.NewRequest("POST", "/api/notes/review", nil))
+	if r2.Code != 400 {
+		t.Fatalf("无 LLM 巡检应 400: %d", r2.Code)
+	}
+	// noteContext 含科目与知识点状态
+	s3 := NewServer(t.TempDir())
+	s3.Tutor = &tutor.Tutor{Dir: t.TempDir()}
+	ctx := s3.noteContext()
+	if !strings.Contains(ctx, "还没有开课") {
+		t.Fatalf("无课上下文应有兜底: %q", ctx)
+	}
+}
+
 // curatorMock 只会调 kb_save 工具然后收口（无网络）。
 type curatorMock struct{}
 

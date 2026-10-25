@@ -55,6 +55,7 @@ type Tutor struct {
 	RefDir      string         // 教学参考库 kb/（教务抓取的原文资料，热读注入清单——讲解优先依据原文）
 	Tools       []Tool         // 助教可用工具（server 组装：GitHub 抓取/入库/阅读；nil=无工具）
 	FetchNote   string         // 今日进货提示（server 注入；开场带给助教一次——收尾时主动推荐延伸材料，用后清空防重复）
+	NotesDir    string         // 学习者笔记目录 notes/（每日巡检的检查对象，只读）
 }
 
 // agents 读取用户自定义约束（AGENTS.md）。缺失/失败返回空（默认纪律兜底）。

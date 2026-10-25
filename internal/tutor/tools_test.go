@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"outpost2/internal/llm"
+	"outpost2/internal/notes"
 	"outpost2/internal/reflib"
 )
 
@@ -108,5 +109,30 @@ func TestCurateOnce(t *testing.T) {
 	// 无工具应报错
 	if _, err := tu.CurateOnce("x", nil); err == nil {
 		t.Fatal("无工具应报错")
+	}
+}
+
+func TestReviewNotes(t *testing.T) {
+	dir := t.TempDir()
+	notesDir := notes.Ensure(dir)
+	mc := &mockClient{replies: []string{"✅ n1.md：梯度下降说法正确。\n⚠️ 建议补充学习率的作用。\n总评：笔记习惯好，补一条例子。"}}
+	tu := &Tutor{Dir: dir, Client: mc, NotesDir: notesDir}
+	// 空笔记目录应报错
+	if _, err := tu.ReviewNotes("- 在学科目：机器学习\n"); err == nil {
+		t.Fatal("无笔记应报错")
+	}
+	if err := os.WriteFile(filepath.Join(notesDir, "n1.md"), []byte("梯度下降就是往低处走"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	report, err := tu.ReviewNotes("- 在学科目：机器学习\n- 《线性回归》（已收尾）：能说清梯度下降\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(report, "总评") {
+		t.Fatalf("报告不对: %q", report)
+	}
+	// 无 LLM 应报错
+	if _, err := (&Tutor{Dir: dir, NotesDir: notesDir}).ReviewNotes("x"); err == nil {
+		t.Fatal("无 LLM 应报错")
 	}
 }

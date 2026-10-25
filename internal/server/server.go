@@ -27,6 +27,7 @@ import (
 	"outpost2/internal/ghfetch"
 	"outpost2/internal/graduation"
 	"outpost2/internal/llm"
+	"outpost2/internal/notes"
 	"outpost2/internal/profile"
 	"outpost2/internal/reflib"
 	"outpost2/internal/sandbox"
@@ -112,6 +113,7 @@ type Server struct {
 	AgentsPath  string           `json:"-"` // AGENTS.md 约束文件（每次 LLM 调用热读）
 	ProfilePath string           `json:"-"` // 学习者画像 memory/profile.md（热读注入 + 方向同步时自动沉淀）
 	RefDir      string           `json:"-"` // 教学参考库 kb/（教务抓取的原文，教学注入清单）
+	NotesDir    string           `json:"-"` // 学习者笔记 notes/（助教每日巡检对象，只读）
 	Tutor       *tutor.Tutor     `json:"-"`
 	Exer        *exercise.Engine `json:"-"`
 
@@ -128,6 +130,9 @@ type FetchConfig struct {
 	Hour       int    `json:"hour"`                 // 每日抓取时刻（0-23，默认 7）
 	LastRun    string `json:"lastRun,omitempty"`    // 上次运行日期 2006-01-02
 	LastReport string `json:"lastReport,omitempty"` // 上次进货报告（助教输出）
+	// 笔记巡检（AI 主导：助教每天对照教学内容查笔记，诊断主动可见）
+	NoteRun    string `json:"noteRun,omitempty"`    // 上次笔记巡检日期
+	NoteReport string `json:"noteReport,omitempty"` // 上次笔记诊断报告
 }
 
 func (s *Server) loadFetchConf() {
@@ -177,7 +182,7 @@ func (s *Server) save(path string, v any) {
 
 // NewServer 装配：缺 goals 时写入种子（90 天冲刺三产出物）。
 func NewServer(dir string) *Server {
-	s := &Server{Dir: dir, Ledger: evidence.New(), Bandit: bandit.New(time.Now().UnixNano()), Ability: ability.New(), AgentsPath: filepath.Join(dir, "AGENTS.md"), ProfilePath: profile.Ensure(dir), RefDir: reflib.Ensure(dir)}
+	s := &Server{Dir: dir, Ledger: evidence.New(), Bandit: bandit.New(time.Now().UnixNano()), Ability: ability.New(), AgentsPath: filepath.Join(dir, "AGENTS.md"), ProfilePath: profile.Ensure(dir), RefDir: reflib.Ensure(dir), NotesDir: notes.Ensure(dir)}
 	s.loadFetchConf()
 	// 模型配置口：llm.json 多 Profile（兼容旧单配置自动迁移）；AGENTS.md 用户约束（缺失写默认模板）
 	if st, err := llm.LoadStore(filepath.Join(dir, "llm.json")); err == nil {
@@ -295,7 +300,7 @@ func (s *Server) rebuildLLM() {
 		return
 	}
 	client := llm.NewClient(p.Config())
-	s.Tutor = &tutor.Tutor{Dir: s.Dir, Client: client, AgentsPath: s.AgentsPath, ProfilePath: s.ProfilePath, RefDir: s.RefDir, Tools: s.buildFetchTools()}
+	s.Tutor = &tutor.Tutor{Dir: s.Dir, Client: client, AgentsPath: s.AgentsPath, ProfilePath: s.ProfilePath, RefDir: s.RefDir, Tools: s.buildFetchTools(), NotesDir: s.NotesDir}
 	s.Exer = &exercise.Engine{Client: client, AgentsPath: s.AgentsPath, ProfilePath: s.ProfilePath}
 }
 
@@ -475,6 +480,57 @@ func (s *Server) buildFetchTools() []tutor.Tool {
 	}
 }
 
+// noteContext 笔记巡检的教学上下文（科目/各知识点状态与简介）。
+func (s *Server) noteContext() string {
+	var b strings.Builder
+	if s.Tutor != nil {
+		cur := s.Tutor.Curriculum()
+		if len(cur.Subjects) > 0 {
+			fmt.Fprintf(&b, "- 在学科目：%s\n", strings.Join(cur.Subjects, "、"))
+		}
+		for _, l := range cur.Lessons {
+			tag := "已收尾"
+			if l.Status == "active" {
+				tag = "进行中"
+			}
+			fmt.Fprintf(&b, "- 《%s》（%s）：%s\n", l.Title, tag, l.Brief)
+		}
+	}
+	if b.Len() == 0 {
+		return "（还没有开课——笔记检查仅按通用学习笔记标准）"
+	}
+	return b.String()
+}
+
+// RunNoteReview 触发一次笔记巡检（异步；与进货共用互斥锁）。结果落 FetchConfig 并主动可见。
+func (s *Server) RunNoteReview() error {
+	s.fetchMu.Lock()
+	defer s.fetchMu.Unlock()
+	if s.fetchRunning {
+		return fmt.Errorf("抓取进行中，稍后再试")
+	}
+	if s.Tutor == nil {
+		return fmt.Errorf("LLM 未配置")
+	}
+	s.fetchRunning = true
+	go func() {
+		report, err := s.Tutor.ReviewNotes(s.noteContext())
+		s.fetchMu.Lock()
+		s.fetchRunning = false
+		if s.FetchConf != nil {
+			s.FetchConf.NoteRun = time.Now().Format("2006-01-02")
+			if err != nil {
+				s.FetchConf.NoteReport = "巡检失败: " + err.Error()
+			} else {
+				s.FetchConf.NoteReport = report
+			}
+		}
+		s.fetchMu.Unlock()
+		s.saveFetchConf()
+	}()
+	return nil
+}
+
 // curateContext 进货员的学习者上下文（科目/进度/库里已有——防重复进货）。
 func (s *Server) curateContext() string {
 	var b strings.Builder
@@ -554,8 +610,13 @@ func (s *Server) StartFetchLoop() {
 				continue
 			}
 			now := time.Now()
-			if now.Hour() == s.FetchConf.Hour && s.FetchConf.LastRun != now.Format("2006-01-02") {
+			today := now.Format("2006-01-02")
+			if now.Hour() == s.FetchConf.Hour && s.FetchConf.LastRun != today {
 				_ = s.RunCurate()
+			}
+			// 笔记巡检：每日一次，与进货同刻（AI 主导的每日例行）
+			if now.Hour() == s.FetchConf.Hour && s.FetchConf.NoteRun != today {
+				_ = s.RunNoteReview()
 			}
 		}
 	}()
@@ -1251,6 +1312,20 @@ func (s *Server) Handlers() http.Handler {
 			s.Tutor.Tools = s.buildFetchTools()
 		}
 		writeJSON(w, map[string]any{"ok": true})
+	})
+	mux.HandleFunc("/api/notes", func(w http.ResponseWriter, _ *http.Request) {
+		resp := map[string]any{"list": notes.List(s.NotesDir)}
+		if s.FetchConf != nil {
+			resp["noteRun"], resp["noteReport"] = s.FetchConf.NoteRun, s.FetchConf.NoteReport
+		}
+		writeJSON(w, resp)
+	})
+	mux.HandleFunc("/api/notes/review", func(w http.ResponseWriter, _ *http.Request) {
+		if err := s.RunNoteReview(); err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true, "note": "助教正在巡检笔记，报告稍后出现在这里"})
 	})
 	mux.HandleFunc("/api/fetch/run", func(w http.ResponseWriter, _ *http.Request) {
 		if err := s.RunCurate(); err != nil {

@@ -347,7 +347,7 @@ function renderGuide(){
   else next='今天全部完成——继续推进是加分项，休息也是正当的';
   const anchor=prev?(prev.status==='done'?'承接你已收尾的《'+esc(prev.title)+'》✓':'前一节《'+esc(prev.title)+'》还没收尾'):'这是这门课的起点';
   const brief=cur&&cur.brief?'<div class="gc-brief">学完它能：<b>'+esc(cur.brief)+'</b></div>':'';
-  gc.innerHTML='<div class="gc"><div class="gc-top"><span class="gc-prog"><b>'+(idx+1)+'/'+lessons.length+'</b> · '+esc(cur?cur.subject:'')+'</span><span class="gc-anchor">'+anchor+'</span></div>'+brief+'<div class="gc-profile" id="profileLine" title="点击查看/编辑学习者画像" onclick="switchTab(\'set\')"></div><div id="fetchLine"></div><div class="gc-next">接下来：'+next+'</div></div>';
+  gc.innerHTML='<div class="gc"><div class="gc-top"><span class="gc-prog"><b>'+(idx+1)+'/'+lessons.length+'</b> · '+esc(cur?cur.subject:'')+'</span><span class="gc-anchor">'+anchor+'</span></div>'+brief+'<div class="gc-profile" id="profileLine" title="点击查看/编辑学习者画像" onclick="switchTab(\'set\')"></div><div id="fetchLine"></div><div id="notesLine"></div><div class="gc-next">接下来：'+next+'</div></div>';
   // 画像上墙：助教记得你（v4.5 学习者画像，异步填充，点击进设置编辑）
   api('/api/profile').then(p=>{
     const lines=(p.content||'').split('\n').filter(l=>l.trim().indexOf('-')===0).map(l=>l.trim().slice(1).trim()).filter(Boolean);
@@ -361,6 +361,13 @@ function renderGuide(){
       const ts=(f.todayTitles||[]).slice(0,2).map(esc).join(' / ')+(f.todayItems>2?' 等 '+f.todayItems+' 份':'');
       el.innerHTML='<div class="gc-fetch" title="点击查看进货报告" onclick="switchTab(\'set\')">今日进货 '+f.todayItems+' 份：'+ts+'——收尾时助教会推荐</div>';
     }
+  }).catch(()=>{});
+  // 笔记诊断：助教每天检查你的笔记（AI 主导——诊断结果主动可见）
+  api('/api/notes').then(n=>{
+    const el=document.getElementById('notesLine');if(!el)return;
+    const cnt=(n.list||[]).length;
+    if(!cnt){el.innerHTML='<div class="gc-fetch">还没有笔记——收尾一课后写进 outpost2-data\\notes\\，助教每天帮你检查</div>';return}
+    el.innerHTML='<div class="gc-fetch" title="点击查看诊断报告" onclick="switchTab(\'set\')">笔记 '+cnt+' 篇'+(n.noteRun?' · 助教 '+esc(n.noteRun)+' 已检查'+(n.noteReport&&n.noteReport.indexOf('⚠️')>=0?'（有改进建议）':'（无问题）'):'——等助教今日巡检')+'</div>';
   }).catch(()=>{});
 }
 let GEN=0;
@@ -542,6 +549,8 @@ function renderSettings(){
     h+='<button class="backbtn" onclick="saveProfile()" style="margin-top:8px">保存画像</button>';
     h+='<div class="grouplabel" style="margin:20px 0 6px">内容进货（AI 助教自动从 GitHub 抓学习材料：定时 + 手动）</div>';
     h+='<div id="fetchBox" style="font-size:12px;color:var(--mut)">加载中…</div>';
+    h+='<div class="grouplabel" style="margin:20px 0 6px">笔记工作区（outpost2-data\\notes\\*.md）——助教每天对照教学内容巡检</div>';
+    h+='<div id="notesBox" style="font-size:12px;color:var(--mut)">加载中…</div>';
     h+='<div class="grouplabel" style="margin:20px 0 6px">AGENTS.md — 助教行为约束（每次调用注入，改完即生效）</div>';
     h+='<textarea id="agentsEdit" spellcheck="false">'+esc(d.agents||'')+'</textarea>';
     h+='<button class="backbtn" onclick="saveAgents()" style="margin-top:8px">保存约束</button>';
@@ -549,6 +558,7 @@ function renderSettings(){
     v.querySelectorAll('.act-model').forEach(b=>{b.onclick=()=>activateModel(b.dataset.name);});
     api('/api/profile').then(p=>{const el=document.getElementById('profileEdit');if(el)el.value=p.content||'';}).catch(()=>{});
     renderFetchBox();
+    renderNotesBox();
   }).catch(e=>{v.innerHTML='<div class="empty">'+esc(e.message)+'</div>';});
 }
 async function saveModel(){
@@ -604,6 +614,23 @@ async function runFetch(){
     await api('/api/fetch/run',{});
     toast('进货已开始——AI 助教正在抓 GitHub，完成后报告出现在下方');
     setTimeout(renderFetchBox,1500);
+  }catch(e){toast('失败：'+e.message)}
+}
+function renderNotesBox(){
+  const el=document.getElementById('notesBox');if(!el)return;
+  api('/api/notes').then(d=>{
+    const list=d.list||[];
+    let h='<div>共 '+list.length+' 篇'+(d.noteRun?' ｜ 助教上次巡检 '+esc(d.noteRun):' ｜ 尚未巡检')+' <button class="backbtn" onclick="runNoteReview()" style="margin-left:8px">立即巡检</button></div>';
+    if(list.length)h+='<div style="margin-top:4px;color:var(--mut)">'+list.slice(0,6).map(x=>esc(x.name)).join(' · ')+(list.length>6?' 等 '+list.length+' 篇':'')+'</div>';
+    if(d.noteReport)h+='<pre style="white-space:pre-wrap;font-size:11.5px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px;margin-top:6px">'+esc(d.noteReport)+'</pre>';
+    el.innerHTML=h;
+  }).catch(e=>{el.innerHTML='<div class="empty">'+esc(e.message)+'</div>'});
+}
+async function runNoteReview(){
+  try{
+    await api('/api/notes/review',{});
+    toast('助教开始巡检笔记——对照今天的教学内容检查问题与改进点');
+    setTimeout(renderNotesBox,1500);
   }catch(e){toast('失败：'+e.message)}
 }
 
