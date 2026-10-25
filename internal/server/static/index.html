@@ -172,6 +172,15 @@ const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&g
 let STATE=null, CURRENT=null, LASTVERDICT=false;
 
 async function api(path,body){const r=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});const j=await r.json().catch(()=>({}));if(r.status>=400)throw new Error(j.error||j.Error||'请求失败');return j}
+// 输入乱码防线（编码统一）：剪贴板编码不一致的文本带典型特征——提示但不拦发
+function looksGarbled(t){
+  if(!t)return false;
+  if(t.indexOf('\uFFFD')>=0)return true;
+  const dia=(t.match(/[♦◊◆]/g)||[]).length;
+  const acc=(t.match(/[æøåÃâÅÞð]/g)||[]).length;
+  return dia>=3&&acc>=1;
+}
+function garbleWarn(t){if(looksGarbled(t))toast('检测到疑似乱码输入（常见于剪贴板编码不一致）——已发送，但建议重新输入',4200)}
 
 function fmtContent(raw){
   raw=raw||'';
@@ -313,6 +322,7 @@ async function send(){
   if(EXER)return sendExercise($('input').value.trim());
   if(!CURRENT){toast('先回答今天的检查题，或点一道练习');return}
   const text=$('input').value.trim();if(!text)return;
+  garbleWarn(text);
   $('input').value='';
   const c=$('chat');c.insertAdjacentHTML('beforeend','<div class="msg u"><div class="bubble">'+esc(text)+'</div></div>');
   c.insertAdjacentHTML('beforeend','<div class="msg a"><div class="bubble" id="tmpwait">…</div></div>');
@@ -331,6 +341,7 @@ async function send(){
 // 练习作答：题目对话里发解法 → 助教批改 → [PASS] 记「用过」履历
 async function sendExercise(text){
   if(!text)return;
+  garbleWarn(text);
   $('input').value='';
   const c=$('chat');c.insertAdjacentHTML('beforeend','<div class="msg u"><div class="bubble">'+esc(text)+'</div></div>');
   c.insertAdjacentHTML('beforeend','<div class="msg a"><div class="bubble" id="tmpwait">批改中…</div></div>');
@@ -532,6 +543,7 @@ function renderDirView(){
 async function sendDirection(){
   const ta=document.getElementById('dirInput');
   const text=ta.value.trim();if(!text)return;
+  garbleWarn(text);
   ta.value='';
   DIRMSG.push({role:'user',content:text});
   DIRMSG.push({role:'assistant',content:'…'});
