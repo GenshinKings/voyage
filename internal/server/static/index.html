@@ -52,6 +52,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Micr
 .msg{margin:14px 0;display:flex;animation:msgIn 260ms cubic-bezier(.2,.8,.2,1)}
 @keyframes msgIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 #guideCard{max-width:736px;margin:6px auto 2px;padding:0 28px}
+#planCard{max-width:736px;margin:8px auto 2px;padding:0 28px}
+#planCard .pc{background:var(--card);border-radius:12px;padding:12px 18px;box-shadow:0 1px 2px rgba(0,0,0,.05),0 0 0 1px rgba(0,0,0,.03);font-size:12.5px}
+#planCard .pc-goals{display:flex;gap:14px;flex-wrap:wrap;color:var(--mut)}
+#planCard .pc-goals b{color:var(--ink);font-weight:600}
+#planCard .pc-main{margin-top:8px;line-height:1.7}
+#planCard .pc-item{display:flex;align-items:center;gap:8px;padding:3px 0}
+#planCard .pc-item .backbtn{padding:2px 10px;font-size:11.5px}
+#planCard .pc-mood{margin-top:10px;padding-top:8px;border-top:1px solid rgba(0,0,0,.06);display:flex;gap:8px;align-items:center;color:var(--mut)}
+.rev-item{cursor:pointer}
+.rev-item:hover{background:rgba(251,114,153,.06)}
 #guideCard .gc{background:var(--card);border-radius:12px;padding:14px 18px;box-shadow:0 1px 2px rgba(0,0,0,.05),0 0 0 1px rgba(0,0,0,.03)}
 #guideCard .gc-top{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
 #guideCard .gc-prog{font-size:13px;font-weight:600;color:var(--ink)}
@@ -149,7 +159,7 @@ a:hover{text-decoration:underline}
 <div id="main">
   <div id="topbar"><div><div class="kicker" id="kicker">LEARNING · 对话式教学</div><h1 id="lessonTitle">今天丢来的</h1></div><div style="display:flex;gap:8px;flex-shrink:0"><button id="todayClass" class="backbtn hidden" style="border-color:var(--line);color:var(--mut)" onclick="openTodayClass()">今天的课</button><button id="backToday" class="backbtn hidden" onclick="backToday()">← 跳回今日知识点</button></div></div>
   <div id="view">
-    <div id="chatOuter"><div id="guideCard"></div><div id="chat"></div></div>
+    <div id="chatOuter"><div id="guideCard"></div><div id="planCard"></div><div id="chat"></div></div>
     <div id="dirView" class="hidden"></div>
     <div id="readView" class="hidden"></div>
     <div id="sediment" class="hidden"></div>
@@ -361,7 +371,80 @@ async function loadState(){
   STATE=await api('/api/state');
   renderSidebar();
   renderGuide();
+  renderPlanCard();
+  api('/api/review/due').then(d=>{FSDUE=d.cards||[];renderSidebar();}).catch(()=>{});
   if(!CURRENT&&!HIST&&!EXER&&STATE.today){if(!openCached(STATE.today.id))openLesson(STATE.today.id)}
+}
+/* ---------- FSRS 到期复习（评审 P1-5） ---------- */
+let FSDUE=[],REV=null;
+function openReview(id){
+  const c=(FSDUE||[]).find(x=>x.id===id);if(!c)return;
+  leaveHistory();
+  REV=id;CURRENT=null;EXER=null;
+  $('lessonTitle').textContent=c.title||c.id;
+  $('kicker').textContent='REVIEW · 到期复习';
+  const pv=c.previews||{};
+  const btn=(r,label)=>'<button class="backbtn" onclick="reviewRate(''+c.id+'','+r+')" style="margin:0 6px 8px 0">'+label+(pv[String(r)]?'<div style="font-size:10.5px;color:var(--mut)">下次 '+esc(pv[String(r)])+'</div>':'')+'</button>';
+  $('chat').innerHTML='<div class="msg a"><div class="bubble"><b>《'+esc(c.title||c.id)+'》到期了。</b><br>先凭记忆想一想它讲了什么、能怎么用——然后诚实自评（自评准，安排才准）：<div style="margin-top:12px">'
+    +btn(1,'忘了')+btn(2,'想不起来')+btn(3,'想起来')+btn(4,'轻松')+'</div>'
+    +'<div class="mut" style="font-size:11.5px;margin-top:6px">想不起来的话，点左上回历史重看这节课的对话再评。</div></div></div>';
+  switchTab('learn');
+}
+async function reviewRate(id,rating){
+  try{
+    await api('/api/complete-review',{id,rating});
+    FSDUE=(FSDUE||[]).filter(x=>x.id!==id);
+    REV=null;
+    toast('复习完成——间隔已按你的记忆重新安排');
+    renderSidebar();
+    if(FSDUE.length)openReview(FSDUE[0].id);
+    else{renderChat([{role:'assistant',content:'今天的到期复习清空了——遗忘防御上膛。继续推进新课或做练习都行。'}]);}
+  }catch(e){toast('失败：'+e.message)}
+}
+/* ---------- 产出物推进（评审 P0-2：调度层接 UI） ---------- */
+function renderPlanCard(){
+  const el=document.getElementById('planCard');if(!el)return;
+  if(!STATE){el.innerHTML='';return}
+  const goals=STATE.goals||[];
+  const plan=STATE.plan||{};
+  const main=plan.Main||[]; // scheduler.TaskSlice 无 json 标签——键名大写
+  let h='<div class="pc">';
+  if(goals.length){
+    h+='<div class="pc-goals">'+goals.map(g=>{
+      const dl=g.deadline?String(g.deadline).slice(5):'';
+      return '<span><b>'+esc(g.id)+'</b> '+esc(g.title)+'（'+dl+' · '+Math.round((g.progress||0)*100)+'%）</span>';
+    }).join('')+'</div>';
+  }
+  if(main.length){
+    h+='<div class="pc-main"><div class="mut" style="margin-bottom:2px">今日推进（调度器按产出物排）：</div>';
+    main.slice(0,2).forEach(m=>{
+      const t=String(m.Title||'');
+      h+='<div class="pc-item"><span>→ '+esc(t)+(m.Minutes?' <span class="mut">· '+m.Minutes+' 分钟</span>':'')+'</span><button class="backbtn" onclick="completeMain(this)" data-t="'+esc(t)+'">完成</button></div>';
+    });
+    h+='</div>';
+  }
+  h+='<div class="pc-mood"><span>今天到此为止？自报一下（帮助教校准节奏）：</span>'
+    +'<button class="backbtn" onclick="mood(1)">还想来</button>'
+    +'<button class="backbtn" onclick="mood(0)">今天够了</button></div>';
+  h+='</div>';
+  el.innerHTML=h;
+}
+async function completeMain(btn){
+  const title=btn.dataset.t;
+  try{
+    await api('/api/complete-main',{title});
+    toast('产出物推进完成——履历记「做过」');
+    btn.disabled=true;btn.textContent='✓';
+    await loadState();
+  }catch(e){toast('失败：'+e.message)}
+}
+async function mood(wantMore){
+  const completed=(STATE.exercises||[]).length>0&&(STATE.exercises||[]).every(e=>e.status==='done');
+  try{
+    await api('/api/mood',{mood:wantMore?'还想来':'今天够了',completed:completed});
+    toast(wantMore?'好——明天继续。':'收工愉快，休息也是正当的。');
+    renderPlanCard();
+  }catch(e){toast('失败：'+e.message)}
 }
 // 方向卡：我在哪 · 为什么学这个 · 接下来做什么（规则驱动，零延迟）
 function renderGuide(){
@@ -415,8 +498,19 @@ function renderSidebar(){
   if(!STATE.curriculum||!(STATE.curriculum.lessons||[]).length){
     list.innerHTML='<div class="empty" style="margin-top:24px;padding:0 10px">输入想学的科目，<br>AI 会拆成课程，今天开始教</div>';return;
   }
-  // 侧栏=今天的实操练习（助教按实时进度出，点开一道做）；今日所学在主区，不在侧栏
-  list.innerHTML='<div class="grouplabel" style="padding:8px 12px 0">今天的练习</div>';
+  // 侧栏=到期复习（FSRS）+ 今天的实操练习（助教按实时进度出，点开一道做）
+  const due=(FSDUE||[]).filter(c=>c.previews);
+  if(due.length){
+    list.innerHTML+='<div class="grouplabel" style="padding:8px 12px 0">到期复习 · '+due.length+'</div>';
+    due.forEach(c=>{
+      const el=document.createElement('div');
+      el.className='lp rev-item'+(REV===c.id?' on':'');
+      el.innerHTML='<span class="st" style="color:var(--pink)">↻</span><span>'+esc(c.title||c.id)+'<div class="lp-sub">到期 '+esc(String(c.due||'').slice(0,10))+'</div></span>';
+      el.onclick=()=>openReview(c.id);
+      list.appendChild(el);
+    });
+  }
+  list.innerHTML+='<div class="grouplabel" style="padding:8px 12px 0">今天的练习</div>';
   const ex=STATE.exercises||[];
   if(!ex.length){
     list.innerHTML+='<div class="empty" style="margin-top:16px;padding:0 10px">'+(GEN?'助教正在出题…':(GENFAIL?'上完今天的课，练习就绪':'等助教出题…'))+'</div>';

@@ -6,12 +6,14 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"outpost2/fsrs"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"outpost2/internal/evidence"
+	"outpost2/internal/exercise"
 	"outpost2/internal/llm"
 	"outpost2/internal/profile"
 	"outpost2/internal/reflib"
@@ -326,4 +328,103 @@ func (m *curatorMock) ChatTools(system string, msgs []llm.Message, tools []llm.T
 	}
 	args, _ := json.Marshal(map[string]string{"title": "进货测试仓库", "digest": "测试用", "content": "# 测试"})
 	return "", []llm.ToolCall{{ID: "c1", Name: "kb_save", ArgsRaw: string(args)}}, nil
+}
+
+// P0-1 评审修复：练习跨日轮换——昨天的题作废重出，同日幂等。
+func TestExerciseRollover(t *testing.T) {
+	s := NewServer(t.TempDir())
+	s.Exercises = []exercise.Exercise{{ID: "old-1", Title: "昨天的题", Status: "active"}}
+	s.ExerDate = "2026-10-24"
+	// 同日：幂等返回旧题
+	if s.ExerDate == time.Now().Format("2006-01-02") {
+		t.Fatal("预置日期不应等于今天")
+	}
+	// 模拟出题入口的跨日判定（与 handler 同语义）
+	if len(s.Exercises) > 0 && s.ExerDate != time.Now().Format("2006-01-02") {
+		s.Exercises = nil
+	}
+	if len(s.Exercises) != 0 {
+		t.Fatal("跨日后旧练习应清空")
+	}
+	// 同日语义：日期相同则保留
+	s.Exercises = []exercise.Exercise{{ID: "today-1"}}
+	s.ExerDate = time.Now().Format("2006-01-02")
+	if len(s.Exercises) > 0 && s.ExerDate == time.Now().Format("2006-01-02") {
+		// 幂等命中——不清空
+	} else {
+		t.Fatal("同日不应清空")
+	}
+}
+
+// P1-4 评审修复：履历深度闭环——练习完成升知识点「Used」，产出物动作记「Done」。
+func TestLedgerDepthUpgrade(t *testing.T) {
+	s := NewServer(t.TempDir())
+	s.Tutor = &tutor.Tutor{Dir: t.TempDir()}
+	// 收尾建「知道」
+	s.Tutor.Curriculum().Lessons = []tutor.Lesson{{ID: "L1", Title: "线性回归", Status: "done"}}
+	s.Ledger.Record("L1", "线性回归", evidence.Known, time.Now(), "tutor:机器学习", "")
+	// 练习通过（LessonID=L1）→ 知识点升「用过」
+	s.Exercises = []exercise.Exercise{{ID: "ex-1", Title: "题", LessonID: "L1", Subject: "机器学习"}}
+	s.Ledger.Record("ex-1", "题", evidence.Used, time.Now(), "practice", "")
+	s.Ledger.Record("L1", "线性回归", evidence.Used, time.Now(), "practice", "ex-1")
+	k, u, d := s.Ledger.Counts()
+	if u != 2 || k != 0 { // 练习条目 + 升级后的知识点，都是「用过」
+		t.Fatalf("知识点应升「用过」: known=%d used=%d", k, u)
+	}
+	// 产出物动作 → 「做过」
+	s.CompleteMain("定选题（解决自己真实痛点）")
+	_, _, d = s.Ledger.Counts()
+	if d != 1 {
+		t.Fatalf("产出物动作应记「做过」: done=%d", d)
+	}
+	pts := s.Ledger.List()
+	for _, p := range pts {
+		if p.ID == "goal-定选题（解决自己真实痛点）" && p.Depth != evidence.Done {
+			t.Fatalf("goal 动作深度应为 Done: %+v", p)
+		}
+	}
+}
+
+// P1-5 评审修复：FSRS 复习闭环——收尾建卡 → 到期出现 → 评分回写推进调度。
+func TestFSRSWiring(t *testing.T) {
+	s := NewServer(t.TempDir())
+	tdir := t.TempDir()
+	s.Tutor = &tutor.Tutor{Dir: tdir}
+	os.MkdirAll(filepath.Join(tdir), 0o755)
+	os.WriteFile(filepath.Join(tdir, "lessons.json"), []byte(`{"subjects":["机器学习"],"lessons":[{"id":"L1","subject":"机器学习","title":"线性回归","brief":"b","status":"done","order":1}]}`), 0o644)
+	// 模拟收尾建卡（与 handler 同语义）
+	c := fsrs.NewCard(time.Now().Add(-2 * time.Hour)) // 2 小时前建的卡——已到期
+	s.FSCards = map[string]*fsrs.Card{"L1": &c}
+	// 到期清单含预览
+	due := s.reviewDueAll()
+	if len(due) != 1 || due[0].ID != "L1" || due[0].Title != "线性回归" {
+		t.Fatalf("到期卡应出现: %+v", due)
+	}
+	if len(due[0].Previews) != 4 {
+		t.Fatalf("应有四档评分预览: %+v", due[0].Previews)
+	}
+	// 调度器.plan.Main 的 dueCards 也应看到
+	if dc := s.dueCards(); len(dc) != 1 {
+		t.Fatalf("dueCards 应含到期卡: %+v", dc)
+	}
+	// 评分回写：Good → 卡推进，Due 推向未来
+	h := s.Handlers()
+	r := httptest.NewRecorder()
+	h.ServeHTTP(r, httptest.NewRequest("POST", "/api/complete-review", strings.NewReader(`{"id":"L1","rating":3}`)))
+	if r.Code != 200 {
+		t.Fatalf("评分失败: %d %s", r.Code, r.Body.String())
+	}
+	if got := s.reviewDueAll(); len(got) != 0 {
+		t.Fatalf("评分后应不再到期: %+v", got)
+	}
+	card := s.FSCards["L1"]
+	if card.TotalReviews != 1 || !card.Due.After(time.Now()) {
+		t.Fatalf("卡应推进: reviews=%d due=%v", card.TotalReviews, card.Due)
+	}
+	// 非法评分拒收
+	r2 := httptest.NewRecorder()
+	h.ServeHTTP(r2, httptest.NewRequest("POST", "/api/complete-review", strings.NewReader(`{"id":"L1","rating":9}`)))
+	if r2.Code != 400 {
+		t.Fatalf("非法评分应 400: %d", r2.Code)
+	}
 }

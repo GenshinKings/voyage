@@ -16,12 +16,15 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"slices"
+	"sort"
 
+	"outpost2/fsrs"
 	"outpost2/internal/ability"
 	"outpost2/internal/bandit"
 	"outpost2/internal/evidence"
@@ -96,17 +99,21 @@ type Reading struct {
 
 // Server 应用壳。
 type Server struct {
-	Dir        string               `json:"dir"`
-	Goals      []Goal               `json:"goals"`
-	Plan       *scheduler.TodayPlan `json:"plan,omitempty"`
-	Done       Completed            `json:"done"`
-	Ledger     *evidence.Ledger     `json:"-"` // 履历单一真相源=ledger.json（Record 时落盘）；state.json 不存副本——此前双写不一致导致重启即丢履历（事故 2026-10-20）
-	Bandit     *bandit.Bandit       `json:"bandit"`
-	Ability    *ability.Tracker     `json:"ability"`
-	Exercises  []exercise.Exercise  `json:"exercises"`  // 今天的实操练习（助教按实时进度出）
-	Readings   []Reading            `json:"readings"`   // 阅读材料（阅读管理器主体）
-	PracBias   map[string]int       `json:"pracBias"`   // 科目→难度偏置（楼梯式 DDA：±80 内）
-	PracStreak map[string]int       `json:"pracStreak"` // 科目→连对计数（bias 上探的依据）
+	Dir       string               `json:"dir"`
+	Goals     []Goal               `json:"goals"`
+	Plan      *scheduler.TodayPlan `json:"plan,omitempty"`
+	Done      Completed            `json:"done"`
+	Ledger    *evidence.Ledger     `json:"-"` // 履历单一真相源=ledger.json（Record 时落盘）；state.json 不存副本——此前双写不一致导致重启即丢履历（事故 2026-10-20）
+	Bandit    *bandit.Bandit       `json:"bandit"`
+	Ability   *ability.Tracker     `json:"ability"`
+	Exercises []exercise.Exercise  `json:"exercises"`          // 今天的实操练习（助教按实时进度出）
+	ExerDate  string               `json:"exerDate,omitempty"` // 练习生成日期（跨日作废重出——评审 P0-1：原实现永不轮换）
+	// FSRS 复习（评审 P1-5：fsrs 包此前零接入，产品对遗忘无防御）
+	FSCards    map[string]*fsrs.Card `json:"fsCards"`    // 知识点 → 记忆卡（收尾时建卡）
+	FSRS       *fsrs.Scheduler       `json:"-"`          // 调度器（内存态）
+	Readings   []Reading             `json:"readings"`   // 阅读材料（阅读管理器主体）
+	PracBias   map[string]int        `json:"pracBias"`   // 科目→难度偏置（楼梯式 DDA：±80 内）
+	PracStreak map[string]int        `json:"pracStreak"` // 科目→连对计数（bias 上探的依据）
 	// 真实知识连接："核心ID->语境ID"→语境式练习真实调用次数——关联图的强边来源
 	ContextEdges map[string]int `json:"contextEdges"`
 	// 错题回归（Magpie 思想）：答错的知识点记入错题本，下次出题优先出换场景变式——自适应让人看得见
@@ -121,10 +128,11 @@ type Server struct {
 	Exer        *exercise.Engine `json:"-"`
 
 	// 内容进货（用户 2026-10-25 决策）：助教带 GitHub 抓取工具，定时+按钮触发
-	FetchConf    *FetchConfig    `json:"-"` // fetch.json：代理/时刻/上次报告
-	Gh           *ghfetch.Client `json:"-"` // GitHub 抓取客户端（代理从 FetchConf）
-	fetchMu      sync.Mutex      `json:"-"`
-	fetchRunning bool            `json:"-"`
+	FetchConf      *FetchConfig    `json:"-"` // fetch.json：代理/时刻/上次报告
+	Gh             *ghfetch.Client `json:"-"` // GitHub 抓取客户端（代理从 FetchConf）
+	fetchMu        sync.Mutex      `json:"-"`
+	fetchRunning   bool            `json:"-"`
+	routineRunning bool            `json:"-"`
 
 	// 助教自迭代（用户 2026-10-25 纠正：内置助教自己在低峰时段迭代项目，非外部 agent 代劳）
 	Obs       []tutor.Observation `json:"-"` // backlog.json：改进观察（open/done）
@@ -223,6 +231,7 @@ func (s *Server) save(path string, v any) {
 func NewServer(dir string) *Server {
 	s := &Server{Dir: dir, Ledger: evidence.New(), Bandit: bandit.New(time.Now().UnixNano()), Ability: ability.New(), AgentsPath: filepath.Join(dir, "AGENTS.md"), ProfilePath: profile.Ensure(dir), RefDir: reflib.Ensure(dir), NotesDir: notes.Ensure(dir)}
 	s.loadFetchConf()
+	s.FSRS = fsrs.NewScheduler()
 	// 助教改进观察 backlog + 仓库根（自迭代工作区）
 	_ = s.load("backlog.json", &s.Obs)
 	if abs, err := filepath.Abs(dir); err == nil {
@@ -547,31 +556,35 @@ func (s *Server) noteContext() string {
 }
 
 // RunNoteReview 触发一次笔记巡检（异步；与进货共用互斥锁）。结果落 FetchConfig 并主动可见。
-func (s *Server) RunNoteReview() error {
-	s.fetchMu.Lock()
-	defer s.fetchMu.Unlock()
-	if s.fetchRunning {
-		return fmt.Errorf("抓取进行中，稍后再试")
+// noteReviewCore 笔记巡检同步核（日期已做则跳过）。
+func (s *Server) noteReviewCore() error {
+	today := time.Now().Format("2006-01-02")
+	if s.FetchConf != nil && s.FetchConf.NoteRun == today {
+		return nil
 	}
+	if !s.beginStep() {
+		return nil
+	}
+	defer s.endStep()
+	report, err := s.Tutor.ReviewNotes(s.noteContext())
+	if s.FetchConf != nil {
+		s.FetchConf.NoteRun = today
+		if err != nil {
+			s.FetchConf.NoteReport = "巡检失败: " + err.Error()
+		} else {
+			s.FetchConf.NoteReport = report
+		}
+	}
+	s.saveFetchConf()
+	return err
+}
+
+// RunNoteReview 触发一次笔记巡检（异步）。
+func (s *Server) RunNoteReview() error {
 	if s.Tutor == nil {
 		return fmt.Errorf("LLM 未配置")
 	}
-	s.fetchRunning = true
-	go func() {
-		report, err := s.Tutor.ReviewNotes(s.noteContext())
-		s.fetchMu.Lock()
-		s.fetchRunning = false
-		if s.FetchConf != nil {
-			s.FetchConf.NoteRun = time.Now().Format("2006-01-02")
-			if err != nil {
-				s.FetchConf.NoteReport = "巡检失败: " + err.Error()
-			} else {
-				s.FetchConf.NoteReport = report
-			}
-		}
-		s.fetchMu.Unlock()
-		s.saveFetchConf()
-	}()
+	go s.noteReviewCore()
 	return nil
 }
 
@@ -579,48 +592,84 @@ func (s *Server) RunNoteReview() error {
 // ---------- 助教自迭代（反思收集 → 低峰自主实现） ----------
 
 // RunReflect 每日教学反思：今天的教学数据 → 结构化观察 → backlog（防重复、封顶 20 条）。
-func (s *Server) RunReflect() error {
-	s.fetchMu.Lock()
-	defer s.fetchMu.Unlock()
-	if s.fetchRunning {
-		return fmt.Errorf("抓取进行中")
+// reflectCore 教学反思同步核（日期已做则跳过）。
+func (s *Server) reflectCore() error {
+	today := time.Now().Format("2006-01-02")
+	if s.FetchConf != nil && s.FetchConf.ReflectRun == today {
+		return nil
 	}
+	if !s.beginStep() {
+		return nil
+	}
+	defer s.endStep()
+	obs, err := s.Tutor.Reflect(s.todayCareer(), s.existingObservations())
+	if err == nil && len(obs) > 0 {
+		s.fetchMu.Lock()
+		for i, o := range obs {
+			o.ID = fmt.Sprintf("obs-%s-%d", time.Now().Format("0102"), i+1)
+			o.At = today
+			o.Status = "open"
+			obs[i] = o
+		}
+		s.Obs = append(s.Obs, obs...)
+		if len(s.Obs) > 20 { // backlog 封顶：最旧的 done/failed 先清，仍超则丢最旧
+			var keep []tutor.Observation
+			for _, o := range s.Obs {
+				if o.Status == "open" || len(keep) < 20 {
+					keep = append(keep, o)
+				}
+			}
+			s.Obs = keep
+		}
+		s.saveBacklog()
+		s.fetchMu.Unlock()
+	}
+	if s.FetchConf != nil {
+		s.FetchConf.ReflectRun = today
+		s.saveFetchConf()
+	}
+	return err
+}
+
+// RunReflect 触发一次教学反思（异步）。
+func (s *Server) RunReflect() error {
 	if s.Tutor == nil {
 		return fmt.Errorf("LLM 未配置")
 	}
-	s.fetchRunning = true
-	go func() {
-		today := s.todayCareer()
-		existing := s.existingObservations()
-		obs, err := s.Tutor.Reflect(today, existing)
-		s.fetchMu.Lock()
-		s.fetchRunning = false
-		if err == nil && len(obs) > 0 {
-			for i, o := range obs {
-				o.ID = fmt.Sprintf("obs-%s-%d", time.Now().Format("0102"), i+1)
-				o.At = time.Now().Format("2006-01-02")
-				o.Status = "open"
-				obs[i] = o
-			}
-			s.Obs = append(s.Obs, obs...)
-			if len(s.Obs) > 20 { // backlog 封顶：最旧的 done/failed 先清，仍超则丢最旧
-				var keep []tutor.Observation
-				for _, o := range s.Obs {
-					if o.Status == "open" || len(keep) < 20 {
-						keep = append(keep, o)
-					}
-				}
-				s.Obs = keep
-			}
-			s.saveBacklog()
-		}
-		s.fetchMu.Unlock()
-		if s.FetchConf != nil {
-			s.FetchConf.ReflectRun = time.Now().Format("2006-01-02")
-			s.saveFetchConf()
-		}
-	}()
+	go s.reflectCore()
 	return nil
+}
+
+// RunDailyRoutine 每日例行串行流水：进货 → 笔记巡检 → 反思（评审 P0-3：原实现同刻争锁+跨时刻静默跳过）。
+// 各核自带日期幂等与步骤互斥——机器不在线跨过时刻，下次上线也会补跑（loop 的 >= 语义）。
+func (s *Server) RunDailyRoutine() {
+	s.fetchMu.Lock()
+	if s.routineRunning {
+		s.fetchMu.Unlock()
+		return
+	}
+	s.routineRunning = true
+	s.fetchMu.Unlock()
+	go func() {
+		if s.Tutor == nil { // 无 LLM 例行无从谈起
+			s.fetchMu.Lock()
+			s.routineRunning = false
+			s.fetchMu.Unlock()
+			return
+		}
+		if err := s.curateCore(); err != nil {
+			log.Printf("例行·进货: %v", err)
+		}
+		if err := s.noteReviewCore(); err != nil {
+			log.Printf("例行·笔记巡检: %v", err)
+		}
+		if err := s.reflectCore(); err != nil {
+			log.Printf("例行·反思: %v", err)
+		}
+		s.fetchMu.Lock()
+		s.routineRunning = false
+		s.fetchMu.Unlock()
+	}()
 }
 
 // todayCareer 反思输入：今天的教学生涯数据（会话/练习/进货/巡检）。
@@ -902,38 +951,61 @@ func (s *Server) curateContext() string {
 	return b.String()
 }
 
-// RunCurate 触发一次内容进货（异步；同一时刻只跑一份）。
-func (s *Server) RunCurate() error {
+// beginStep/endStep 每日例行步骤互斥（进货/巡检/反思串行化的基础）。
+func (s *Server) beginStep() bool {
 	s.fetchMu.Lock()
 	defer s.fetchMu.Unlock()
 	if s.fetchRunning {
-		return fmt.Errorf("抓取进行中")
+		return false
 	}
+	s.fetchRunning = true
+	return true
+}
+
+func (s *Server) endStep() {
+	s.fetchMu.Lock()
+	s.fetchRunning = false
+	s.fetchMu.Unlock()
+}
+
+// curateCore 进货同步核（日期已做则跳过；返回 nil=跳过或成功）。
+func (s *Server) curateCore() error {
+	today := time.Now().Format("2006-01-02")
+	if s.FetchConf != nil && s.FetchConf.LastRun == today {
+		return nil // 今日已进货
+	}
+	if !s.beginStep() {
+		return nil
+	}
+	defer s.endStep()
+	report, err := s.doCurate()
+	if s.FetchConf != nil {
+		s.FetchConf.LastRun = today
+		if err != nil {
+			s.FetchConf.LastReport = "进货失败: " + err.Error()
+		} else {
+			s.FetchConf.LastReport = report
+			if s.Tutor != nil {
+				s.Tutor.FetchNote = truncateNote(report) // 进货完成 → 下一节开场由助教主动推荐
+			}
+		}
+	}
+	s.saveFetchConf()
+	return err
+}
+
+// RunCurate 触发一次内容进货（异步；同一时刻只跑一份）。
+func (s *Server) RunCurate() error {
 	if s.Tutor == nil {
 		return fmt.Errorf("LLM 未配置（outpost2-data/llm.json）")
 	}
 	if len(s.buildFetchTools()) == 0 {
 		return fmt.Errorf("抓取工具未就绪")
 	}
-	s.fetchRunning = true
-	go func() {
-		report, err := s.doCurate()
-		s.fetchMu.Lock()
-		s.fetchRunning = false
-		if s.FetchConf != nil {
-			s.FetchConf.LastRun = time.Now().Format("2006-01-02")
-			if err != nil {
-				s.FetchConf.LastReport = "进货失败: " + err.Error()
-			} else {
-				s.FetchConf.LastReport = report
-				if s.Tutor != nil {
-					s.Tutor.FetchNote = truncateNote(report) // 进货完成 → 下一节开场由助教主动推荐
-				}
-			}
-		}
-		s.fetchMu.Unlock()
-		s.saveFetchConf()
-	}()
+	if s.FetchConf != nil && s.FetchConf.LastRun == time.Now().Format("2006-01-02") {
+		return fmt.Errorf("今天已经进过货了")
+	}
+	go s.curateCore()
 	return nil
 }
 
@@ -941,29 +1013,26 @@ func (s *Server) doCurate() (string, error) {
 	return s.Tutor.CurateOnce(s.curateContext(), s.buildFetchTools())
 }
 
-// StartFetchLoop 每日定时进货（serve 启动时开一个低频检查协程：命中配置时刻且当日未跑则触发）。
+// StartFetchLoop 每日例行调度：启动即查一次（补跑），此后每 15 分钟一查。
+// 时刻语义是 >=（跨过配置时刻后只要当天没跑就补跑——机器关机跳过不再静默丢）。
 func (s *Server) StartFetchLoop() {
 	go func() {
-		for {
-			time.Sleep(15 * time.Minute)
-			if s.FetchConf == nil || s.Tutor == nil {
+		for i := 0; ; i++ {
+			if i > 0 {
+				time.Sleep(15 * time.Minute)
+			}
+			if s.FetchConf == nil {
 				continue
 			}
 			now := time.Now()
 			today := now.Format("2006-01-02")
-			if now.Hour() == s.FetchConf.Hour && s.FetchConf.LastRun != today {
-				_ = s.RunCurate()
+			// 每日例行流水（进货→巡检→反思串行）：任一步当天没做且已到/过时刻 → 整条流水跑一遍（核内幂等）
+			stepsDone := s.FetchConf.LastRun == today && s.FetchConf.NoteRun == today && s.FetchConf.ReflectRun == today
+			if !stepsDone && now.Hour() >= s.FetchConf.Hour {
+				s.RunDailyRoutine()
 			}
-			// 笔记巡检：每日一次，与进货同刻（AI 主导的每日例行）
-			if now.Hour() == s.FetchConf.Hour && s.FetchConf.NoteRun != today {
-				_ = s.RunNoteReview()
-			}
-			// 教学反思：每日例行第三步（进货→巡检→反思）
-			if now.Hour() == s.FetchConf.Hour && s.FetchConf.ReflectRun != today {
-				_ = s.RunReflect()
-			}
-			// 低峰自迭代：独立时刻（默认凌晨 3 点，可关），观察清单里有一条 open 才动手
-			if s.FetchConf.IterEnabled && now.Hour() == s.iterHour() && s.FetchConf.IterRun != today && s.hasOpenObservation() {
+			// 低峰自迭代：独立时刻（默认凌晨 3 点，可关），观察清单里有 open 才动手
+			if s.FetchConf.IterEnabled && now.Hour() >= s.iterHour() && s.FetchConf.IterRun != today && s.hasOpenObservation() {
 				_ = s.RunIterate()
 			}
 		}
@@ -1077,16 +1146,63 @@ func ResolveShapeCurrent(s *Server, now time.Time) string {
 	return best
 }
 
-// dueCards v0：无 FSRS 实时对接时从 state 里读手动维护的复习项（占位）。
+// dueCards FSRS 驱动：到期知识点的复习卡（评审 P1-5：替换 reviews.json 占位）。
 func (s *Server) dueCards() []scheduler.ReviewCard {
+	now := time.Now()
+	titles := map[string]string{}
+	if s.Tutor != nil {
+		for _, l := range s.Tutor.Curriculum().Lessons {
+			titles[l.ID] = l.Title
+		}
+	}
 	var due []scheduler.ReviewCard
-	s.load("reviews.json", &due)
+	for id, c := range s.FSCards {
+		if c == nil || c.Due.After(now) {
+			continue
+		}
+		due = append(due, scheduler.ReviewCard{ID: id, Due: c.Due, Title: titles[id]})
+	}
 	return due
+}
+
+// reviewDuePayload /api/review/due 的载荷：到期卡 + 四档评分的下次间隔预览。
+type reviewDuePayload struct {
+	ID       string            `json:"id"`
+	Title    string            `json:"title"`
+	Due      time.Time         `json:"due"`
+	Previews map[string]string `json:"previews"` // "1".."4" → 文案
+}
+
+// reviewDueAll 当前到期复习清单（含评分预览，按到期先后）。
+func (s *Server) reviewDueAll() []reviewDuePayload {
+	now := time.Now()
+	titles := map[string]string{}
+	if s.Tutor != nil {
+		for _, l := range s.Tutor.Curriculum().Lessons {
+			titles[l.ID] = l.Title
+		}
+	}
+	out := []reviewDuePayload{}
+	for id, c := range s.FSCards {
+		if c == nil || c.Due.After(now) {
+			continue
+		}
+		pv := s.FSRS.Preview(*c, now)
+		previews := map[string]string{}
+		for r, txt := range pv {
+			previews[strconv.Itoa(int(r))] = txt
+		}
+		out = append(out, reviewDuePayload{ID: id, Title: titles[id], Due: c.Due, Previews: previews})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Due.Before(out[j].Due) })
+	return out
 }
 
 // CompleteMain 完成一片主推进：消化产出物的首个剩余动作 + 履历记 Used。
 func (s *Server) CompleteMain(title string) {
 	s.Done.Main = append(s.Done.Main, title)
+	s.Ledger.Record("goal-"+title, title, evidence.Done, time.Now(), "goal", "")
+	s.save("ledger.json", s.Ledger)
 	for gi := range s.Goals {
 		g := &s.Goals[gi]
 		if len(g.Actions) > 0 && g.Actions[0] == title {
@@ -1179,12 +1295,27 @@ func (s *Server) Handlers() http.Handler {
 	})
 	mux.HandleFunc("/api/complete-review", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
-			ID string `json:"id"`
+			ID     string `json:"id"`
+			Rating int    `json:"rating"` // 1=忘了 2=想不起来 3=想起来 4=轻松
 		}
 		_ = json.NewDecoder(r.Body).Decode(&req)
+		card, ok := s.FSCards[req.ID]
+		if !ok || card == nil {
+			http.Error(w, "复习卡不存在", 404)
+			return
+		}
+		if req.Rating < 1 || req.Rating > 4 {
+			http.Error(w, "rating 取值 1-4", 400)
+			return
+		}
+		next, _ := s.FSRS.Review(*card, fsrs.Rating(req.Rating), time.Now(), 0)
+		s.FSCards[req.ID] = &next
 		s.Done.Reviews = append(s.Done.Reviews, req.ID)
 		s.saveState()
-		writeJSON(w, map[string]any{"ok": true})
+		writeJSON(w, map[string]any{"ok": true, "nextDue": next.Due.Format("2006-01-02 15:04")})
+	})
+	mux.HandleFunc("/api/review/due", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, map[string]any{"cards": s.reviewDueAll()})
 	})
 	mux.HandleFunc("/api/mood", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
@@ -1254,6 +1385,14 @@ func (s *Server) Handlers() http.Handler {
 		verdict := ""
 		if v.Kind == "pass" || v.Kind == "partial" {
 			s.Ledger.Record(lesson.ID, lesson.Title, evidence.Known, time.Now(), "tutor:"+lesson.Subject, "")
+			// FSRS 建卡（评审 P1-5）：收尾即入遗忘防御——到期由复习闭环召回
+			if s.FSCards == nil {
+				s.FSCards = map[string]*fsrs.Card{}
+			}
+			if _, ok := s.FSCards[lesson.ID]; !ok {
+				c := fsrs.NewCard(time.Now())
+				s.FSCards[lesson.ID] = &c
+			}
 			s.Tutor.MarkLessonDone(lesson.ID)
 			s.save("ledger.json", s.Ledger)
 			verdict = v.Kind
@@ -1261,9 +1400,13 @@ func (s *Server) Handlers() http.Handler {
 		writeJSON(w, map[string]any{"reply": v.Reply, "verdict": verdict})
 	})
 	mux.HandleFunc("/api/exercise/generate", func(w http.ResponseWriter, _ *http.Request) {
-		if len(s.Exercises) > 0 { // 幂等：今天的题已出过
+		today := time.Now().Format("2006-01-02")
+		if len(s.Exercises) > 0 && s.ExerDate == today { // 幂等：今天的题已出过
 			writeJSON(w, map[string]any{"exercises": s.Exercises})
 			return
+		}
+		if len(s.Exercises) > 0 { // 跨日作废重出（错题已在 WrongHits，不丢学习信号）
+			s.Exercises = nil
 		}
 		if s.Exer == nil {
 			http.Error(w, "LLM 未配置（outpost2-data/llm.json）", 400)
@@ -1370,6 +1513,7 @@ func (s *Server) Handlers() http.Handler {
 			}
 		}
 		s.Exercises = list
+		s.ExerDate = today
 		s.saveState()
 		writeJSON(w, map[string]any{"exercises": s.Exercises})
 	})
@@ -1444,6 +1588,15 @@ func (s *Server) Handlers() http.Handler {
 			}
 			if done { // 实操完成=「用过」级履历
 				s.Ledger.Record(s.Exercises[i].ID, s.Exercises[i].Title, evidence.Used, time.Now(), "practice", "")
+				// 知识点升级（评审 P1-4）：核心知识点随练习通过升「用过」——履历深度不再停在「知道」
+				if lid := s.Exercises[i].LessonID; lid != "" && s.Tutor != nil {
+					for _, l := range s.Tutor.Curriculum().Lessons {
+						if l.ID == lid {
+							s.Ledger.Record(lid, l.Title, evidence.Used, time.Now(), "practice", s.Exercises[i].ID)
+							break
+						}
+					}
+				}
 				s.save("ledger.json", s.Ledger)
 			}
 			s.saveState()
