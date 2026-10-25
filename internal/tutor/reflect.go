@@ -16,14 +16,14 @@ import (
 
 // Observation 一条改进观察（backlog 的原子：助教提 → 低峰自迭代做 → 报告回流）。
 type Observation struct {
-	ID          string `json:"id"`                 // obs-日期-序号
-	Observation string `json:"observation"`        // 教学中看到了什么（现象）
-	Gap         string `json:"gap"`                // 项目缺什么/哪里不顺
-	Suggestion  string `json:"suggestion"`         // 建议怎么改
-	Priority    string `json:"priority"`           // high|mid|low
-	At          string `json:"at,omitempty"`       // 提出日期
-	Status      string `json:"status,omitempty"`   // open|done|failed
-	Report      string `json:"report,omitempty"`   // 迭代报告（done/failed 时回填）
+	ID          string `json:"id"`               // obs-日期-序号
+	Observation string `json:"observation"`      // 教学中看到了什么（现象）
+	Gap         string `json:"gap"`              // 项目缺什么/哪里不顺
+	Suggestion  string `json:"suggestion"`       // 建议怎么改
+	Priority    string `json:"priority"`         // high|mid|low
+	At          string `json:"at,omitempty"`     // 提出日期
+	Status      string `json:"status,omitempty"` // open|done|failed
+	Report      string `json:"report,omitempty"` // 迭代报告（done/failed 时回填）
 }
 
 const reflectSystem = `你是前哨的 AI 助教，今天例行工作的最后一步：反思今天的教学过程，找出项目本身的缺漏。

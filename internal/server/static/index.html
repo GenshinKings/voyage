@@ -175,6 +175,12 @@ async function api(path,body){const r=await fetch(path,body?{method:'POST',heade
 
 function fmtContent(raw){
   raw=raw||'';
+  let hints='';
+  // [PROPOSE-VOID]：旧提案作废（用户转向新方向）——收起提示
+  if(raw.indexOf('[PROPOSE-VOID]')>=0){
+    raw=raw.replace(/\[PROPOSE-VOID\]/g,'').trim();
+    hints+='<span class="mark propose" style="color:var(--mut)">旧提案已收起——按新方向继续聊</span>';
+  }
   // [PROPOSE] JSON 块折叠成一行提示（提案卡由方向视图单独渲染，消息流里不糊原始 JSON）
   let hint='';
   const i=raw.indexOf('[PROPOSE]');
@@ -195,7 +201,8 @@ function fmtContent(raw){
   let html=esc(raw);
   html=html.replace(/\[PASS:partial\]/g,'<span class="mark partial">◐ 本节收尾（半懂也记录在案，继续往下走）</span>');
   html=html.replace(/\[PASS\]/g,'<span class="mark">✓ 本节收尾通过</span>');
-  return hint+(html?'<br>'+html:'');
+  const body=hint+(html?'<br>'+html:'');
+  return hints?hints+(body?'<br>'+body:''):body;
 }
 let curView='learn';
 function updateChrome(v){
@@ -532,7 +539,7 @@ async function sendDirection(){
   try{
     const r=await api('/api/direction/send',{text});
     DIRMSG.splice(DIRMSG.length-1,1,{role:'assistant',content:r.reply});
-    if(r.proposal)DIRPROPOSAL=r.proposal;
+    if(r.proposal!==undefined)DIRPROPOSAL=r.proposal; // null=旧提案已作废（转新方向），卡片收起
     renderDirView();
   }catch(e){DIRMSG.splice(DIRMSG.length-1,1);renderDirView();toast('失败：'+e.message)}
 }

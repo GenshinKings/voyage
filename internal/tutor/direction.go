@@ -43,7 +43,8 @@ const directionSystem = `你是 Voyage 的学习方向顾问。用户想开启�
 {"subject":"科目名（≤10字）","lessons":[{"title":"≤16字","brief":"学完能做什么"}]}
 
 提案要求：4-8 课，从基础到进阶，每课都是 30 分钟内「讲解+检查题」能收尾的最小单元。
-用户之后可能要求调整（加一课/去掉某课/换个侧重）——按反馈修改后重新输出 [PROPOSE] 块。用户说「同步/就这个/可以了」之类的话时，不要重复输出提案，简单确认即可（同步由系统按钮完成）。`
+用户之后可能要求调整（加一课/去掉某课/换个侧重）——按反馈修改后重新输出 [PROPOSE] 块。用户说「同步/就这个/可以了」之类的话时，不要重复输出提案，简单确认即可（同步由系统按钮完成）。
+用户明确转向新方向、或说明之前的讨论只是测试/不算数时：旧提案作废——在回复中单独一行输出 [PROPOSE-VOID]（系统会收起旧提案卡），然后正常回应新方向，绝不要把旧提案再挂出来。`
 
 // LoadDirection 读取方向讨论会话（不存在= nil）。
 func (t *Tutor) LoadDirection() *DirectionSession {
@@ -93,6 +94,9 @@ func (t *Tutor) DirectionSend(userText string) (reply string, proposal *Proposal
 	s.Messages = append(s.Messages, llm.Message{Role: "assistant", Content: reply})
 	if p := parseProposal(reply); p != nil {
 		s.Proposal = p
+	} else if strings.Contains(reply, "[PROPOSE-VOID]") {
+		// 用户转向新方向/声明之前是测试——旧提案作废（收起卡片）
+		s.Proposal = nil
 	}
 	s.Updated = time.Now()
 	t.saveDirection(s)

@@ -136,3 +136,29 @@ func TestReviewNotes(t *testing.T) {
 		t.Fatal("无 LLM 应报错")
 	}
 }
+
+func TestDirectionProposalVoid(t *testing.T) {
+	dir := t.TempDir()
+	mc := &mockClient{replies: []string{
+		`{"nodes":[{"title":"A","brief":"b"}]}`,
+		"方向清晰。[PROPOSE]{\"subject\":\"推荐系统入门\",\"lessons\":[{\"title\":\"是什么\",\"brief\":\"b\"}]}",
+		"了解了，测试内容不算数。[PROPOSE-VOID] 你想成为 FDE 工程师——先问一句：RAG 还是 Agent？",
+	}}
+	tu := &Tutor{Dir: dir, Client: mc}
+	// 第一轮：产出提案
+	_, proposal, err := tu.DirectionSend("想学推荐系统")
+	if err != nil || proposal == nil {
+		t.Fatalf("应产出提案: %v", err)
+	}
+	// 第二轮：用户转向 → 顾问输出 [PROPOSE-VOID] → 提案作废
+	_, proposal, err = tu.DirectionSend("上述为测试内容。我想成为 FDE 工程师")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if proposal != nil {
+		t.Fatalf("转新方向后旧提案应作废: %+v", proposal)
+	}
+	if s := tu.LoadDirection(); s.Proposal != nil {
+		t.Fatal("direction.json 里提案应已清空")
+	}
+}
