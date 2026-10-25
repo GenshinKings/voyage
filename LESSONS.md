@@ -24,7 +24,7 @@
 
 1. 数据必须单一真相源 | Ledger 双写不一致：Record 只落 ledger.json，state.json 副本从未更新，重启加载只信 state.json → 用户履历被吞 | commit 32886bc + TestLedgerSurvivesRestart | Seen 1×
 2. JSON 文件顶层形状必须与加载目标一致 | readings.json 写成 {"readings":[...]} 而加载目标是数组 → 静默加载失败，字段为 nil | commit 50ece24 | Seen 1×
-3. 同一文件禁止连续增量补丁 | index.html 五六个补丁互相覆盖污染，关联图问题查了一小时，最终全量重写一次成型 | commit c49e470 | Seen 1×
+3. 同一文件禁止连续增量补丁；复杂 JS 生成禁止走 python heredoc | index.html 五六个补丁互相覆盖污染（c49e470）；heredoc 的 \ 转义坍缩两次把 JS 的 ' 吃成 '（本次：openReview 评分按钮行字符串断裂→整页脚本瘫痪白屏「加载中」，桌面端用户直接撞上）| 修法：node --check 提取 <script> 做语法门（app_check.js），JS 内嵌 HTML 一律双引号外层+Edit 工具直改 | Seen 2×
 4. rAF 不可依赖 | 后台页/iframe 页 requestAnimationFrame 被节流暂停，绘制闭包静默不执行；改 await rAF 更是永久卡死 | commit 88f03fb | Seen 1×
 5. 物理模拟必须有界 | 力导向逐对直接位移无上限，第 1 轮迭代坐标冲到 -5.5e6、第 2 轮 NaN，fill(NaN) 静默不画；改标准 FR（合力累加+退火位移 clamp）数学保证收敛 | commit 88f03fb | Seen 1×
 6. 双端语义抄形不抄义会翻车 | 抄 DeepSeek 侧栏抄成课程排期（欠账清单）而非会话历史（存货），违背宪法案例零；被用户两次纠偏（c49e470 / 2c4a361）| Seen 2×

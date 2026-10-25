@@ -384,7 +384,7 @@ function openReview(id){
   $('lessonTitle').textContent=c.title||c.id;
   $('kicker').textContent='REVIEW · 到期复习';
   const pv=c.previews||{};
-  const btn=(r,label)=>'<button class="backbtn" onclick="reviewRate(''+c.id+'','+r+')" style="margin:0 6px 8px 0">'+label+(pv[String(r)]?'<div style="font-size:10.5px;color:var(--mut)">下次 '+esc(pv[String(r)])+'</div>':'')+'</button>';
+  const btn=(r,label)=>"<button class=\"backbtn\" onclick=\"reviewRate('"+c.id+"',"+r+")\" style=\"margin:0 6px 8px 0\">"+label+(pv[String(r)]?"<div style=\"font-size:10.5px;color:var(--mut)\">下次 "+esc(pv[String(r)])+"</div>":"")+"</button>";
   $('chat').innerHTML='<div class="msg a"><div class="bubble"><b>《'+esc(c.title||c.id)+'》到期了。</b><br>先凭记忆想一想它讲了什么、能怎么用——然后诚实自评（自评准，安排才准）：<div style="margin-top:12px">'
     +btn(1,'忘了')+btn(2,'想不起来')+btn(3,'想起来')+btn(4,'轻松')+'</div>'
     +'<div class="mut" style="font-size:11.5px;margin-top:6px">想不起来的话，点左上回历史重看这节课的对话再评。</div></div></div>';
