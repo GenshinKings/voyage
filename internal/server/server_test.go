@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -232,6 +233,82 @@ func TestNotesHandler(t *testing.T) {
 	if !strings.Contains(ctx, "还没有开课") {
 		t.Fatalf("无课上下文应有兜底: %q", ctx)
 	}
+}
+
+// 助教自迭代端到端：注入会写文件的开发助教 mock → 走白名单/闸门/提交全链路。
+func TestSelfIterateEndToEnd(t *testing.T) {
+	dir := t.TempDir()
+	s := NewServer(dir)
+	// 假仓库（与仓库结构一致：dataDir 的上一级）
+	repo := filepath.Dir(dir)
+	git := func(args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = repo
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %s", args, out)
+		}
+	}
+	git("init", "-q")
+	git("config", "user.email", "t@t")
+	git("config", "user.name", "t")
+	os.WriteFile(filepath.Join(repo, "go.mod"), []byte("module fake\n\ngo 1.26\n"), 0o644)
+	os.MkdirAll(filepath.Join(repo, "cmd", "outpost2"), 0o755)
+	os.WriteFile(filepath.Join(repo, "cmd", "outpost2", "main.go"), []byte("package main\n\nfunc main() {}\n"), 0o644)
+	os.MkdirAll(filepath.Join(repo, "internal", "x"), 0o755)
+	os.WriteFile(filepath.Join(repo, "internal", "x", "x.go"), []byte("package x\n\nfunc Hello() string { return \"hi\" }\n"), 0o644)
+	os.WriteFile(filepath.Join(repo, "internal", "x", "x_test.go"), []byte("package x\n\nimport \"testing\"\n\nfunc TestHello(t *testing.T) { if Hello() != \"hi\" {\n\tt.Fatal(\"bad\")\n} }\n"), 0o644)
+	git("add", ".")
+	git("commit", "-qm", "init")
+
+	// 开发助教 mock：第一轮用 write_file 写个带测试的改进，第二轮 run_tests 全绿后收口
+	s.Tutor = &tutor.Tutor{Dir: dir, Client: &iterMock{repo: repo}, RefDir: s.RefDir, NotesDir: s.NotesDir}
+	obs := tutor.Observation{ID: "obs-1", Observation: "Hello 无文档", Gap: "缺注释", Suggestion: "给 Hello 加注释", Priority: "low", Status: "open"}
+	s.Obs = []tutor.Observation{obs}
+	if err := s.RunIterate(); err != nil {
+		t.Fatal(err)
+	}
+	// 等异步完成（轮询 ≤30s：go test 全量要跑一会儿）
+	deadline := time.Now().Add(60 * time.Second)
+	for time.Now().Before(deadline) {
+		if s.Obs[0].Status != "open" {
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	if s.Obs[0].Status != "done" {
+		t.Fatalf("应 done: %+v 报告=%s", s.Obs[0].Status, s.Obs[0].Report)
+	}
+	out, _ := exec.Command("git", "-C", repo, "log", "--oneline", "-1").CombinedOutput()
+	if !strings.Contains(string(out), "iter(low)") {
+		t.Fatalf("应产生迭代提交: %s", out)
+	}
+	// 白名单拒绝：开发助教试图写数据目录
+	s2 := NewServer(t.TempDir())
+	s2.Tutor = &tutor.Tutor{Dir: t.TempDir(), Client: &iterMock{repo: filepath.Dir(t.TempDir())}}
+	_, err := s2.buildIterateTools()[2].Fn(json.RawMessage(`{"path":"outpost2-data/llm.json","content":"{}"}`))
+	if err == nil {
+		t.Fatal("数据目录必须被白名单拒收")
+	}
+}
+
+// iterMock 会真调 write_file 与 run_tests 工具（走 server 组装的白名单实现）。
+type iterMock struct{ repo string }
+
+func (m *iterMock) Chat(system string, msgs []llm.Message) (string, error) { return "ok", nil }
+func (m *iterMock) ChatJSON(system string, msgs []llm.Message) (string, error) {
+	return "{}", nil
+}
+func (m *iterMock) ChatTools(system string, msgs []llm.Message, tools []llm.Tool) (string, []llm.ToolCall, error) {
+	for _, msg := range msgs {
+		if msg.Role == "tool" {
+			return "实现报告：给 Hello 加了注释，测试全绿。", nil, nil
+		}
+	}
+	// 组装真正的工具（从测试上下文拿不到——用反射式遍历 tools 名字即可：直接调一次 write+test）
+	// 这里通过注入的参数拿到工具集太绕；改由 server 测试直接验证工具 Fn（见 TestSelfIterateEndToEnd 的白名单断言），
+	// 本 mock 只返回 write_file 调用，server 的 doIterate 会执行。
+	args, _ := json.Marshal(map[string]string{"path": "internal/x/x.go", "content": "package x\n\n// Hello 返回问候。\nfunc Hello() string { return \"hi\" }\n"})
+	return "", []llm.ToolCall{{ID: "c1", Name: "write_file", ArgsRaw: string(args)}}, nil
 }
 
 // curatorMock 只会调 kb_save 工具然后收口（无网络）。

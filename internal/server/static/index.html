@@ -551,6 +551,8 @@ function renderSettings(){
     h+='<div id="fetchBox" style="font-size:12px;color:var(--mut)">加载中…</div>';
     h+='<div class="grouplabel" style="margin:20px 0 6px">笔记工作区（outpost2-data\\notes\\*.md）——助教每天对照教学内容巡检</div>';
     h+='<div id="notesBox" style="font-size:12px;color:var(--mut)">加载中…</div>';
+    h+='<div class="grouplabel" style="margin:20px 0 6px">助教自迭代（低峰时段自主改进项目：反思→实现→测试→构建→提交）</div>';
+    h+='<div id="iterBox" style="font-size:12px;color:var(--mut)">加载中…</div>';
     h+='<div class="grouplabel" style="margin:20px 0 6px">AGENTS.md — 助教行为约束（每次调用注入，改完即生效）</div>';
     h+='<textarea id="agentsEdit" spellcheck="false">'+esc(d.agents||'')+'</textarea>';
     h+='<button class="backbtn" onclick="saveAgents()" style="margin-top:8px">保存约束</button>';
@@ -559,6 +561,7 @@ function renderSettings(){
     api('/api/profile').then(p=>{const el=document.getElementById('profileEdit');if(el)el.value=p.content||'';}).catch(()=>{});
     renderFetchBox();
     renderNotesBox();
+    renderIterBox();
   }).catch(e=>{v.innerHTML='<div class="empty">'+esc(e.message)+'</div>';});
 }
 async function saveModel(){
@@ -631,6 +634,53 @@ async function runNoteReview(){
     await api('/api/notes/review',{});
     toast('助教开始巡检笔记——对照今天的教学内容检查问题与改进点');
     setTimeout(renderNotesBox,1500);
+  }catch(e){toast('失败：'+e.message)}
+}
+/* ---------- 助教自迭代 ---------- */
+function renderIterBox(){
+  const el=document.getElementById('iterBox');if(!el)return;
+  api('/api/backlog').then(d=>{
+    const ic=d.iter||{};
+    let h='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">';
+    h+='<label style="cursor:pointer"><input type="checkbox" id="iterEnabled" '+(ic.enabled?'checked':'')+'> 启用</label>';
+    h+='低峰时刻 <input id="iterHour" type="number" min="0" max="23" value="'+(ic.hour??3)+'" style="width:52px"> 点';
+    h+='<button class="backbtn" onclick="saveIterConf()">保存</button>';
+    h+='<button class="backbtn" onclick="runReflect()" style="margin-left:auto">今日反思</button>';
+    h+='<button class="backbtn" onclick="runIterate()" '+(d.iterating?'disabled':'')+' style="border-color:var(--pink);color:var(--pink)">'+(d.iterating?'迭代中…':'立即迭代一条')+'</button></div>';
+    const obs=d.observations||[];
+    if(obs.length){
+      h+='<div style="margin-top:8px">';
+      obs.forEach(o=>{
+        const st={open:'待做',done:'✓已迭代',failed:'✗失败'}[o.status]||o.status;
+        const col=o.status==='done'?'#3a9d5d':(o.status==='failed'?'#c25b4e':'var(--pink)');
+        h+='<div style="border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin-top:5px;font-size:11.5px">';
+        h+='<div><span style="color:'+col+';font-weight:600">['+st+']</span> '+esc(o.observation)+'</div>';
+        h+='<div style="color:var(--mut);margin-top:2px">缺 '+esc(o.gap)+' → 改：'+esc(o.suggestion)+'</div>';
+        if(o.report)h+='<div style="color:var(--mut);margin-top:2px">报告：'+esc(o.report.slice(0,140))+(o.report.length>140?'…':'')+'</div>';
+        h+='</div>';
+      });
+      h+='</div>';
+    } else h+='<div style="margin-top:6px;color:var(--mut)">观察清单为空——助教每日教学后反思会自动补充</div>';
+    if(ic.lastRun)h+='<div style="margin-top:6px;color:var(--mut)">上次迭代 '+esc(ic.lastRun)+(ic.lastReport?'：'+esc(String(ic.lastReport).slice(0,160)):'')+'</div>';
+    el.innerHTML=h;
+  }).catch(e=>{el.innerHTML='<div class="empty">'+esc(e.message)+'</div>'});
+}
+async function saveIterConf(){
+  try{
+    await api('/api/fetch/config',{iterEnabled:document.getElementById('iterEnabled').checked,iterHour:parseInt(val('iterHour'))||3});
+    toast('自迭代设置已保存——助教会在低峰时段自主改进项目');renderIterBox();
+  }catch(e){toast('失败：'+e.message)}
+}
+async function runReflect(){
+  try{
+    await api('/api/reflect/run',{});
+    toast('助教开始今日教学反思——缺漏会进观察清单');setTimeout(renderIterBox,2000);
+  }catch(e){toast('失败：'+e.message)}
+}
+async function runIterate(){
+  try{
+    await api('/api/iterate/run',{});
+    toast('助教开始自主迭代：实现→测试→构建→提交（闸门全绿才算数）');setTimeout(renderIterBox,2000);
   }catch(e){toast('失败：'+e.message)}
 }
 

@@ -6,6 +6,7 @@
 package server
 
 import (
+	"context"
 	_ "embed"
 	"encoding/json"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -26,6 +28,7 @@ import (
 	"outpost2/internal/exercise"
 	"outpost2/internal/ghfetch"
 	"outpost2/internal/graduation"
+	"outpost2/internal/iterate"
 	"outpost2/internal/llm"
 	"outpost2/internal/notes"
 	"outpost2/internal/profile"
@@ -122,6 +125,18 @@ type Server struct {
 	Gh           *ghfetch.Client `json:"-"` // GitHub 抓取客户端（代理从 FetchConf）
 	fetchMu      sync.Mutex      `json:"-"`
 	fetchRunning bool            `json:"-"`
+
+	// 助教自迭代（用户 2026-10-25 纠正：内置助教自己在低峰时段迭代项目，非外部 agent 代劳）
+	Obs       []tutor.Observation `json:"-"` // backlog.json：改进观察（open/done）
+	RepoDir   string              `json:"-"` // 仓库根（迭代工作区；dataDir 的上一级）
+	iterMu    sync.Mutex          `json:"-"`
+	iterating bool                `json:"-"`
+}
+
+// Backlog backlog.json：助教的改进观察清单。
+type Backlog struct {
+	Updated      string              `json:"updated,omitempty"`
+	Observations []tutor.Observation `json:"observations"`
 }
 
 // FetchConfig fetch.json：内容进货的配置与运行状态。
@@ -133,6 +148,13 @@ type FetchConfig struct {
 	// 笔记巡检（AI 主导：助教每天对照教学内容查笔记，诊断主动可见）
 	NoteRun    string `json:"noteRun,omitempty"`    // 上次笔记巡检日期
 	NoteReport string `json:"noteReport,omitempty"` // 上次笔记诊断报告
+	// 教学反思（每日例行第三步：发现项目缺漏 → backlog）
+	ReflectRun string `json:"reflectRun,omitempty"` // 上次反思日期
+	// 助教自迭代（低峰时段独立时刻；默认凌晨 3 点，可关）
+	IterEnabled bool   `json:"iterEnabled,omitempty"` // 启用自迭代
+	IterHour    int    `json:"iterHour,omitempty"`    // 迭代时刻 0-23（默认 3）
+	IterRun     string `json:"iterRun,omitempty"`     // 上次迭代日期
+	IterReport  string `json:"iterReport,omitempty"`  // 上次迭代报告
 }
 
 func (s *Server) loadFetchConf() {
@@ -155,6 +177,23 @@ func truncateNote(report string) string {
 		report = report[:500] + "…（全文见设置页·内容进货）"
 	}
 	return report
+}
+
+// runIn 在 dir 里跑一条固定命令（自迭代工具用；不接受模型给的任意命令）。
+func runIn(dir, name string, args ...string) (string, error) {
+	cmd := exec.CommandContext(context.Background(), name, args...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	return strings.TrimSpace(string(out)), err
+}
+
+// tailLines 取输出末 N 行（测试输出可能很长）。
+func tailLines(s string, n int) string {
+	lines := strings.Split(strings.TrimSpace(s), "\n")
+	if len(lines) <= n {
+		return s
+	}
+	return "…\n" + strings.Join(lines[len(lines)-n:], "\n")
 }
 
 func (s *Server) saveFetchConf() {
@@ -184,6 +223,11 @@ func (s *Server) save(path string, v any) {
 func NewServer(dir string) *Server {
 	s := &Server{Dir: dir, Ledger: evidence.New(), Bandit: bandit.New(time.Now().UnixNano()), Ability: ability.New(), AgentsPath: filepath.Join(dir, "AGENTS.md"), ProfilePath: profile.Ensure(dir), RefDir: reflib.Ensure(dir), NotesDir: notes.Ensure(dir)}
 	s.loadFetchConf()
+	// 助教改进观察 backlog + 仓库根（自迭代工作区）
+	_ = s.load("backlog.json", &s.Obs)
+	if abs, err := filepath.Abs(dir); err == nil {
+		s.RepoDir = filepath.Dir(abs)
+	}
 	// 模型配置口：llm.json 多 Profile（兼容旧单配置自动迁移）；AGENTS.md 用户约束（缺失写默认模板）
 	if st, err := llm.LoadStore(filepath.Join(dir, "llm.json")); err == nil {
 		s.LLMStore = st
@@ -532,6 +576,302 @@ func (s *Server) RunNoteReview() error {
 }
 
 // curateContext 进货员的学习者上下文（科目/进度/库里已有——防重复进货）。
+// ---------- 助教自迭代（反思收集 → 低峰自主实现） ----------
+
+// RunReflect 每日教学反思：今天的教学数据 → 结构化观察 → backlog（防重复、封顶 20 条）。
+func (s *Server) RunReflect() error {
+	s.fetchMu.Lock()
+	defer s.fetchMu.Unlock()
+	if s.fetchRunning {
+		return fmt.Errorf("抓取进行中")
+	}
+	if s.Tutor == nil {
+		return fmt.Errorf("LLM 未配置")
+	}
+	s.fetchRunning = true
+	go func() {
+		today := s.todayCareer()
+		existing := s.existingObservations()
+		obs, err := s.Tutor.Reflect(today, existing)
+		s.fetchMu.Lock()
+		s.fetchRunning = false
+		if err == nil && len(obs) > 0 {
+			for i, o := range obs {
+				o.ID = fmt.Sprintf("obs-%s-%d", time.Now().Format("0102"), i+1)
+				o.At = time.Now().Format("2006-01-02")
+				o.Status = "open"
+				obs[i] = o
+			}
+			s.Obs = append(s.Obs, obs...)
+			if len(s.Obs) > 20 { // backlog 封顶：最旧的 done/failed 先清，仍超则丢最旧
+				var keep []tutor.Observation
+				for _, o := range s.Obs {
+					if o.Status == "open" || len(keep) < 20 {
+						keep = append(keep, o)
+					}
+				}
+				s.Obs = keep
+			}
+			s.saveBacklog()
+		}
+		s.fetchMu.Unlock()
+		if s.FetchConf != nil {
+			s.FetchConf.ReflectRun = time.Now().Format("2006-01-02")
+			s.saveFetchConf()
+		}
+	}()
+	return nil
+}
+
+// todayCareer 反思输入：今天的教学生涯数据（会话/练习/进货/巡检）。
+func (s *Server) todayCareer() string {
+	var b strings.Builder
+	today := time.Now().Format("2006-01-02")
+	fmt.Fprintf(&b, "- 日期：%s\n", today)
+	if s.Tutor != nil {
+		cur := s.Tutor.Curriculum()
+		var done, active []string
+		for _, l := range cur.Lessons {
+			if l.Status == "done" {
+				done = append(done, l.Title)
+			} else {
+				active = append(active, l.Title)
+			}
+			if sess := s.Tutor.Load(l.ID); sess != nil && sess.UpdatedAt.Format("2006-01-02") == today {
+				fmt.Fprintf(&b, "- 今日教学会话：《%s》共 %d 轮（判定 %q）\n", l.Title, len(sess.Messages)/2, sess.Verdict)
+			}
+		}
+		if len(done) > 0 {
+			fmt.Fprintf(&b, "- 已收尾：%s\n", strings.Join(done, "、"))
+		}
+		if len(active) > 0 {
+			fmt.Fprintf(&b, "- 进行中：%s\n", strings.Join(active, "、"))
+		}
+	}
+	for i := range s.Exercises {
+		e := &s.Exercises[i]
+		if e.Status == "done" || len(e.Messages) > 2 {
+			fmt.Fprintf(&b, "- 练习《%s》（%s）：%d 轮作答，状态 %s\n", e.Title, e.Topic, (len(e.Messages)-1)/2, e.Status)
+		}
+	}
+	if s.FetchConf != nil {
+		if s.FetchConf.LastRun == today && s.FetchConf.LastReport != "" {
+			fmt.Fprintf(&b, "- 今日进货报告：%.150s\n", s.FetchConf.LastReport)
+		}
+		if s.FetchConf.NoteRun == today && s.FetchConf.NoteReport != "" {
+			fmt.Fprintf(&b, "- 今日笔记巡检：%.150s\n", s.FetchConf.NoteReport)
+		}
+	}
+	if b.Len() == 0 {
+		return "（今天没有教学活动——可输出空观察列表）"
+	}
+	return b.String()
+}
+
+func (s *Server) existingObservations() string {
+	var lines []string
+	for _, o := range s.Obs {
+		if o.Status == "open" {
+			lines = append(lines, "- "+o.Observation)
+		}
+	}
+	if len(lines) == 0 {
+		return "（空）"
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (s *Server) saveBacklog() {
+	s.save("backlog.json", Backlog{Updated: time.Now().Format("2006-01-02"), Observations: s.Obs})
+}
+
+func (s *Server) hasOpenObservation() bool {
+	for _, o := range s.Obs {
+		if o.Status == "open" {
+			return true
+		}
+	}
+	return false
+}
+
+// buildIterateTools 自迭代工具组：白名单读写 + 固定的测试/构建/看 diff（无任意命令执行）。
+func (s *Server) buildIterateTools() []tutor.Tool {
+	readTool := tutor.Tool{
+		Name: "read_file", Description: "读仓库源码文件（白名单：internal/ 与根 .go；数据目录与 cmd/ 禁读——密钥与入口不进模型）",
+		Schema: map[string]any{"type": "object", "properties": map[string]any{
+			"path": map[string]any{"type": "string"}}, "required": []string{"path"}},
+		Fn: func(args json.RawMessage) (string, error) {
+			var req struct{ Path string }
+			_ = json.Unmarshal(args, &req)
+			p, err := iterate.SafePath(s.RepoDir, req.Path)
+			if err != nil {
+				return "", err
+			}
+			b, err := os.ReadFile(p)
+			if err != nil {
+				return "", err
+			}
+			if len(b) > 48<<10 {
+				b = b[:48<<10]
+			}
+			return string(b), nil
+		},
+	}
+	listTool := tutor.Tool{
+		Name: "list_dir", Description: "列目录（白名单同上）",
+		Schema: map[string]any{"type": "object", "properties": map[string]any{
+			"path": map[string]any{"type": "string"}}, "required": []string{"path"}},
+		Fn: func(args json.RawMessage) (string, error) {
+			var req struct{ Path string }
+			_ = json.Unmarshal(args, &req)
+			p, err := iterate.SafePath(s.RepoDir, req.Path)
+			if err != nil {
+				return "", err
+			}
+			entries, err := os.ReadDir(p)
+			if err != nil {
+				return "", err
+			}
+			names := make([]string, 0, len(entries))
+			for _, e := range entries {
+				names = append(names, e.Name())
+			}
+			return strings.Join(names, "\n"), nil
+		},
+	}
+	writeTool := tutor.Tool{
+		Name: "write_file", Description: "写仓库源码文件（白名单：internal/ 与根 .go；单文件 ≤128KB；这是你唯一的写入口）",
+		Schema: map[string]any{"type": "object", "properties": map[string]any{
+			"path": map[string]any{"type": "string"}, "content": map[string]any{"type": "string"}},
+			"required": []string{"path", "content"}},
+		Fn: func(args json.RawMessage) (string, error) {
+			var req struct{ Path, Content string }
+			_ = json.Unmarshal(args, &req)
+			p, err := iterate.SafePath(s.RepoDir, req.Path)
+			if err != nil {
+				return "", err
+			}
+			if len(req.Content) > iterate.MaxFileBytes {
+				return "", fmt.Errorf("内容超过 %dKB 上限——需要大改请放弃并在报告里说明", iterate.MaxFileBytes>>10)
+			}
+			if err := os.WriteFile(p, []byte(req.Content), 0o644); err != nil {
+				return "", err
+			}
+			return "已写入 " + req.Path, nil
+		},
+	}
+	testTool := tutor.Tool{
+		Name: "run_tests", Description: "跑全量 go test ./...（改完必须跑，红了修到绿）",
+		Schema: map[string]any{"type": "object", "properties": map[string]any{}, "required": []string{}},
+		Fn: func(args json.RawMessage) (string, error) {
+			out, err := iterate.RunTests(s.RepoDir)
+			if err != nil {
+				return "", err
+			}
+			return "测试全绿\n" + tailLines(out, 10), nil
+		},
+	}
+	buildTool := tutor.Tool{
+		Name: "go_build", Description: "构建到 outpost2-next.exe（不碰运行中的服务）",
+		Schema: map[string]any{"type": "object", "properties": map[string]any{}, "required": []string{}},
+		Fn: func(args json.RawMessage) (string, error) {
+			if _, err := iterate.Build(s.RepoDir); err != nil {
+				return "", err
+			}
+			return "构建成功", nil
+		},
+	}
+	diffTool := tutor.Tool{
+		Name: "git_diff", Description: "看自己改动的内容（git diff internal/）",
+		Schema: map[string]any{"type": "object", "properties": map[string]any{}, "required": []string{}},
+		Fn: func(args json.RawMessage) (string, error) {
+			out, err := runIn(s.RepoDir, "git", "diff", "--stat", "internal/")
+			if err != nil {
+				return "", err
+			}
+			return out, nil
+		},
+	}
+	return []tutor.Tool{readTool, listTool, writeTool, testTool, buildTool, diffTool}
+}
+
+// RunIterate 低峰自迭代：取最旧的一条 open 观察 → 助教自主实现 → 确定性闸门（测试+构建，不过即还原）→ 提交。
+// 一次只做一条；失败不重试（报告 failed，观察留给人工评估）。
+func (s *Server) RunIterate() error {
+	s.iterMu.Lock()
+	defer s.iterMu.Unlock()
+	if s.iterating {
+		return fmt.Errorf("迭代进行中")
+	}
+	var obs *tutor.Observation
+	for i := range s.Obs {
+		if s.Obs[i].Status == "open" {
+			obs = &s.Obs[i]
+			break
+		}
+	}
+	if obs == nil {
+		return fmt.Errorf("观察清单为空——等每日反思")
+	}
+	if s.Tutor == nil {
+		return fmt.Errorf("LLM 未配置")
+	}
+	target := *obs
+	s.iterating = true
+	go func() {
+		report, err := s.doIterate(target)
+		s.iterMu.Lock()
+		s.iterating = false
+		// 回写 backlog 状态
+		for i := range s.Obs {
+			if s.Obs[i].ID == target.ID {
+				if err != nil {
+					s.Obs[i].Status = "failed"
+					s.Obs[i].Report = "失败: " + err.Error()
+				} else {
+					s.Obs[i].Status = "done"
+					s.Obs[i].Report = report
+				}
+			}
+		}
+		s.saveBacklog()
+		if s.FetchConf != nil {
+			s.FetchConf.IterRun = time.Now().Format("2006-01-02")
+			s.FetchConf.IterReport = report
+			if err != nil {
+				s.FetchConf.IterReport = "迭代失败: " + err.Error()
+			}
+			s.saveFetchConf()
+		}
+		s.iterMu.Unlock()
+	}()
+	return nil
+}
+
+func (s *Server) doIterate(obs tutor.Observation) (string, error) {
+	tools := s.buildIterateTools()
+	report, _, err := s.Tutor.SelfIterate(obs, tools)
+	if err != nil {
+		iterate.Restore(s.RepoDir)
+		return "", err
+	}
+	// 确定性闸门（不信任 AI）：全量测试 + 构建，任一失败 → 还原
+	if _, err := iterate.RunTests(s.RepoDir); err != nil {
+		iterate.Restore(s.RepoDir)
+		return "", err
+	}
+	if _, err := iterate.Build(s.RepoDir); err != nil {
+		iterate.Restore(s.RepoDir)
+		return "", err
+	}
+	msg := fmt.Sprintf("iter(%s): %s —— 助教低峰自迭代\n\n观察：%s\n缺口：%s\n\nCo-authored-by: ZCode (GLM) <zcode@z.ai>", obs.Priority, obs.Suggestion, obs.Observation, obs.Gap)
+	if err := iterate.Commit(s.RepoDir, msg); err != nil {
+		iterate.Restore(s.RepoDir)
+		return "", err
+	}
+	return report + "\n（闸门全绿，已提交——重启换版后生效）", nil
+}
+
 func (s *Server) curateContext() string {
 	var b strings.Builder
 	if s.Tutor != nil {
@@ -618,8 +958,24 @@ func (s *Server) StartFetchLoop() {
 			if now.Hour() == s.FetchConf.Hour && s.FetchConf.NoteRun != today {
 				_ = s.RunNoteReview()
 			}
+			// 教学反思：每日例行第三步（进货→巡检→反思）
+			if now.Hour() == s.FetchConf.Hour && s.FetchConf.ReflectRun != today {
+				_ = s.RunReflect()
+			}
+			// 低峰自迭代：独立时刻（默认凌晨 3 点，可关），观察清单里有一条 open 才动手
+			if s.FetchConf.IterEnabled && now.Hour() == s.iterHour() && s.FetchConf.IterRun != today && s.hasOpenObservation() {
+				_ = s.RunIterate()
+			}
 		}
 	}()
+}
+
+// iterHour 迭代时刻（未配置=默认凌晨 3 点）。
+func (s *Server) iterHour() int {
+	if s.FetchConf.IterHour >= 0 && s.FetchConf.IterHour <= 23 {
+		return s.FetchConf.IterHour
+	}
+	return 3
 }
 
 func (s *Server) readAgents() string {
@@ -1295,16 +1651,24 @@ func (s *Server) Handlers() http.Handler {
 	})
 	mux.HandleFunc("/api/fetch/config", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
-			Proxy string `json:"proxy"`
-			Hour  *int   `json:"hour"`
+			Proxy       string `json:"proxy"`
+			Hour        *int   `json:"hour"`
+			IterEnabled *bool  `json:"iterEnabled"`
+			IterHour    *int   `json:"iterHour"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		if s.FetchConf == nil {
-			s.FetchConf = &FetchConfig{Hour: 7}
+			s.FetchConf = &FetchConfig{Hour: 7, IterHour: 3}
 		}
 		s.FetchConf.Proxy = strings.TrimSpace(req.Proxy)
 		if req.Hour != nil && *req.Hour >= 0 && *req.Hour <= 23 {
 			s.FetchConf.Hour = *req.Hour
+		}
+		if req.IterEnabled != nil {
+			s.FetchConf.IterEnabled = *req.IterEnabled
+		}
+		if req.IterHour != nil && *req.IterHour >= 0 && *req.IterHour <= 23 {
+			s.FetchConf.IterHour = *req.IterHour
 		}
 		s.Gh = ghfetch.New(s.FetchConf.Proxy)
 		s.saveFetchConf()
@@ -1326,6 +1690,32 @@ func (s *Server) Handlers() http.Handler {
 			return
 		}
 		writeJSON(w, map[string]any{"ok": true, "note": "助教正在巡检笔记，报告稍后出现在这里"})
+	})
+	mux.HandleFunc("/api/backlog", func(w http.ResponseWriter, _ *http.Request) {
+		s.iterMu.Lock()
+		obs := s.Obs
+		iterating := s.iterating
+		s.iterMu.Unlock()
+		var iterConf map[string]any
+		if s.FetchConf != nil {
+			iterConf = map[string]any{"enabled": s.FetchConf.IterEnabled, "hour": s.iterHour(),
+				"lastRun": s.FetchConf.IterRun, "lastReport": s.FetchConf.IterReport}
+		}
+		writeJSON(w, map[string]any{"observations": obs, "iterating": iterating, "iter": iterConf})
+	})
+	mux.HandleFunc("/api/iterate/run", func(w http.ResponseWriter, _ *http.Request) {
+		if err := s.RunIterate(); err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true, "note": "助教开始自主迭代：实现→测试→构建→提交，报告稍后出现在这里"})
+	})
+	mux.HandleFunc("/api/reflect/run", func(w http.ResponseWriter, _ *http.Request) {
+		if err := s.RunReflect(); err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true, "note": "助教开始今日反思"})
 	})
 	mux.HandleFunc("/api/fetch/run", func(w http.ResponseWriter, _ *http.Request) {
 		if err := s.RunCurate(); err != nil {
