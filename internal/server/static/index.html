@@ -73,6 +73,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Micr
 .msg.u .bubble .mark{color:#fff}
 .bubble .mark{display:block;margin-top:10px;font-weight:600;color:var(--green)}
 .bubble .mark.partial{color:#c93400}
+.bubble .mark.propose{color:var(--pink);font-size:12.5px;font-weight:600}
 .msg.u .bubble .mark.partial{color:#ffd60a}
 .inputbar{position:absolute;bottom:0;left:0;right:0;z-index:3;padding:14px 28px 18px;background:rgba(245,245,247,.72);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border-top:1px solid rgba(0,0,0,.05)}
 #chatbox{max-width:736px;margin:0 auto;display:flex;gap:10px}
@@ -173,10 +174,28 @@ let STATE=null, CURRENT=null, LASTVERDICT=false;
 async function api(path,body){const r=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});const j=await r.json().catch(()=>({}));if(r.status>=400)throw new Error(j.error||j.Error||'请求失败');return j}
 
 function fmtContent(raw){
+  raw=raw||'';
+  // [PROPOSE] JSON 块折叠成一行提示（提案卡由方向视图单独渲染，消息流里不糊原始 JSON）
+  let hint='';
+  const i=raw.indexOf('[PROPOSE]');
+  if(i>=0){
+    let depth=0,end=-1,inStr=false;
+    for(let j=i+9;j<raw.length;j++){
+      const c=raw[j];
+      if(inStr){if(c==='\\')j++;else if(c==='"')inStr=false;continue}
+      if(c==='"')inStr=true;
+      else if(c==='{')depth++;
+      else if(c==='}'){depth--;if(depth===0){end=j+1;break}}
+    }
+    const before=raw.slice(0,i).replace(/\s+$/,'');
+    const after=end>=0?raw.slice(end).replace(/^\s+/,''):'';
+    raw=(before&&(before+'\n\n'))+after;
+    hint='<span class="mark propose">📋 课程提案已生成'+(curView==='dir'?'——见下方卡片':'')+'</span>';
+  }
   let html=esc(raw);
   html=html.replace(/\[PASS:partial\]/g,'<span class="mark partial">◐ 本节收尾（半懂也记录在案，继续往下走）</span>');
   html=html.replace(/\[PASS\]/g,'<span class="mark">✓ 本节收尾通过</span>');
-  return html;
+  return hint+(html?'<br>'+html:'');
 }
 let curView='learn';
 function updateChrome(v){
@@ -491,9 +510,11 @@ function renderDirView(){
   let h='<div class="mut" style="margin:4px 0 10px">和助教聊聊你想学什么、为什么、有多少时间——方向聊清楚了，课程就同步到「学习」。</div>';
   (DIRMSG||[]).forEach(m=>{h+='<div class="dir-msg '+(m.role==='assistant'?'a':'u')+'"><div class="bubble">'+fmtContent(m.content)+'</div></div>';});
   if(DIRPROPOSAL){
+    const n=(DIRPROPOSAL.lessons||[]).length;
     h+='<div class="proposal-card"><h4>📋 课程提案 · '+esc(DIRPROPOSAL.subject)+'</h4><ol>';
     (DIRPROPOSAL.lessons||[]).forEach(l=>{h+='<li><b>'+esc(l.title)+'</b> — '+esc(l.brief||'')+'</li>';});
-    h+='</ol><button class="backbtn" onclick="commitProposal()" style="background:var(--pink);color:#fff;border:none">✓ 同步到学习</button> <span class="mut" style="font-size:12px;margin-left:8px">想调整就继续在下面说</span></div>';
+    h+='</ol><div class="mut" style="font-size:12px;margin:0 0 12px">共 '+n+' 节 · 每节约 30 分钟 · 收尾一节解锁下一节</div>';
+    h+='<button class="backbtn" onclick="commitProposal()" style="background:var(--pink);color:#fff;border:none">✓ 同步到学习</button> <span class="mut" style="font-size:12px;margin-left:8px">想调整就继续在下面说</span></div>';
   }
   h+='<div class="dir-input"><textarea id="dirInput" placeholder="'+(DIRPROPOSAL?'想调整提案？直接说':'说说你想学什么，为什么想学…')+'"></textarea><button onclick="sendDirection()">发送</button></div>';
   v.innerHTML=h;
