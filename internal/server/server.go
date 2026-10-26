@@ -78,12 +78,14 @@ type Goal struct {
 
 // Completed 今日已完成项（内存+落盘）。
 type Completed struct {
-	Date    string   `json:"date"`
-	Main    []string `json:"main"`    // 已完成切片（DeliverableID|actionIndex 语义由前端组装标题）
-	Reviews []string `json:"reviews"` // 已完成复习卡 id
-	Extras  []string `json:"extras"`
-	Mood    string   `json:"mood,omitempty"`
-	Shape   string   `json:"shape,omitempty"`
+	Date       string   `json:"date"`
+	Main       []string `json:"main"`    // 已完成切片（DeliverableID|actionIndex 语义由前端组装标题）
+	Reviews    []string `json:"reviews"` // 已完成复习卡 id
+	Extras     []string `json:"extras"`
+	Mood       string   `json:"mood,omitempty"`       // 旧字段（兼容读）；新写入拆到下面两个
+	TimeBudget string   `json:"timeBudget,omitempty"` // 小穗三轮问题2：日初时间预算 10/30/90
+	EndMood    string   `json:"endMood,omitempty"`    // 小穗三轮问题2：日终自报 还想来/今天够了
+	Shape      string   `json:"shape,omitempty"`
 }
 
 // Opportunity 机会条目（P1 去处）：手工维护 opportunities.json——真实 issue/实习/接单入口。
@@ -313,6 +315,10 @@ func NewServer(dir string) *Server {
 	// 今日进货提示 → 助教开场带一次（AI 主导：收尾时主动推荐延伸材料）
 	if s.Tutor != nil && s.FetchConf != nil && s.FetchConf.LastRun == time.Now().Format("2006-01-02") {
 		s.Tutor.FetchNote = truncateNote(s.FetchConf.LastReport)
+	}
+	// 小穗三轮问题1：冷启动同步时间预算进助教（当日 mood 选择在 state.json 里）
+	if s.Tutor != nil && s.Done.TimeBudget != "" {
+		s.Tutor.TimeBudget = s.Done.TimeBudget
 	}
 	_ = s.load("opportunities.json", &s.Opportunities)
 	loaded := s.load("state.json", s)
@@ -1522,7 +1528,7 @@ func (s *Server) SettleMood(mood string, completed bool) {
 	if s.ExpBandit {
 		s.Bandit.Settle("local", shape, reward)
 	}
-	s.Done.Mood = mood
+	s.Done.EndMood = mood // 小穗三轮问题2：日终自报与日初时间预算分字段
 	s.saveState()
 }
 
@@ -1714,6 +1720,16 @@ func (s *Server) Handlers() http.Handler {
 			Completed bool   `json:"completed"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&req)
+		// 小穗三轮问题2：语义拆分——数字=日初时间预算（进 tutor prompt）；文字=日终自报（EndMood+bandit）
+		if req.Mood == "10" || req.Mood == "30" || req.Mood == "90" {
+			s.Done.TimeBudget = req.Mood
+			s.saveState()
+			if s.Tutor != nil {
+				s.Tutor.TimeBudget = req.Mood
+			}
+			writeJSON(w, map[string]any{"ok": true, "timeBudget": req.Mood})
+			return
+		}
 		s.SettleMood(req.Mood, req.Completed)
 		writeJSON(w, map[string]any{"ok": true})
 	})

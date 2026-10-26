@@ -65,6 +65,7 @@ type Tutor struct {
 	Tools       []Tool         // 助教可用工具（server 组装：GitHub 抓取/入库/阅读；nil=无工具）
 	FetchNote   string         // 今日进货提示（server 注入；开场带给助教一次——收尾时主动推荐延伸材料，用后清空防重复）
 	NotesDir    string         // 学习者笔记目录 notes/（每日巡检的检查对象，只读）
+	TimeBudget  string         // 小穗三轮问题1：今天的时间预算 10/30/90（server 从 state 同步）——决定讲解长度与检查题数量
 }
 
 // agents 读取用户自定义约束（AGENTS.md）。缺失/失败返回空（默认纪律兜底）。
@@ -278,6 +279,13 @@ func (t *Tutor) StartOrResume(lesson Lesson) (*Session, bool, error) {
 	s := &Session{NodeID: lesson.ID, Title: lesson.Title}
 	s.OpeningMeta = &OpeningMeta{Index: lesson.Order, Title: lesson.Title, Why: lesson.Brief}
 	sys := teachSystem
+	// 小穗三轮问题1：开场同样守时间预算——10 分钟档开场一句话+一道题
+	switch t.TimeBudget {
+	case "10":
+		sys += "\n\n【今天的时间预算】学习者今天只有 10 分钟——开场一句话讲完（最多 3 句），立刻给一道检查题。宁可少讲，不要展开。"
+	case "30":
+		sys += "\n\n【今天的时间预算】学习者今天有半小时——开场三段以内，检查题最多两道。"
+	}
 	user := fmt.Sprintf("知识点：《%s》——%s\n科目：%s\n现在开始教学：输出你的开场（讲解+检查题）。",
 		lesson.Title, lesson.Brief, lesson.Subject)
 	if t.FetchNote != "" {
@@ -316,7 +324,17 @@ func (t *Tutor) Send(lesson Lesson, userText string) (Verdict, error) {
 		return Verdict{}, fmt.Errorf("LLM 未配置")
 	}
 	s.Messages = append(s.Messages, llm.Message{Role: "user", Content: userText})
-	reply, conv, err := t.runAgent(t.withAgents(teachSystem), s.Messages, t.Tools)
+	// 小穗三轮问题1：时间预算进助教——量随人走，不随课程表
+	sys := teachSystem
+	switch t.TimeBudget {
+	case "10":
+		sys += "\n\n【今天的时间预算】学习者今天只有 10 分钟——一句话讲完（最多 3 句），然后立刻给一道检查题。宁可少讲，不要展开；检查题只出一道。"
+	case "30":
+		sys += "\n\n【今天的时间预算】学习者今天有半小时——讲解控制在三段以内，检查题最多两道。"
+	default:
+		// 90 或未填：正常展开
+	}
+	reply, conv, err := t.runAgent(t.withAgents(sys), s.Messages, t.Tools)
 	if err != nil {
 		return Verdict{}, err
 	}

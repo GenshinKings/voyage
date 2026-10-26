@@ -48,20 +48,20 @@ type ShadowMeta struct {
 
 // Dungeon 一个副本（持久化 dungeons.json）。
 type Dungeon struct {
-	ID        string        `json:"id"`
-	ReadingID string        `json:"readingId"`
-	Repo      string        `json:"repo"`
-	Project   string        `json:"project"` // 项目真名——通关（CLEAR）前前端显示「？？？」
-	Brief     string        `json:"brief"`   // 开门时的项目导读（导师上下文）
-	Status    string        `json:"status"`  // active|cleared|abandoned
-	Stages    []DStage      `json:"stages"`
-	Cur       int           `json:"cur"` // 当前关卡下标
-	Messages  []llm.Message `json:"messages"`
-	ShadowMeta              // 开门即冻结的影子画像（tier/stars/req）
-	Impact    string        `json:"impact,omitempty"` // 影响力叙事（揭晓 payload 专供，Sealed 期前端拿不到）
-	StartedAt time.Time     `json:"startedAt"`
-	ClearedAt time.Time     `json:"clearedAt,omitempty"`
-	UpdatedAt time.Time     `json:"updatedAt"`
+	ID         string        `json:"id"`
+	ReadingID  string        `json:"readingId"`
+	Repo       string        `json:"repo"`
+	Project    string        `json:"project"` // 项目真名——通关（CLEAR）前前端显示「？？？」
+	Brief      string        `json:"brief"`   // 开门时的项目导读（导师上下文）
+	Status     string        `json:"status"`  // active|cleared|abandoned
+	Stages     []DStage      `json:"stages"`
+	Cur        int           `json:"cur"` // 当前关卡下标
+	Messages   []llm.Message `json:"messages"`
+	ShadowMeta               // 开门即冻结的影子画像（tier/stars/req）
+	Impact     string        `json:"impact,omitempty"` // 影响力叙事（揭晓 payload 专供，Sealed 期前端拿不到）
+	StartedAt  time.Time     `json:"startedAt"`
+	ClearedAt  time.Time     `json:"clearedAt,omitempty"`
+	UpdatedAt  time.Time     `json:"updatedAt"`
 }
 
 // Sealed 副本还在进行中（项目名对用户保密）。
