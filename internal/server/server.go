@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"slices"
@@ -85,17 +86,32 @@ type Completed struct {
 	Shape   string   `json:"shape,omitempty"`
 }
 
-// Reading 孵化池条目：进货抓来的候选项目——助教导读（Brief）后可开门进副本。前端已无独立阅读视图。
+// Trophy 纪念卡：通关揭晓时生成的战利品（收藏墙 + 沉淀连锚的数据源）。
+type Trophy struct {
+	Name      string    `json:"name"`
+	Repo      string    `json:"repo"`
+	Impact    string    `json:"impact"`
+	Nodes     []string  `json:"nodes"` // 参与知识点（连锚边来源）
+	Stages    int       `json:"stages"`
+	Date      string    `json:"date"`  // 2026-10-27
+	Short     string    `json:"short"` // 10·27
+	At        time.Time `json:"at"`
+	DungeonID string    `json:"dungeonId"`
+}
+
+// Reading 孵化池条目：进货抓来的候选项目——助教孵化（Shadow）后可开门进副本。
 type Reading struct {
-	ID          string `json:"id"`
-	Title       string `json:"title"`
-	URL         string `json:"url"`
-	Content     string `json:"content"`               // 正文（中文整理/翻译，Markdown）
-	Original    string `json:"original,omitempty"`    // 英文原文（如有）
-	Translation string `json:"translation,omitempty"` // Original 的中文翻译（按需生成缓存）
-	Brief       string `json:"brief,omitempty"`       // 助教导读（深入项目源码后的结构化消化，用户 2026-10-26 指令）
-	Done        bool   `json:"done"`
-	ReadAt      string `json:"readAt,omitempty"`
+	ID          string            `json:"id"`
+	Title       string            `json:"title"`
+	URL         string            `json:"url"`
+	Content     string            `json:"content"`               // 正文（中文整理/翻译，Markdown）
+	Original    string            `json:"original,omitempty"`    // 英文原文（如有）
+	Translation string            `json:"translation,omitempty"` // Original 的中文翻译（按需生成缓存）
+	Brief       string            `json:"brief,omitempty"`       // 助教导读（深入项目源码后的结构化消化）
+	Shadow      *tutor.ShadowMeta `json:"shadow,omitempty"`      // 影子元数据（孵化器产出；nil=未孵化）
+	Impact      string            `json:"impact,omitempty"`      // 影响力叙事（揭晓 payload 专供，候选期不下发）
+	Done        bool              `json:"done"`
+	ReadAt      string            `json:"readAt,omitempty"`
 }
 
 // Server 应用壳。
@@ -121,6 +137,11 @@ type Server struct {
 	WrongHits map[string]*WrongHit `json:"wrongHits"`
 	// 副本学习（用户 2026-10-26 设计）：用已收尾知识复现真实项目，通关揭晓恍然大悟
 	Duns []*tutor.Dungeon `json:"dungeons"`
+	// 纪念卡（副本 v2 悬念化）：通关揭晓时生成，收藏墙 + 沉淀连锚的数据源
+	Trophies []*Trophy `json:"trophies"`
+	// 孵化器存量补齐的去重状态（进程内）
+	hatchOnce sync.Once
+	hatchDay  atomic.Value // string 日期
 	// 模型配置口：多 Profile 热切换（key 只落本地 llm.json，0600，不入仓库）
 	LLMStore    *llm.Store       `json:"-"`
 	AgentsPath  string           `json:"-"` // AGENTS.md 约束文件（每次 LLM 调用热读）
@@ -238,6 +259,7 @@ func NewServer(dir string) *Server {
 	// 助教改进观察 backlog + 仓库根（自迭代工作区）
 	_ = s.load("backlog.json", &s.Obs)
 	_ = s.load("dungeons.json", &s.Duns)
+	_ = s.load("trophies.json", &s.Trophies)
 	if abs, err := filepath.Abs(dir); err == nil {
 		s.RepoDir = filepath.Dir(abs)
 	}
@@ -752,6 +774,65 @@ func (s *Server) saveBacklog() {
 
 func (s *Server) saveDuns() {
 	s.save("dungeons.json", s.Duns)
+}
+
+func (s *Server) saveTrophies() {
+	s.save("trophies.json", s.Trophies)
+}
+
+// hatchMark 把孵化结果写进孵化池条目（miss/tier 由后端对照已收尾清单判定）。
+func hatchMark(s *Server, rd *Reading, m tutor.ShadowMeta, impact string) {
+	learned := map[string]bool{}
+	for _, p := range s.Ledger.List() {
+		if p.Depth >= 1 { // 收尾及以上才算已掌握
+			learned[p.Title] = true
+		}
+	}
+	for i := range m.Req {
+		m.Req[i].Miss = !learned[m.Req[i].N]
+	}
+	m.Tier = tutor.TierOf(m.Req)
+	rd.Shadow = &m
+	rd.Impact = impact
+}
+
+// hatchBacklog 孵化存量：已导读但缺影子元数据的条目（惰性补齐，一次一条防烧钱）。
+func (s *Server) hatchBacklog() {
+	if s.Tutor == nil || s.Tutor.Client == nil {
+		return
+	}
+	for i := range s.Readings {
+		rd := &s.Readings[i]
+		if rd.Brief == "" || rd.Shadow != nil || githubRepoFromURL(rd.URL) == "" {
+			continue
+		}
+		if m, impact, err := s.Tutor.Hatch(hatchCtx(s), rd.Brief); err == nil {
+			hatchMark(s, rd, m, impact)
+			s.save("readings.json", s.Readings)
+			s.saveState()
+		}
+		return // 每次调用只补一条——大厅多次刷新自然补完
+	}
+}
+
+// mintTrophy 通关揭晓时铸造纪念卡（一锤揭晓的揭晓 payload 数据源）。
+func (s *Server) mintTrophy(d *tutor.Dungeon) *Trophy {
+	nodes := []string{}
+	for _, r := range d.Req {
+		nodes = append(nodes, r.N)
+	}
+	now := time.Now()
+	tr := &Trophy{
+		Name: d.Project, Repo: d.Repo, Impact: d.Impact, Nodes: nodes,
+		Stages: len(d.Stages),
+		Date:   now.Format("2006-01-02"), Short: now.Format("01·02"),
+		At: now, DungeonID: d.ID,
+	}
+	if tr.Impact == "" { // 旧数据兜底：孵化叙事缺失时给朴素回顾
+		tr.Impact = "一个真实开源项目的核心复现——它只用了你已经学会的东西。"
+	}
+	s.Trophies = append([]*Trophy{tr}, s.Trophies...) // 新卡置顶
+	return tr
 }
 
 // activeDungeon 当前进行中的副本（同时只跑一个——专注）。
@@ -1308,9 +1389,23 @@ func (s *Server) Handlers() http.Handler {
 				}
 			}
 		}
+		// 孵化池影子化下发（ADR 0001）：title/repo/impact 不出服务端——前端只见影子画像
+		shadowOut := []map[string]any{}
+		for _, rd := range s.Readings {
+			so := map[string]any{"id": rd.ID, "done": rd.Done, "brief": rd.Brief != ""}
+			if githubRepoFromURL(rd.URL) != "" {
+				so["project"] = true
+			}
+			if rd.Shadow != nil {
+				so["tier"] = rd.Shadow.Tier
+				so["stars"] = rd.Shadow.Stars
+				so["req"] = rd.Shadow.Req
+			}
+			shadowOut = append(shadowOut, so)
+		}
 		writeJSON(w, map[string]any{
 			"plan": s.Plan, "done": s.Done, "goals": s.Goals,
-			"exercises": s.Exercises, "readings": s.Readings, "contextEdges": s.ContextEdges,
+			"exercises": s.Exercises, "readings": shadowOut, "trophies": s.Trophies, "contextEdges": s.ContextEdges,
 			"wrongHits": s.WrongHits,
 			"ledger":    s.Ledger.List(), "counts": map[string]int{"known": k, "used": u, "done": d},
 			"graduation": map[string]any{"state": string(g), "reason": gReason},
@@ -1665,8 +1760,8 @@ func (s *Server) Handlers() http.Handler {
 				http.Error(w, "该条目不是 GitHub 项目", 400)
 				return
 			}
-			if rd.Brief == "" {
-				http.Error(w, "先让助教生成项目导读，再开副本", 400)
+			if rd.Brief == "" || rd.Shadow == nil {
+				http.Error(w, "先孵化这个影子（助教导读+定档），再开门", 400)
 				return
 			}
 			d, missing, err := s.Tutor.DungeonStart(briefContext(s, rd), repo, rd.Brief)
@@ -1680,6 +1775,10 @@ func (s *Server) Handlers() http.Handler {
 			}
 			d.ID = fmt.Sprintf("dn-%s-%d", time.Now().Format("0102"), len(s.Duns)+1)
 			d.ReadingID = rd.ID
+			d.Impact = rd.Impact
+			if rd.Shadow != nil { // 影子画像开门即冻结（tier/stars/req 不再随学习漂移）
+				d.ShadowMeta = *rd.Shadow
+			}
 			s.Duns = append(s.Duns, d)
 			s.saveDuns()
 			writeJSON(w, map[string]any{"dungeon": d})
@@ -1703,31 +1802,48 @@ func (s *Server) Handlers() http.Handler {
 			http.Error(w, err.Error(), 500)
 			return
 		}
+		var reveal map[string]any
+		if strings.Contains(reply, "[CLEAR]") { // 一锤揭晓：生成纪念卡 + 揭晓 payload（ADR 0001：此刻才下发项目身份）
+			tr := s.mintTrophy(d)
+			reveal = map[string]any{
+				"name": tr.Name, "repo": tr.Repo, "impact": tr.Impact,
+				"nodes": tr.Nodes, "date": tr.Date, "short": tr.Short,
+			}
+			s.saveTrophies()
+		}
 		s.saveDuns()
-		writeJSON(w, map[string]any{"reply": reply, "dungeon": d})
+		writeJSON(w, map[string]any{"reply": reply, "dungeon": d, "reveal": reveal})
 	})
 	mux.HandleFunc("/api/dungeon/list", func(w http.ResponseWriter, _ *http.Request) {
 		// 列表脱敏：active 副本不回传 project 名（Sealed 机制）
+		// ADR 0001：Sealed 副本只下发影子画像（repo/project/impact 全部不出现）
+		s.hatchOnce.Do(func() { // 存量补齐：当日一次、后台跑（LLM 慢不阻塞列表）
+			if time.Now().Format("2006-01-02") != s.hatchDay.Load() {
+				s.hatchDay.Store(time.Now().Format("2006-01-02"))
+				go s.hatchBacklog()
+			}
+		})
 		type dunView struct {
-			ID       string         `json:"id"`
-			Repo     string         `json:"repo"`
-			Title    string         `json:"title"`
-			Status   string         `json:"status"`
-			Stages   []tutor.DStage `json:"stages"`
-			Cur      int            `json:"cur"`
-			Messages []llm.Message  `json:"messages,omitempty"`
+			ID        string          `json:"id"`
+			ReadingID string          `json:"readingId"`
+			Title     string          `json:"title"`
+			Status    string          `json:"status"`
+			Stages    []tutor.DStage  `json:"stages"`
+			Cur       int             `json:"cur"`
+			Messages  []llm.Message   `json:"messages,omitempty"`
+			Tier      int             `json:"tier"`
+			Stars     int             `json:"stars"`
+			Req       []tutor.ReqNode `json:"req"`
 		}
 		out := []dunView{}
 		for _, d := range s.Duns {
-			title := d.Project
+			v := dunView{ID: d.ID, ReadingID: d.ReadingID, Title: d.Project, Status: d.Status, Stages: d.Stages, Cur: d.Cur,
+				Messages: d.Messages, Tier: d.Tier, Stars: d.Stars, Req: d.Req}
 			if d.Sealed() {
-				title = "？？？"
+				v.Title = "？？？"
+				v.Req = d.Req // 影子画像保持可见（需求知识点+难度是候选期的承诺）
 			}
-			msgs := d.Messages
-			if d.Sealed() && len(msgs) > 0 {
-				msgs = msgs // 对话内容保留（导师本来就不透露）
-			}
-			out = append(out, dunView{ID: d.ID, Repo: d.Repo, Title: title, Status: d.Status, Stages: d.Stages, Cur: d.Cur, Messages: msgs})
+			out = append(out, v)
 		}
 		writeJSON(w, map[string]any{"dungeons": out})
 	})
@@ -1792,9 +1908,13 @@ func (s *Server) Handlers() http.Handler {
 				return
 			}
 			rd.Brief = brief
+			// 孵化影子（导读完成后顺带定档——用户点一次得到完整影子）
+			if m, impact, herr := s.Tutor.Hatch(hatchCtx(s), brief); herr == nil {
+				hatchMark(s, rd, m, impact)
+			}
 			s.save("readings.json", s.Readings) // 教务覆盖式更新时 Brief 以 readings.json 为准
 			s.saveState()
-			writeJSON(w, map[string]any{"brief": brief})
+			writeJSON(w, map[string]any{"brief": brief, "shadow": rd.Shadow})
 			return
 		}
 		http.Error(w, "阅读条目不存在", 404)
@@ -2184,6 +2304,21 @@ func githubRepoFromURL(raw string) string {
 }
 
 // briefContext 导读生成的学习者上下文（贴合个人：在学科目+已收尾）。
+// hatchCtx 孵化器专用上下文：只有已收尾知识点清单（req 词汇表的唯一来源，防 LLM 把条目标题当知识点）。
+// 数据源=ledger（履历单一真相源），与 hatchMark 的 miss 判定同源——两处口径必须一致。
+func hatchCtx(s *Server) string {
+	var done []string
+	for _, p := range s.Ledger.List() {
+		if p.Depth >= 1 {
+			done = append(done, p.Title)
+		}
+	}
+	if len(done) == 0 {
+		return "（暂无已收尾知识点——req 将全部标记为缺失，属正常状态）"
+	}
+	return "已收尾知识点（req 词汇表的唯一来源，逐字取用）：" + strings.Join(done, "、")
+}
+
 func briefContext(s *Server, rd *Reading) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "- 阅读条目：%s（%s）\n", rd.Title, rd.URL)

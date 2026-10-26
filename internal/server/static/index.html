@@ -7,7 +7,7 @@
 <style>
 :root{
   --ink:#101b29;--paper:#f7f7f5;--side:rgba(255,255,255,.72);--line:#e3e6ea;--mut:#8a92a0;
-  --pink:#FB7299;--usr:#101b29;--green:#34c759;--card:#fff;--chip:rgba(16,27,41,.045);
+  --pink:#FB7299;--gold:#D9A441;--usr:#101b29;--green:#34c759;--card:#fff;--chip:rgba(16,27,41,.045);
   --num-font:"Bahnschrift","Segoe UI",sans-serif;
   --shadow-contact:0 1px 2px rgba(16,27,41,.06),0 0 0 1px rgba(16,27,41,.03);
   --r-lg:12px;--r-md:9px;--r-sm:7px;
@@ -258,6 +258,119 @@ a:hover{text-decoration:underline}
 .btn.primary:hover{opacity:.9;background:var(--pink)}
 .btn.ghost{border-color:var(--line);color:var(--mut)}
 .btn.ghost:hover{border-color:var(--ink);color:var(--ink);background:transparent}
+
+/* ===== 影子副本（v2 悬念化，demo/shadow-dungeon 移植） ===== */
+/* 影子候选卡 */
+.shadow-card{display:flex;align-items:center;gap:20px;position:relative;overflow:hidden;background:linear-gradient(135deg,#2E2B33,#43323E);border-radius:var(--r-lg);padding:18px 22px;margin-bottom:12px;color:#EFE9E4;transition:transform 280ms cubic-bezier(.22,.9,.32,1),box-shadow 280ms}
+.shadow-card::before{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle at 84% 24%,rgba(251,114,153,.2),transparent 55%)}
+.shadow-card:hover{transform:translateY(-3px) rotate(-.35deg);box-shadow:0 14px 30px rgba(16,27,41,.26)}
+.sh-body{flex:1;min-width:0;position:relative;z-index:1}
+.sh-title{font-size:15px;font-weight:700;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.tier{font-size:10px;letter-spacing:1.5px;padding:3px 10px;border-radius:8px;font-weight:700}
+.tier.t0{background:rgba(107,190,131,.16);color:#4C9E64}
+.tier.t1{background:rgba(217,164,65,.2);color:#B07F22}
+.tier.t2{background:rgba(251,114,153,.24);color:var(--pink)}
+.stars{color:var(--gold);font-size:12px;letter-spacing:2.5px}
+.stars .off{color:rgba(217,164,65,.28)}
+.req{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
+.req .chip{background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.15);color:#EFE9E4;border-radius:9px}
+.req .chip.miss{background:rgba(217,164,65,.13);border-color:rgba(217,164,65,.42);color:#E8C477}
+.sh-sub{font-size:11.5px;color:rgba(239,233,228,.55);margin-top:9px}
+.sh-actions{flex:none;position:relative;z-index:1;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+.sh-go{border:1px solid var(--pink);background:var(--pink);color:#fff;border-radius:9px;padding:9px 26px;font-size:13px;cursor:pointer;font-weight:700;transition:opacity 120ms,transform 100ms}
+.sh-go:hover{opacity:.88}
+.sh-go:active{transform:scale(.96)}
+.sh-go:disabled{opacity:.4;cursor:default}
+.sh-hint{font-size:10.5px;color:rgba(239,233,228,.45)}
+/* 进行中卡 */
+.active-card{background:var(--card);border:1.5px solid var(--pink);border-radius:var(--r-lg);padding:18px 22px;margin-bottom:12px;box-shadow:0 4px 18px rgba(251,114,153,.1)}
+.ac-top{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.ac-tag{font-size:10px;letter-spacing:2px;padding:3px 11px;border-radius:8px;background:rgba(251,114,153,.12);color:var(--pink);font-weight:700}
+.ac-title{font-size:15px;font-weight:700;letter-spacing:1px}
+.pip-track{display:flex;gap:9px;margin-bottom:14px}
+.pip{flex:1;height:6px;border-radius:4px;background:var(--chip);position:relative;overflow:hidden}
+.pip::after{content:"";position:absolute;inset:0;background:var(--pink);border-radius:4px;transform:scaleX(0);transform-origin:left;transition:transform 600ms cubic-bezier(.22,.9,.32,1)}
+.pip.done::after{transform:scaleX(1)}
+.pip.cur::after{animation:pipPulse 1.3s ease-in-out infinite alternate}
+@keyframes pipPulse{from{transform:scaleX(.15)}to{transform:scaleX(.72)}}
+.ac-actions{display:flex;gap:10px}
+/* 剪影与收藏墙 */
+.silo-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
+.silo-slot{border:1.5px dashed var(--line);border-radius:var(--r-lg);min-height:132px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;color:var(--mut);transition:border-color 120ms}
+.silo-slot:hover{border-color:var(--mut)}
+.silo{width:46px;height:46px;border-radius:12px;background:repeating-linear-gradient(45deg,var(--paper),var(--paper) 4px,transparent 4px,transparent 8px)}
+.silo-slot .q{font-size:16px;font-weight:800;color:var(--line)}
+.silo-slot small{font-size:11px}
+.wall-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px}
+.tcard{background:linear-gradient(155deg,#FFFDFB,#F7EFE9);border:1.5px solid var(--pink);border-radius:var(--r-lg);padding:18px;position:relative;overflow:hidden;cursor:pointer;transition:transform 280ms cubic-bezier(.22,.9,.32,1),box-shadow 280ms;animation:cardIn .55s cubic-bezier(.22,.9,.32,1) both}
+@keyframes cardIn{from{opacity:0;transform:translateY(16px) scale(.94)}to{opacity:1;transform:none}}
+.tcard:hover{transform:translateY(-4px);box-shadow:0 14px 28px rgba(16,27,41,.14)}
+.tcard::after{content:"";position:absolute;top:0;bottom:0;width:55%;left:-70%;background:linear-gradient(105deg,transparent,rgba(255,255,255,.7),transparent);transform:skewX(-18deg)}
+.tcard:hover::after{animation:cardShimmer 1s cubic-bezier(.22,.9,.32,1)}
+@keyframes cardShimmer{to{left:135%}}
+.t-badge{font-size:9.5px;letter-spacing:2px;color:var(--pink);font-weight:700}
+.t-name{font-size:16px;font-weight:800;margin:5px 0 4px}
+.t-impact{font-size:11.5px;color:var(--ink);opacity:.75;line-height:1.7;max-width:78%}
+.t-meta{display:flex;gap:7px;margin-top:12px;flex-wrap:wrap}
+.t-meta span{font-size:10.5px;padding:3px 10px;border-radius:8px;background:rgba(251,114,153,.12);color:var(--pink);font-weight:600}
+.t-date{position:absolute;top:15px;right:15px;width:60px;height:60px;border:1.5px solid var(--pink);border-radius:50%;display:flex;align-items:center;justify-content:center;text-align:center;font-size:8.5px;color:var(--pink);font-weight:700;line-height:1.4;transform:rotate(-9deg);letter-spacing:.5px}
+/* 卡详情 */
+.tdetail{position:fixed;inset:0;background:rgba(24,21,26,.62);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:90;animation:tdFade 280ms both}
+@keyframes tdFade{from{opacity:0}to{opacity:1}}
+.td-card{width:400px;max-width:92vw;background:linear-gradient(155deg,#FFFDFB,#F7EFE9);border:1.5px solid var(--pink);border-radius:16px;padding:26px 28px;position:relative;animation:tdIn 450ms cubic-bezier(.2,.8,.3,1.12) both}
+@keyframes tdIn{from{opacity:0;transform:perspective(1000px) rotateY(55deg) scale(.9)}to{opacity:1;transform:perspective(1000px) rotateY(0) scale(1)}}
+.td-close{position:absolute;top:14px;right:14px;width:28px;height:28px;border-radius:50%;border:1px solid var(--line);background:#fff;color:var(--mut);cursor:pointer;font-size:13px;line-height:1}
+.td-close:hover{color:var(--ink);border-color:var(--ink)}
+.td-name{font-size:22px;font-weight:800;margin:6px 0 2px}
+.td-repo{font-size:12px;color:var(--mut);margin-bottom:10px}
+.td-impact{font-size:13px;color:var(--ink);opacity:.8;line-height:1.8}
+.td-node{font-size:11.5px;padding:3px 11px;border-radius:8px;background:rgba(251,114,153,.12);color:var(--pink);font-weight:600;display:inline-block;margin:0 6px 6px 0;cursor:pointer}
+.td-node:hover{background:var(--pink);color:#fff}
+.td-cleared{font-size:11px;color:var(--mut)}
+/* 开门雾散 */
+.fog{position:fixed;inset:0;z-index:88;pointer-events:none;background:radial-gradient(ellipse at 30% 40%,rgba(67,50,62,.97),transparent 60%),radial-gradient(ellipse at 72% 60%,rgba(46,43,51,.97),transparent 62%),rgba(30,27,33,.98);opacity:0}
+.fog.play{animation:fogPlay .95s cubic-bezier(.22,.9,.32,1) both}
+@keyframes fogPlay{0%{opacity:0}32%{opacity:1}66%{opacity:1}100%{opacity:0}}
+.fog .fog-q{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:20px;letter-spacing:8px;color:rgba(239,233,228,.85);font-weight:700;opacity:0;animation:fogQ .95s both}
+@keyframes fogQ{20%{opacity:1}58%{opacity:1;letter-spacing:11px}100%{opacity:0;letter-spacing:15px}}
+/* 一锤揭晓（时序：暗场.35 → 碎片.7 → flip.7 → shimmer → 文案 → 按钮） */
+.reveal{position:fixed;inset:0;z-index:95;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 42%,rgba(56,44,52,.985),rgba(22,19,24,.99));opacity:0;pointer-events:none;transition:opacity 350ms cubic-bezier(.22,.9,.32,1)}
+.reveal.show{opacity:1;pointer-events:auto}
+.rv-qs{font-size:46px;font-weight:800;letter-spacing:12px;color:#EFE9E4;height:80px;user-select:none}
+.rv-qs span{display:inline-block}
+.reveal.revealing .rv-qs span{animation:shatter .72s cubic-bezier(.22,.9,.32,1) forwards}
+.rv-qs span:nth-child(1){--dx:-150px;--dy:-96px;--dr:-48deg;animation-delay:.05s}
+.rv-qs span:nth-child(2){--dx:130px;--dy:-118px;--dr:40deg;animation-delay:.13s}
+.rv-qs span:nth-child(3){--dx:-95px;--dy:110px;--dr:52deg;animation-delay:.21s}
+.rv-qs span:nth-child(4){--dx:155px;--dy:80px;--dr:-36deg;animation-delay:.29s}
+.rv-qs span:nth-child(5){--dx:8px;--dy:-150px;--dr:26deg;animation-delay:.37s}
+@keyframes shatter{to{transform:translate(var(--dx),var(--dy)) rotate(var(--dr)) scale(1.5);opacity:0;filter:blur(4px)}}
+.rv-card{width:360px;max-width:90vw;position:relative;overflow:hidden;background:linear-gradient(155deg,#FFFDFB,#F7EFE9);border:1.5px solid var(--pink);border-radius:16px;padding:24px 26px;opacity:0;transform:perspective(1000px) rotateY(92deg)}
+.reveal.revealing .rv-card{animation:cardFlip .72s .5s cubic-bezier(.2,.8,.3,1.12) forwards}
+@keyframes cardFlip{to{opacity:1;transform:perspective(1000px) rotateY(0)}}
+.rv-card::after{content:"";position:absolute;top:0;bottom:0;width:55%;left:-70%;background:linear-gradient(105deg,transparent,rgba(255,255,255,.78),transparent);transform:skewX(-18deg)}
+.reveal.revealing .rv-card::after{animation:cardShimmer 1.05s 1.15s cubic-bezier(.22,.9,.32,1) forwards}
+.rv-text{text-align:center;color:#EFE9E4;margin-top:18px;min-height:58px}
+.rv-text b{font-size:17px;display:block}
+.rv-text small{display:block;font-size:11.5px;color:rgba(239,233,228,.62);margin-top:4px}
+.reveal.revealing .rv-text{animation:bubIn .5s 1.35s both}
+@keyframes bubIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.rv-go{margin-top:16px;border:1px solid var(--pink);background:transparent;color:#F894B4;border-radius:9px;padding:9px 26px;font-size:13px;cursor:pointer;font-weight:600;opacity:0}
+.rv-go:hover{background:rgba(251,114,153,.12)}
+.reveal.revealing .rv-go{animation:bubIn .4s 1.9s both}
+.rv-mote{position:absolute;width:4px;height:4px;border-radius:50%;background:var(--pink);opacity:0;pointer-events:none}
+.reveal.revealing .rv-mote{animation:mote 1.6s cubic-bezier(.22,.9,.32,1) both}
+@keyframes mote{0%{opacity:0;transform:translateY(0) scale(1)}25%{opacity:.85}100%{opacity:0;transform:translateY(-130px) scale(.4)}}
+/* 沉淀连锚 */
+.anchor-svg{width:100%;max-width:720px;height:auto;display:block}
+.an-ctx{stroke:#C9C2B9;stroke-width:1.4;opacity:.65;fill:none}
+.an-earned{stroke:var(--pink);stroke-width:1.7;stroke-dasharray:6 4;opacity:.8;fill:none;animation:dashFlow 1.7s linear infinite}
+@keyframes dashFlow{to{stroke-dashoffset:-20}}
+.an-node{fill:#fff;stroke:var(--line);stroke-width:1.5}
+.an-tro{fill:#FFF6F2;stroke:var(--pink);stroke-width:2}
+.an-label{font-size:11.5px;fill:var(--ink)}
+.an-sub{font-size:10px;fill:var(--mut)}
+.an-note{font-size:10.5px;fill:var(--mut);letter-spacing:1px}
 </style>
 </head>
 <body>
@@ -662,7 +775,7 @@ function renderSidebar(){
   // 副本进行中（AI 主导可见：入口永远在侧栏顶）
   const act=(STATE.dungeons||[]).find(x=>x.status==='active');
   if(act){
-    list.innerHTML='<div class="lp" onclick="openDungeon(\''+act.id+'\')"><span class="st" style="color:var(--pink)">⚔</span><span>副本 · ？？？（'+((act.stages||[]).filter(sg=>sg.done).length)+'/'+((act.stages||[]).length)+' 关）<div class="lp-sub">'+esc(act.repo)+'</div></span></div>';
+    list.innerHTML='<div class="lp" onclick="openDungeon(\''+act.id+'\')"><span class="st" style="color:var(--pink)">⚔</span><span>副本 · ？？？（'+((act.stages||[]).filter(sg=>sg.done).length)+'/'+((act.stages||[]).length)+' 关）</span></div>';
   }
   if(!STATE.curriculum||!(STATE.curriculum.lessons||[]).length){
     list.innerHTML='<div class="empty" style="margin-top:24px;padding:0 10px">输入想学的科目，<br>AI 会拆成课程，今天开始教</div>';return;
@@ -961,6 +1074,11 @@ function renderSediment(){
     });
   });
   if(!(st.ledger||[]).length)html+='<div class="mut">履历还是空的。完成第一节的检查题，这里就长出第一条。</div>';
+  /* 连锚：纪念卡与铸成它的知识点（副本 v2） */
+  if((st.trophies||[]).length){
+    html+='<div class="grouplabel" style="margin:26px 0 10px">连锚 —— 这些知识点共同铸成了你的作品</div>';
+    st.trophies.forEach(tr=>{html+=anchorSVG(tr)});
+  }
   html+='<div style="margin-top:24px"><a href="/evidence.html" target="_blank">对外证据页 →</a></div>';
   s.innerHTML=html;
 }
@@ -1133,16 +1251,6 @@ $('input').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.pre
 document.querySelectorAll('.sbtn').forEach(t=>t.onclick=()=>switchTab(t.dataset.v));
 /* ---------- 副本学习（用已学知识复现真实项目，通关揭晓恍然大悟） ---------- */
 let DN=null; // 当前打开的副本 id
-async function startDungeon(readingId){
-  const btn=event.target;btn.disabled=true;btn.textContent='⚔ 副本设计中…（校验重合度+生成关卡）';
-  try{
-    const r=await api('/api/dungeon/start',{readingId});
-    DN=r.dungeon.id;
-    if(!STATE.dungeons)STATE.dungeons=[];
-    STATE.dungeons.push(r.dungeon);
-    openDungeon(DN);
-  }catch(e){btn.disabled=false;btn.textContent='⚔ 开启副本：用你学过的知识复现这个项目';toast(e.message)}
-}
 function openDungeon(id){
   const d=(STATE.dungeons||[]).find(x=>x.id===id);if(!d)return;
   leaveHistory();
@@ -1153,13 +1261,11 @@ function openDungeon(id){
   switchTab('learn');
 }
 function renderDungeon(d){
-  // 关卡进度条
-  let st='<div class="dn-stages">';
-  (d.stages||[]).forEach((sg,i)=>{
-    const cls=i<d.cur?'done':(i===d.cur&&d.status==='active'?'cur':'');
-    st+='<div class="dn-stage '+cls+'"><span class="dn-no">'+(i+1)+'</span><span>'+esc(sg.title)+'</span>'+(sg.done?'<span class="dn-done">✓</span>':'')+'</div>';
-  });
-  st+='</div>';
+  // 影子头部：？？？？？（通关揭晓）+ pip 进度轨
+  let st='<div style="margin-bottom:16px"><div style="font-size:30px;font-weight:800;letter-spacing:8px">'+(d.status==='active'?'？？？？？':esc(d.title||''))+'</div>'
+    +'<div style="font-size:11.5px;color:var(--mut);margin-top:2px">'+(d.status==='active'?'影子已开门 · 是什么，打完才知道':'已揭晓')+'</div>'
+    +'<div class="pip-track" style="max-width:560px">'
+    +(d.stages||[]).map((sg,i)=>'<div class="pip '+(i<d.cur?'done':(i===d.cur&&d.status==='active'?'cur':''))+'"></div>').join('')+'</div></div>';
   let h=st;
   // 已通关横幅
   if(d.status==='cleared'){
@@ -1199,6 +1305,9 @@ async function sendDungeon(){
     Object.assign(d,nd);
     if(!nd.messages||!nd.messages.length)d.messages=old;
     renderDungeon(d);
+    if(r.reveal){ // 一锤揭晓：纪念卡生成，仪式开始
+      setTimeout(()=>showReveal(r.reveal,async()=>{DN=null;await loadState();switchTab('dungeon');}),900);
+    }
   }catch(e){d.messages.splice(d.messages.length-2,2);renderDungeon(d);toast('失败：'+e.message)}
 }
 async function abandonDungeon(id){
@@ -1210,67 +1319,182 @@ async function abandonDungeon(id){
   }catch(e){toast('失败：'+e.message)}
 }
 // AI 导读：助教深入项目源码后产出结构化消化（是什么/核心概念/怎么用/复现路径）
-/* ---------- 副本大厅（一级视图：进行中 / 可开启 / 已通关） ---------- */
-async function genBriefHere(id,btn){
-  btn.disabled=true;btn.textContent='助教研读中…';
+/* ---------- 影子副本 v2（demo/shadow-dungeon 移植） ---------- */
+/* 影子候选卡 / 进行中卡 / 收藏墙 / 雾散开门 / 一锤揭晓 / 沉淀连锚 */
+
+function starsHTML(n){let h='';for(let i=1;i<=3;i++)h+=i<=n?'★':'<span class="off">★</span>';return '<span class="stars">'+h+'</span>'}
+function tierHTML(t){const names=['巩固','拉伸','跃迁'];return '<span class="tier t'+t+'">'+(names[t]||'巩固')+'</span>'}
+function reqHTML(req){return '<div class="req">'+(req||[]).map(r=>'<span class="chip'+(r.miss?' miss':'')+'">'+esc(r.n)+(r.miss?' · 未掌握':'')+'</span>').join('')+'</div>'}
+
+/* 大厅：进行中 / 影子候选 / 收藏墙（数据源全部影子化，无项目名——ADR 0001） */
+
+/* 孵化影子（未导读项目 → 助教导读+定档，一次点完） */
+async function hatchShadow(id,btn){
+  btn.disabled=true;btn.textContent='助教深入项目中…（1-2 分钟）';
   try{
     const r=await api('/api/reading/brief',{id});
-    const sr=(STATE.readings||[]).find(x=>x.id===id);if(sr)sr.brief=r.brief;
-    toast('导读完成——确认感兴趣就开门');
+    toast('影子已孵化——看看它需要什么');
+    await loadState();
     renderDunHall();
-  }catch(e){btn.disabled=false;btn.textContent='生成导读';toast('失败：'+e.message)}
+  }catch(e){btn.disabled=false;btn.textContent='孵化影子';toast('失败：'+e.message)}
 }
+
+/* 开门雾散 → 进入副本 */
+async function startDungeon(readingId,btn){
+  btn=btn||event.target;
+  btn.disabled=true;btn.textContent='开门中…';
+  let fog=document.getElementById('shadowFog');
+  if(!fog){fog=document.createElement('div');fog.className='fog';fog.id='shadowFog';fog.innerHTML='<div class="fog-q">？？？？？</div>';document.body.appendChild(fog);}
+  fog.classList.remove('play');void fog.offsetWidth;fog.classList.add('play');
+  setTimeout(async()=>{
+    try{
+      const r=await api('/api/dungeon/start',{readingId});
+      if(!STATE.dungeons)STATE.dungeons=[];
+      STATE.dungeons.push(r.dungeon);
+      DN=r.dungeon.id;
+      openDungeon(DN);
+    }catch(e){toast(e.message);if(btn){btn.disabled=false;btn.textContent='开门'}}
+  },470);
+  setTimeout(()=>fog.classList.remove('play'),1050);
+}
+
+/* 一锤揭晓仪式（sendDungeon 响应带 reveal 时触发） */
+function showReveal(rv,done){
+  let ov=document.getElementById('shadowReveal');
+  if(!ov){
+    ov=document.createElement('div');ov.className='reveal';ov.id='shadowReveal';
+    ov.innerHTML='<div class="rv-qs"><span>？</span><span>？</span><span>？</span><span>？</span><span>？</span></div>'
+      +'<div class="rv-card" id="rvCard"></div><div class="rv-text" id="rvText"></div>'
+      +'<button class="rv-go" id="rvGo">收入收藏墙 →</button>';
+    document.body.appendChild(ov);
+    const card=ov.querySelector('#rvCard');
+    for(let i=0;i<16;i++){
+      const m=document.createElement('i');m.className='rv-mote';
+      m.style.left=(12+Math.random()*76)+'%';m.style.top=(30+Math.random()*45)+'%';
+      m.style.animationDelay=(0.7+Math.random()*1.1)+'s';
+      m.style.width=m.style.height=(2+Math.random()*3)+'px';
+      card.appendChild(m);
+    }
+  }
+  ov.querySelector('#rvCard').innerHTML='<div class="t-date">复现<br>'+esc(rv.short)+'<br>2026</div>'
+    +'<div class="t-badge">🏆 复现成功 · 影子揭晓</div><div class="t-name">'+esc(rv.name)+'</div>'
+    +'<div class="t-impact">'+esc(rv.impact)+'</div>'
+    +'<div class="t-meta">'+(rv.nodes||[]).map(n=>'<span>'+esc(n)+'</span>').join('')+'</div>';
+  ov.querySelector('#rvText').innerHTML='<b>恭喜——你做出了「'+esc(rv.name)+'」。</b><small>回头看：它只用了你已经学会的东西。</small>';
+  ov.classList.add('show');ov.classList.remove('revealing');
+  requestAnimationFrame(()=>requestAnimationFrame(()=>ov.classList.add('revealing')));
+  ov.querySelector('#rvGo').onclick=()=>{
+    ov.classList.remove('show','revealing');
+    done&&done();
+  };
+}
+
+/* 纪念卡详情（flip 弹入） */
+function trophyDetail(name){
+  const tr=(STATE.trophies||[]).find(x=>x.name===name);if(!tr)return;
+  const ov=document.createElement('div');ov.className='tdetail';
+  ov.innerHTML='<div class="td-card"><button class="td-close">✕</button>'
+    +'<div class="t-badge">🏆 复现成功 · 纪念卡</div><div class="td-name">'+esc(tr.name)+'</div>'
+    +'<div class="td-repo">'+esc(tr.repo)+'</div><div class="td-impact">'+esc(tr.impact)+'</div>'
+    +'<div class="grouplabel" style="margin:16px 0 8px">用到的知识点（连锚已写入沉淀）</div>'
+    +(tr.nodes||[]).map(n=>'<span class="td-node" onclick="switchTab(\'graph\')">'+esc(n)+'</span>').join('')
+    +'<div style="margin-top:18px;display:flex;justify-content:space-between;align-items:center"><span class="td-cleared">复现于 '+esc(tr.date)+'</span><button class="btn ghost" onclick="this.closest(\'.tdetail\').remove()">关闭</button></div></div>';
+  document.body.appendChild(ov);
+  ov.addEventListener('click',e=>{if(e.target===ov||e.target.classList.contains('td-close'))ov.remove()});
+}
+
+/* 沉淀连锚图（显式布局表——小规模离散布局直接查表，防节点重叠） */
+function anchorSVG(tr){
+  const nodes=tr.nodes||[];
+  const W=660,H=210,midY=105,cx=500,cy=midY;
+  const LAYOUTS={1:[[110,100]],2:[[110,62],[150,140]],3:[[110,44],[160,105],[110,166]],4:[[95,44],[210,74],[95,150],[210,166]]};
+  const layout=LAYOUTS[nodes.length]||LAYOUTS[3];
+  const pos=nodes.map((n,i)=>({n,x:layout[i]?layout[i][0]:110,y:layout[i]?layout[i][1]:100}));
+  let s='<svg class="anchor-svg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc(nodes.join('、'))+'连向'+esc(tr.name)+'">';
+  pos.forEach((p,i)=>{
+    const y2=cy+(i-(pos.length-1)/2)*16;
+    s+='<line class="an-earned" x1="'+(p.x+80)+'" y1="'+p.y+'" x2="'+(cx-92)+'" y2="'+y2+'"/>';
+  });
+  if(pos.length>1)s+='<path class="an-ctx" d="M '+(pos[0].x+62)+' '+(pos[0].y+14)+' C '+(pos[0].x+120)+' '+(pos[0].y+26)+', '+(pos[1].x-60)+' '+(pos[1].y-26)+', '+(pos[1].x+18)+' '+(pos[1].y-20)+'"/>';
+  pos.forEach(p=>{
+    s+='<g><rect class="an-node" x="'+(p.x-8)+'" y="'+(p.y-17)+'" width="78" height="32" rx="9"/><text class="an-label" x="'+(p.x+31)+'" y="'+(p.y+4)+'" text-anchor="middle">'+esc(p.n)+'</text></g>';
+  });
+  s+='<g><rect class="an-tro" x="'+(cx-84)+'" y="'+(cy-46)+'" width="168" height="92" rx="14" transform="rotate(45 '+cx+' '+cy+')"/>'
+    +'<text class="an-label" x="'+cx+'" y="'+(cy-4)+'" text-anchor="middle" font-weight="700">'+esc(tr.name)+'</text>'
+    +'<text class="an-sub" x="'+cx+'" y="'+(cy+15)+'" text-anchor="middle">🏆 '+esc(tr.short)+'</text></g>';
+  s+='<text class="an-note" x="'+((cx+60)/2)+'" y="'+(cy-58)+'" text-anchor="middle">共同铸成 →</text></svg>';
+  return s;
+}
+
+/* 大厅：进行中 / 影子候选 / 收藏墙（数据源全部影子化，无项目名——ADR 0001） */
+function renderDunHall(){
+  const v=$('dunHallView');
+  const duns=STATE.dungeons||[];
+  const act=duns.find(x=>x.status==='active');
+  const abandoned=duns.filter(x=>x.status==='abandoned');
+  const pool=(STATE.readings||[]).filter(r=>r.project);
+  const ready=pool.filter(r=>r.brief&&r.req);
+  const unhatched=pool.filter(r=>!r.brief);
+  const used=new Set(duns.map(x=>x.readingId));
+  const trophies=STATE.trophies||[];
+
+  let h='<div style="max-width:880px;margin:0 auto;padding:8px 28px 130px">';
+  if(act){
+    const tot=(act.stages||[]).length;
+    h+='<div class="grouplabel">进行中</div><div class="active-card">'
+      +'<div class="ac-top"><span class="ac-tag">⚔ 进行中</span><span class="ac-title">？？？？？</span><span style="margin-left:auto" class="chip pink">'+act.cur+'/'+tot+' 关</span></div>'
+      +'<div class="pip-track">'+(act.stages||[]).map((sg,i)=>'<div class="pip '+(i<act.cur?'done':(i===act.cur?'cur':''))+'"></div>').join('')+'</div>'
+      +'<div class="ac-actions"><button class="btn primary" onclick="openDungeon(\''+act.id+'\')">继续打副本</button><button class="btn ghost" onclick="abandonDungeon(\''+act.id+'\')">收起</button></div></div>';
+  }
+  h+='<div class="grouplabel">'+(act?'更多影子（打完当前的再开）':'可开启的影子副本 —— 只告诉你需要什么，不告诉你是什么')+'</div>';
+  const free=ready.filter(r=>!used.has(r.id)&&!r.done);
+  if(free.length){
+    free.forEach(r=>{
+      h+='<div class="shadow-card"><div class="sh-body">'
+        +'<div class="sh-title"><span>⚔ 影子副本 · ？？？？？</span>'+tierHTML(r.tier||0)+starsHTML(r.stars||2)+'</div>'
+        +reqHTML(r.req)
+        +'<div class="sh-sub">'+((r.req||[]).some(x=>x.miss)?'开门后先由助教补上缺的点，再进关':'所需知识点你全部已收尾 · 通关揭晓它是什么')+'</div></div>'
+        +'<div class="sh-actions"><button class="sh-go" onclick="startDungeon(\''+r.id+'\',this)" '+(act?'disabled':'')+'>开门</button>'
+        +'<span class="sh-hint">'+(act?'先打完当前的影子':'通关揭晓它是什么')+'</span></div></div>';
+    });
+  } else if(!unhatched.length&&!act){
+    h+='<div class="silo-slot" style="min-height:76px"><small>没有待开的影子——去收尾几个新知识点，孵化器会带来新的</small></div>';
+  }
+  if(unhatched.length){
+    unhatched.forEach(r=>{
+      h+='<div class="dh-item dim" style="list-style:none"><div><div class="dh-t" style="filter:blur(.4px)">⚔ ？？？（未孵化）</div><div class="dh-sub">助教先深入项目导读+定档，你确认感兴趣再开门</div></div><button class="btn ghost" onclick="hatchShadow(\''+r.id+'\',this)">孵化影子</button></div>';
+    });
+  }
+  /* 收藏墙 */
+  h+='<div class="grouplabel">收藏墙 —— 你亲手做出的东西</div><div class="wall-grid">';
+  (trophies||[]).forEach(tr=>{
+    h+='<div class="tcard" onclick="trophyDetail(\''+esc(tr.name)+'\')">'
+      +'<div class="t-date">复现<br>'+esc(tr.short)+'<br>2026</div>'
+      +'<div class="t-badge">🏆 已复现</div><div class="t-name">'+esc(tr.name)+'</div>'
+      +'<div class="t-impact">'+esc(tr.repo)+'</div>'
+      +'<div class="t-meta"><span>'+tr.stages+' 关</span><span>'+((tr.nodes||[]).length)+' 知识点</span></div></div>';
+  });
+  const siloN=Math.max(0,2-trophies.length);
+  for(let i=0;i<siloN;i++)h+='<div class="silo-slot"><div class="silo"></div><span class="q">？</span><small>？？？（未遇见）</small></div>';
+  h+='</div>';
+  /* 已收起 */
+  if(abandoned.length){
+    h+='<div class="grouplabel">已收起</div>';
+    abandoned.forEach(d=>{
+      h+='<div class="dh-item dim"><div><div class="dh-t">⚔ ？？？？？</div><div class="dh-sub">已收起——影子与关卡都还在</div></div><button class="btn ghost" onclick="reopenDungeon(\''+d.id+'\')">重新开门</button></div>';
+    });
+  }
+  h+='</div>';
+  v.innerHTML=h;
+}
+
+/* ---------- 副本大厅（一级视图：进行中 / 可开启 / 已通关） ---------- */
 async function reopenDungeon(id){
   try{
     await api('/api/dungeon/reopen',{id});
     await loadState();
     openDungeon(id);
   }catch(e){toast('失败：'+e.message)}
-}
-function renderDunHall(){
-  const v=$('dunHallView');
-  const duns=STATE.dungeons||[];
-  const act=duns.find(x=>x.status==='active');
-  const cleared=duns.filter(x=>x.status==='cleared');
-  const abandoned=duns.filter(x=>x.status==='abandoned');
-  const usedReadings=new Set(duns.map(x=>x.readingId));
-  const ready=(STATE.readings||[]).filter(r=>!usedReadings.has(r.id)&&r.brief&&r.url&&r.url.indexOf('github.com')>=0);
-  const needBrief=(STATE.readings||[]).filter(r=>!usedReadings.has(r.id)&&(!r.brief)&&r.url&&r.url.indexOf('github.com')>=0&&!r.done);
-
-  let h='<div style="max-width:880px;margin:0 auto;padding:8px 28px 130px">';
-  if(act){
-    const doneN=(act.stages||[]).filter(sg=>sg.done).length, tot=(act.stages||[]).length;
-    h+='<div class="dh-card" style="border-color:var(--pink)"><div class="dh-top"><span class="dh-tag hot">⚔ 进行中</span><span class="dh-title">？？？（'+doneN+'/'+tot+' 关）</span></div>';
-    h+='<div class="dn-stages">'+(act.stages||[]).map((sg,i)=>'<div class="dn-stage '+(sg.done?'done':(i===act.cur?'cur':''))+'"><span class="dn-no">'+(i+1)+'</span><span>'+esc(sg.title)+'</span>'+(sg.done?'<span class="dn-done">✓</span>':'')+'</div>').join('')+'</div>';
-    h+='<div class="dh-actions"><button class="btn primary" onclick="openDungeon(&#39;'+act.id+'&#39;)">继续打副本</button><button class="btn ghost" onclick="abandonDungeon(&#39;'+act.id+'&#39;)">放弃</button></div></div>';
-  }
-  h+='<div class="grouplabel" style="margin:22px 0 8px">'+(act?'更多可挑战（打完当前的再开）':'可开启的副本 —— 用你学过的知识复现真实项目')+'</div>';
-  if(ready.length){
-    ready.forEach(r=>{
-      h+='<div class="dh-item"><div><div class="dh-t">⚔ '+esc(r.title)+'</div><div class="dh-sub">'+esc((r.url||'').replace('https://github.com/',''))+' · 助教已导读 · 开门前会校验与你已学内容的重合度</div></div><button class="btn primary" onclick="startDungeon(&#39;'+r.id+'&#39;,this)">开启</button></div>';
-    });
-  } else {
-    h+='<div class="dh-item mut" style="cursor:default">暂无可开启的项目——'+(needBrief.length?'先给下面 '+needBrief.length+' 个项目生成导读':'去进货后再来')+'</div>';
-  }
-  if(needBrief.length){
-    needBrief.forEach(r=>{
-      h+='<div class="dh-item dim"><div><div class="dh-t">'+esc(r.title)+'</div><div class="dh-sub">尚未导读——助教先深入项目，你确认感兴趣再开门</div></div><button class="btn ghost" onclick="genBriefHere(&#39;'+r.id+'&#39;,this)">生成导读</button></div>';
-    });
-  }
-  if(cleared.length){
-    h+='<div class="grouplabel" style="margin:22px 0 8px">已通关</div>';
-    cleared.forEach(d=>{
-      h+='<div class="dh-item"><div><div class="dh-t">🏆 '+esc(d.project||d.title)+'</div><div class="dh-sub">'+(d.clearedAt||'').slice(0,10)+' · '+((d.stages||[]).length)+' 关全通</div></div><button class="btn ghost" onclick="openDungeon(&#39;'+d.id+'&#39;)">回顾</button></div>';
-    });
-  }
-  if(abandoned.length){
-    h+='<div class="grouplabel" style="margin:22px 0 8px">已收起</div>';
-    abandoned.forEach(d=>{
-      h+='<div class="dh-item dim"><div><div class="dh-t">⚔ '+esc(d.project||'？？？')+'</div><div class="dh-sub">已放弃——项目和关卡都还在</div></div><button class="btn ghost" onclick="reopenDungeon(&#39;'+d.id+'&#39;)">重新开启</button></div>';
-    });
-  }
-  h+='</div>';
-  v.innerHTML=h;
 }
 // 快捷键 1-7：视图顺序 = 侧栏顺序
 const VIEW_ORDER=['learn','dir','dungeon','sediment','graph','set'];
