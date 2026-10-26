@@ -16,9 +16,9 @@ if errorlevel 1 (
 endlocal
 :reuse
 rem close the stale voyage app window (matched by its unique --app command line), then reopen fresh
-powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name='msedge.exe'\" | Where-Object { $_.CommandLine -like '*--app=*127.0.0.1:7412*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -EA SilentlyContinue }"
+powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name='msedge.exe'\" | Where-Object { $_.CommandLine -like '*--app=http://localhost:7412*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -EA SilentlyContinue }"
 ping -n 2 127.0.0.1 >nul
 set "EDGE=%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"
 if not exist "%EDGE%" set "EDGE=%ProgramFiles%\Google\Chrome\Application\chrome.exe"
-start "" "%EDGE%" --app=http://127.0.0.1:7412
+start "" "%EDGE%" --app=http://localhost:7412
 exit /b 0
