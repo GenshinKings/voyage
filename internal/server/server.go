@@ -85,7 +85,7 @@ type Completed struct {
 	Shape   string   `json:"shape,omitempty"`
 }
 
-// Reading 阅读材料：教务策展产出的原文（或中文整理/翻译）。读完记「知道」级履历。
+// Reading 孵化池条目：进货抓来的候选项目——助教导读（Brief）后可开门进副本。前端已无独立阅读视图。
 type Reading struct {
 	ID          string `json:"id"`
 	Title       string `json:"title"`
@@ -112,7 +112,7 @@ type Server struct {
 	// FSRS 复习（评审 P1-5：fsrs 包此前零接入，产品对遗忘无防御）
 	FSCards    map[string]*fsrs.Card `json:"fsCards"`    // 知识点 → 记忆卡（收尾时建卡）
 	FSRS       *fsrs.Scheduler       `json:"-"`          // 调度器（内存态）
-	Readings   []Reading             `json:"readings"`   // 阅读材料（阅读管理器主体）
+	Readings   []Reading             `json:"readings"`   // 孵化池（副本候选；json 字段名保留 readings 兼容旧数据）
 	PracBias   map[string]int        `json:"pracBias"`   // 科目→难度偏置（楼梯式 DDA：±80 内）
 	PracStreak map[string]int        `json:"pracStreak"` // 科目→连对计数（bias 上探的依据）
 	// 真实知识连接："核心ID->语境ID"→语境式练习真实调用次数——关联图的强边来源
@@ -522,7 +522,7 @@ func (s *Server) buildFetchTools() []tutor.Tool {
 			},
 		},
 		{
-			Name: "add_reading", Description: "把最值得深读的一份材料加进学习者的阅读清单",
+			Name: "add_reading", Description: "把值得复现的项目加进学习者的副本孵化池（候选池，助教导读后可开门）",
 			Schema: map[string]any{"type": "object", "properties": map[string]any{
 				"title": map[string]any{"type": "string"},
 				"url":   map[string]any{"type": "string"},

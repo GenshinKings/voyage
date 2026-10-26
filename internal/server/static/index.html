@@ -164,7 +164,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Micr
 .item .t{font-weight:600;letter-spacing:-.01em}
 .item .m{color:var(--mut);font-size:12.5px;margin-top:1px}
 #graphWrap{height:calc(100vh - 240px);position:relative;margin:8px 24px 20px}
-#readView{max-width:736px;margin:0 auto;padding:8px 28px 130px}
 #dirView{max-width:880px;margin:0 auto;padding:8px 28px 130px}
 .dir-msg{margin:14px 0;display:flex}
 .dir-msg .bubble{max-width:78%;padding:11px 15px;border-radius:18px;font-size:14.5px;line-height:1.7;white-space:pre-wrap;word-break:break-word}
@@ -268,7 +267,6 @@ a:hover{text-decoration:underline}
   <div class="sidebtns">
     <div class="sbtn on" data-v="learn">◈ 学习</div>
     <div class="sbtn" data-v="dir">◈ 方向</div>
-    <div class="sbtn" data-v="read">◈ 阅读</div>
     <div class="sbtn" data-v="dungeon">⚔ 副本</div>
     <div class="sbtn" data-v="sediment">◈ 沉淀</div>
     <div class="sbtn" data-v="graph">◈ 关联</div>
@@ -285,7 +283,6 @@ a:hover{text-decoration:underline}
     <div id="chatOuter"><div id="guideCard"></div><div id="planCard"></div><div id="chat"></div></div>
     <div id="dirView" class="hidden"></div>
     <div id="dunHallView" class="hidden"></div>
-    <div id="readView" class="hidden"></div>
     <div id="sediment" class="hidden"></div>
     <div id="setView" class="hidden"></div>
     <div id="graphWrap" class="hidden"><div class="gLegend">圆=收尾的知识点 · <span style="color:#0071e3;font-weight:600">━</span> 练习中真实调用的连接（×N=次数） · <span style="color:#b8c0c8">━</span> 课程先后 · 点圆回到对话</div><canvas id="graphCanvas"></canvas></div>
@@ -369,7 +366,6 @@ function updateChrome(v){
   if(v==='sediment'){kb.textContent='SEDIMENT · 已经学会的';$('lessonTitle').textContent='沉淀'}
   else if(v==='dir'){kb.textContent='DIRECTION · 学习方向';$('lessonTitle').textContent='方向'}
   else if(v==='dungeon'){kb.textContent='DUNGEON · 副本复现';$('lessonTitle').textContent='副本'}
-  else if(v==='read'){kb.textContent='READING · 阅读原文';$('lessonTitle').textContent='阅读'}
   else if(v==='graph'){kb.textContent='GRAPH · 知识地图';$('lessonTitle').textContent='关联'}
   else if(v==='set'){kb.textContent='SETTINGS · 模型与约束';$('lessonTitle').textContent='设置'}
   else if(HIST){kb.textContent='HISTORY · 对话历史'}
@@ -384,14 +380,12 @@ function switchTab(v){
   curView=v;
   document.querySelectorAll('.sbtn').forEach(t=>t.classList.toggle('on',t.dataset.v===v));
   $('chatOuter').classList.toggle('hidden',v!=='learn');
-  $('readView').classList.toggle('hidden',v!=='read');
   $('dirView').classList.toggle('hidden',v!=='dir');
   $('dunHallView').classList.toggle('hidden',v!=='dungeon');
   $('setView').classList.toggle('hidden',v!=='set');
   $('sediment').classList.toggle('hidden',v!=='sediment');
   $('graphWrap').classList.toggle('hidden',v!=='graph');
   updateChrome(v);
-  if(v==='read')renderReadings();
   if(v==='dir')renderDirection();
   if(v==='dungeon')renderDunHall();
   if(v==='set')renderSettings();
@@ -625,7 +619,7 @@ function renderToday(){
       const t=String(m.Title||'');
       h+='<div class="tl"><div class="no">0'+(4+i)+'</div><div class="bd"><div class="cat">推进 · 90 天冲刺</div><div class="ti">'+esc(t)+(m.Minutes?' · '+m.Minutes+' 分钟':'')+'</div></div><div class="act"><button class="btn" onclick="completeMain(this)" data-t="'+esc(t)+'">完成</button></div></div>';
     });
-    h+='<div class="sline" id="statusLine"><span id="profileLine"></span><span id="fetchLine"></span><span id="notesLine"></span><span>阅读 <b>'+((STATE.readings||[]).filter(r=>!r.done).length)+' 篇</b>待读</span></div>';
+    h+='<div class="sline" id="statusLine"><span id="profileLine"></span><span id="fetchLine"></span><span id="notesLine"></span><span>孵化池 <b>'+((STATE.readings||[]).length)+'</b> 项目</span></div>';
     h+='</div>';
   }
   h+='</div>';
@@ -723,167 +717,6 @@ function openExercise(id){
   $('kicker').textContent='PRACTICE · 实操练习'+(e.review?' · 错题回归':'');
   renderChat(e.messages);
   switchTab('learn');
-}
-/* ---------- 阅读：原文/中文对照的阅读管理器 ---------- */
-let READING=null;
-function mdRender(t){
-  let h=esc(t);
-  h=h.replace(/```([\s\S]*?)```/g,(m,c)=>'<pre>'+c.replace(/^\n/,'')+'</pre>');
-  h=h.replace(/^### (.*)$/gm,'<h4>$1</h4>').replace(/^## (.*)$/gm,'<h3>$1</h3>').replace(/^# (.*)$/gm,'<h3>$1</h3>');
-  h=h.replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>');
-  h=h.replace(/^&gt; (.*)$/gm,'<blockquote>$1</blockquote>');
-  h=h.replace(/`([^`\n]+)`/g,'<code>$1</code>');
-  h=h.replace(/^- (.*)$/gm,'• $1<br>');
-  return h;
-}
-function renderReadings(){
-  const v=$('readView');
-  if(READING){
-    const cur=(STATE.readings||[]).find(x=>x.id===READING);
-    if(!cur){READING=null} // 条目已被教务更新移除——回列表而不是卡死
-    else{renderReading(cur);return}
-  }
-  const rs=(STATE.readings||[]).slice().sort((x,y)=>(x.done?1:0)-(y.done?1:0));
-  if(!rs.length){v.innerHTML='<div class="empty" style="margin-top:80px">教务策展的阅读材料会落在这里——<br>原文（或中文翻译），读完记入履历</div>';return}
-  let html='<div class="grouplabel" style="margin:4px 0 8px">阅读材料</div>';
-  rs.forEach(r=>{
-    html+='<div class="lp'+(r.done?' done':'')+'" onclick="openReading(\''+r.id+'\')"><span class="st">'+(r.done?'✓':'·')+'</span><span>'+esc(r.title)+'</span></div>';
-  });
-  v.innerHTML=html;
-}
-function openReading(id){
-  const r=(STATE.readings||[]).find(x=>x.id===id);if(!r)return;
-  READING=id;renderReading(r);
-}
-function renderReading(r){
-  const v=$('readView');
-  let body='';
-  if(r.original&&!r.translation){
-    body='<div class="mut" style="margin:8px 0">下面是中文整理版。<a href="'+esc(r.url)+'" target="_blank">读英文原文 ↗</a></div>';
-  }
-  if(r.brief){
-    body='<div class="brief-card"><div class="grouplabel" style="margin:0 0 6px">🤖 助教导读（深入项目后的消化）</div>'+mdRender(r.brief)
-      +'<div style="margin-top:14px"><button class="btn primary" onclick="startDungeon(\''+r.id+'\')" style="background:var(--ink);border:none;color:#fff">⚔ 开启副本：用你学过的知识复现这个项目</button>'
-      +'<span class="mut" style="font-size:11.5px;margin-left:10px">助教先校验与你已学内容的重合度，够格才开门</span></div></div>'+body;
-  }
-  if(r.url&&r.url.indexOf('github.com')>=0&&!r.done){
-    const bl=r.brief&&r.brief.indexOf('失败')===0;
-    const lbl=bl?'🔄 上次导读失败——重新让助教导读':(r.brief?'🔄 重新导读':'🤖 让助教导读这个项目（深入源码后总结：是什么/怎么用/复现路径）');
-    const bc=bl?'#c0392b':'var(--pink)';
-    body='<button class="backbtn" onclick="genBrief(\''+r.id+'\')" style="margin:8px 0;border-color:'+bc+';color:'+bc+'">'+lbl+'</button>'+body;
-  }
-  body+='<div class="reading-body">'+mdRender(r.translation||r.content||r.original||'（空）')+'</div>';
-  v.innerHTML='<div style="display:flex;gap:8px;margin:4px 0 10px;flex-wrap:wrap">'+
-    '<button class="backbtn" onclick="closeReading()" style="border-color:var(--line);background:var(--card);color:var(--ink)">← 返回列表</button>'+
-    (r.original?'<button class="backbtn" onclick="toggleOriginal(\''+r.id+'\')" style="border-color:var(--line);background:var(--card);color:var(--ink)">中/EN 对照</button>':'')+
-    (r.url?'<button class="backbtn" onclick="window.open(\''+esc(r.url)+'\',\'_blank\')" style="border-color:var(--line);background:var(--card);color:var(--ink)">原文链接 ↗</button>':'')+
-    (r.done?'<span class="mut" style="align-self:center">已读完 ✓</span>':'<button class="backbtn" onclick="finishReading(\''+r.id+'\')">✓ 读完，记入履历</button>')+
-    '</div><div class="mut" style="margin-bottom:8px"><a href="'+esc(r.url)+'" target="_blank">'+esc(r.url)+'</a></div>'+body;
-}
-function closeReading(){READING=null;renderReadings();}
-/* ---------- 副本学习（用已学知识复现真实项目，通关揭晓恍然大悟） ---------- */
-let DN=null; // 当前打开的副本 id
-async function startDungeon(readingId){
-  const btn=event.target;btn.disabled=true;btn.textContent='⚔ 副本设计中…（校验重合度+生成关卡）';
-  try{
-    const r=await api('/api/dungeon/start',{readingId});
-    DN=r.dungeon.id;
-    if(!STATE.dungeons)STATE.dungeons=[];
-    STATE.dungeons.push(r.dungeon);
-    openDungeon(DN);
-  }catch(e){btn.disabled=false;btn.textContent='⚔ 开启副本：用你学过的知识复现这个项目';toast(e.message)}
-}
-function openDungeon(id){
-  const d=(STATE.dungeons||[]).find(x=>x.id===id);if(!d)return;
-  leaveHistory();
-  DN=id;CURRENT=null;EXER=null;READING=null;
-  $('lessonTitle').textContent=d.status==='active'?'副本 · ？？？（通关揭晓）':'副本 · '+d.title;
-  $('kicker').textContent='DUNGEON · 副本复现';
-  renderDungeon(d);
-  switchTab('learn');
-}
-function renderDungeon(d){
-  // 关卡进度条
-  let st='<div class="dn-stages">';
-  (d.stages||[]).forEach((sg,i)=>{
-    const cls=i<d.cur?'done':(i===d.cur&&d.status==='active'?'cur':'');
-    st+='<div class="dn-stage '+cls+'"><span class="dn-no">'+(i+1)+'</span><span>'+esc(sg.title)+'</span>'+(sg.done?'<span class="dn-done">✓</span>':'')+'</div>';
-  });
-  st+='</div>';
-  let h=st;
-  // 已通关横幅
-  if(d.status==='cleared'){
-    h+='<div class="dn-clear">🎉 恭喜——你实现了「'+esc(d.project||d.title)+'」。回头看：它只用了你已经学会的东西。</div>';
-  } else if(d.status==='abandoned'){
-    h+='<div class="dn-clear" style="border-color:var(--line);color:var(--mut)">副本已放弃——随时可以再回来（项目与关卡还在）。</div>';
-  }
-  // 对话流
-  h+='<div id="dnChat" class="dn-chat">';
-  (d.messages||[]).forEach(m=>{
-    if(!m.content)return;
-    h+='<div class="msg '+(m.role==='assistant'?'a':'u')+'"><div class="bubble">'+fmtContent(m.content)+'</div></div>';
-  });
-  h+='</div>';
-  // 输入与放弃
-  if(d.status==='active'){
-    h+='<div class="dir-input" style="max-width:none"><textarea id="dnInput" placeholder="提交这一关的成果 / 说卡住了 / 问点什么…"></textarea><button onclick="sendDungeon()">提交</button></div>';
-    h+='<div style="text-align:right;margin-top:6px"><span class="mut" style="font-size:11px;cursor:pointer" onclick="abandonDungeon(\''+d.id+'\')">放弃副本（可随时回来）</span></div>';
-  }
-  const c=$('chat');
-  c.innerHTML=h;
-  const ta=document.getElementById('dnInput');
-  if(ta)ta.onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendDungeon();}};
-  $('view').scrollTop=$('view').scrollHeight;
-}
-async function sendDungeon(){
-  const ta=document.getElementById('dnInput');if(!ta)return;
-  const text=ta.value.trim();if(!text)return;
-  const d=(STATE.dungeons||[]).find(x=>x.id===DN);if(!d)return;
-  ta.value='';
-  d.messages.push({role:'user',content:text},{role:'assistant',content:'…'});
-  renderDungeon(d);
-  try{
-    const r=await api('/api/dungeon/send',{id:DN,text});
-    const nd=r.dungeon;
-    const old=d.messages;
-    Object.assign(d,nd);
-    if(!nd.messages||!nd.messages.length)d.messages=old;
-    renderDungeon(d);
-  }catch(e){d.messages.splice(d.messages.length-2,2);renderDungeon(d);toast('失败：'+e.message)}
-}
-async function abandonDungeon(id){
-  try{
-    await api('/api/dungeon/abandon',{id});
-    const d=(STATE.dungeons||[]).find(x=>x.id===id);if(d)d.status='abandoned';
-    DN=null;renderSidebar();renderReadings();switchTab('read');
-    toast('副本已收起——项目与关卡都留着，随时回来');
-  }catch(e){toast('失败：'+e.message)}
-}
-// AI 导读：助教深入项目源码后产出结构化消化（是什么/核心概念/怎么用/复现路径）
-async function genBrief(id){
-  const r=(STATE.readings||[]).find(x=>x.id===id);if(!r)return;
-  const btn=event.target;btn.disabled=true;btn.textContent='助教研读中…（1-2 分钟，会翻仓库源码）';
-  try{
-    const resp=await api('/api/reading/brief',{id});
-    r.brief=resp.brief;
-    toast('导读完成——助教已把项目吃透');
-    renderReading(r);
-  }catch(e){btn.disabled=false;btn.textContent='🤖 让助教导读这个项目';toast('失败：'+e.message)}
-}
-function toggleOriginal(id){
-  const r=(STATE.readings||[]).find(x=>x.id===id);if(!r)return;
-  const v=$('readView');
-  const showing=v.querySelector('.reading-original');
-  if(showing){showing.remove();return}
-  v.querySelector('.reading-body').insertAdjacentHTML('beforebegin','<div class="reading-original"><div class="grouplabel">ORIGINAL</div><div class="reading-body">'+mdRender(r.original)+'</div></div>');
-}
-async function finishReading(id){
-  try{
-    await api('/api/reading/done',{id});
-    const r=(STATE.readings||[]).find(x=>x.id===id);if(r)r.done=true;
-    READING=null;renderReadings();await loadState();
-    toast('读完——履历记「知道」');
-  }catch(e){toast('失败：'+e.message)}
 }
 
 /* ---------- 方向：和 AI 助教讨论学习方向，收敛后同步到学习 ---------- */
@@ -1298,6 +1131,85 @@ async function renderGraph(){
 /* 启动 */
 $('input').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}});
 document.querySelectorAll('.sbtn').forEach(t=>t.onclick=()=>switchTab(t.dataset.v));
+/* ---------- 副本学习（用已学知识复现真实项目，通关揭晓恍然大悟） ---------- */
+let DN=null; // 当前打开的副本 id
+async function startDungeon(readingId){
+  const btn=event.target;btn.disabled=true;btn.textContent='⚔ 副本设计中…（校验重合度+生成关卡）';
+  try{
+    const r=await api('/api/dungeon/start',{readingId});
+    DN=r.dungeon.id;
+    if(!STATE.dungeons)STATE.dungeons=[];
+    STATE.dungeons.push(r.dungeon);
+    openDungeon(DN);
+  }catch(e){btn.disabled=false;btn.textContent='⚔ 开启副本：用你学过的知识复现这个项目';toast(e.message)}
+}
+function openDungeon(id){
+  const d=(STATE.dungeons||[]).find(x=>x.id===id);if(!d)return;
+  leaveHistory();
+  DN=id;CURRENT=null;EXER=null;
+  $('lessonTitle').textContent=d.status==='active'?'副本 · ？？？（通关揭晓）':'副本 · '+d.title;
+  $('kicker').textContent='DUNGEON · 副本复现';
+  renderDungeon(d);
+  switchTab('learn');
+}
+function renderDungeon(d){
+  // 关卡进度条
+  let st='<div class="dn-stages">';
+  (d.stages||[]).forEach((sg,i)=>{
+    const cls=i<d.cur?'done':(i===d.cur&&d.status==='active'?'cur':'');
+    st+='<div class="dn-stage '+cls+'"><span class="dn-no">'+(i+1)+'</span><span>'+esc(sg.title)+'</span>'+(sg.done?'<span class="dn-done">✓</span>':'')+'</div>';
+  });
+  st+='</div>';
+  let h=st;
+  // 已通关横幅
+  if(d.status==='cleared'){
+    h+='<div class="dn-clear">🎉 恭喜——你实现了「'+esc(d.project||d.title)+'」。回头看：它只用了你已经学会的东西。</div>';
+  } else if(d.status==='abandoned'){
+    h+='<div class="dn-clear" style="border-color:var(--line);color:var(--mut)">副本已放弃——随时可以再回来（项目与关卡还在）。</div>';
+  }
+  // 对话流
+  h+='<div id="dnChat" class="dn-chat">';
+  (d.messages||[]).forEach(m=>{
+    if(!m.content)return;
+    h+='<div class="msg '+(m.role==='assistant'?'a':'u')+'"><div class="bubble">'+fmtContent(m.content)+'</div></div>';
+  });
+  h+='</div>';
+  // 输入与放弃
+  if(d.status==='active'){
+    h+='<div class="dir-input" style="max-width:none"><textarea id="dnInput" placeholder="提交这一关的成果 / 说卡住了 / 问点什么…"></textarea><button onclick="sendDungeon()">提交</button></div>';
+    h+='<div style="text-align:right;margin-top:6px"><span class="mut" style="font-size:11px;cursor:pointer" onclick="abandonDungeon(\''+d.id+'\')">放弃副本（可随时回来）</span></div>';
+  }
+  const c=$('chat');
+  c.innerHTML=h;
+  const ta=document.getElementById('dnInput');
+  if(ta)ta.onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendDungeon();}};
+  $('view').scrollTop=$('view').scrollHeight;
+}
+async function sendDungeon(){
+  const ta=document.getElementById('dnInput');if(!ta)return;
+  const text=ta.value.trim();if(!text)return;
+  const d=(STATE.dungeons||[]).find(x=>x.id===DN);if(!d)return;
+  ta.value='';
+  d.messages.push({role:'user',content:text},{role:'assistant',content:'…'});
+  renderDungeon(d);
+  try{
+    const r=await api('/api/dungeon/send',{id:DN,text});
+    const nd=r.dungeon;
+    const old=d.messages;
+    Object.assign(d,nd);
+    if(!nd.messages||!nd.messages.length)d.messages=old;
+    renderDungeon(d);
+  }catch(e){d.messages.splice(d.messages.length-2,2);renderDungeon(d);toast('失败：'+e.message)}
+}
+async function abandonDungeon(id){
+  try{
+    await api('/api/dungeon/abandon',{id});
+    const d=(STATE.dungeons||[]).find(x=>x.id===id);if(d)d.status='abandoned';
+    DN=null;renderSidebar();switchTab('dungeon');
+    toast('副本已收起——项目与关卡都留着，随时回来');
+  }catch(e){toast('失败：'+e.message)}
+}
+// AI 导读：助教深入项目源码后产出结构化消化（是什么/核心概念/怎么用/复现路径）
 /* ---------- 副本大厅（一级视图：进行中 / 可开启 / 已通关） ---------- */
 async function genBriefHere(id,btn){
   btn.disabled=true;btn.textContent='助教研读中…';
@@ -1338,7 +1250,7 @@ function renderDunHall(){
       h+='<div class="dh-item"><div><div class="dh-t">⚔ '+esc(r.title)+'</div><div class="dh-sub">'+esc((r.url||'').replace('https://github.com/',''))+' · 助教已导读 · 开门前会校验与你已学内容的重合度</div></div><button class="btn primary" onclick="startDungeon(&#39;'+r.id+'&#39;,this)">开启</button></div>';
     });
   } else {
-    h+='<div class="dh-item mut" style="cursor:default">暂无可开启的项目——'+(needBrief.length?'先给下面 '+needBrief.length+' 个项目生成导读':'去进货或读完材料后再来')+'</div>';
+    h+='<div class="dh-item mut" style="cursor:default">暂无可开启的项目——'+(needBrief.length?'先给下面 '+needBrief.length+' 个项目生成导读':'去进货后再来')+'</div>';
   }
   if(needBrief.length){
     needBrief.forEach(r=>{
@@ -1361,7 +1273,7 @@ function renderDunHall(){
   v.innerHTML=h;
 }
 // 快捷键 1-7：视图顺序 = 侧栏顺序
-const VIEW_ORDER=['learn','dir','read','dungeon','sediment','graph','set'];
+const VIEW_ORDER=['learn','dir','dungeon','sediment','graph','set'];
 document.addEventListener('keydown',e=>{
   if(e.target&&(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'))return;
   const n=parseInt(e.key);
