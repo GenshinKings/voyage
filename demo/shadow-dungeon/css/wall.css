@@ -1,0 +1,17 @@
+/* ============================================================
+   wall.css — 连锚图谱（沉淀页视角）：知识点 → 纪念卡
+   ============================================================ */
+.anchor-wrap{max-width:760px}
+.anchor-svg{width:100%;height:auto;display:block}
+.an-ctx{stroke:#C9C2B9;stroke-width:1.4;opacity:.65;fill:none}
+.an-earned{stroke:var(--pink);stroke-width:1.7;stroke-dasharray:6 4;opacity:.8;fill:none;
+  animation:dashFlow 1.7s linear infinite}
+@keyframes dashFlow{to{stroke-dashoffset:-20}}
+.an-node{fill:var(--card);stroke:var(--line);stroke-width:1.5;transition:stroke var(--t-fast)}
+.an-node.hi{stroke:var(--pink)}
+.an-tro{fill:#FFF6F2;stroke:var(--pink);stroke-width:2;transition:filter var(--t-med)}
+.an-tro.hi{filter:drop-shadow(0 3px 9px rgba(251,114,153,.45))}
+.an-label{font-size:11.5px;fill:var(--ink)}
+.an-sub{font-size:10px;fill:var(--mut)}
+.an-note{font-size:10.5px;fill:var(--mut);letter-spacing:1px}
+.an-g{cursor:pointer}

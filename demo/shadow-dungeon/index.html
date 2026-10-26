@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>前哨 · 影子副本 demo</title>
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/hall.css">
+<link rel="stylesheet" href="css/dungeon.css">
+<link rel="stylesheet" href="css/wall.css">
+</head>
+<body>
+<div id="app">
+  <aside class="side">
+    <div class="logo"><div class="kicker">OUTPOST 2.0</div><b>全托管学习机</b></div>
+    <div class="sidebtns">
+      <div class="sbtn" data-nav="learn">◈ 学习</div>
+      <div class="sbtn" data-nav="dir">◈ 方向</div>
+      <div class="sbtn on" data-nav="hall">⚔ 副本</div>
+      <div class="sbtn" data-nav="sediment">◈ 沉淀</div>
+      <div class="sbtn" data-nav="graph">◈ 关联</div>
+      <div class="sbtn" data-nav="set">◈ 设置</div>
+    </div>
+    <div class="side-foot">
+      <div class="progress-mini" id="prog">尚未复现作品</div>
+      <div class="demo-note">DEMO · 模拟数据<br>效果=产品验收基准</div>
+    </div>
+  </aside>
+  <main class="main">
+    <div class="kicker" id="kicker"></div>
+    <div class="h1" id="h1"></div>
+    <div class="view" id="view-hall"></div>
+    <div class="view" id="view-dungeon" hidden></div>
+    <div class="view" id="view-wall" hidden></div>
+  </main>
+</div>
+<div id="toast" role="status" aria-live="polite"></div>
+<script src="js/store.js"></script>
+<script src="js/views.js"></script>
+<script src="js/effects.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

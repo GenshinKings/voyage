@@ -1,0 +1,113 @@
+/* ============================================================
+   dungeon.css — 副本进行中视图 + 一锤揭晓仪式 + 开门雾散
+   ============================================================ */
+
+/* ---- 副本头部 ---- */
+.dn-head{margin-bottom:16px}
+.dn-q{font-size:30px;font-weight:800;letter-spacing:8px;color:var(--ink)}
+.dn-sub{font-size:11.5px;color:var(--mut);margin-top:2px}
+.pip-track{display:flex;gap:9px;margin-top:14px;max-width:560px}
+.pip{flex:1;height:6px;border-radius:4px;background:var(--paper);position:relative;overflow:hidden}
+.pip::after{content:"";position:absolute;inset:0;background:var(--pink);border-radius:4px;transform:scaleX(0);transform-origin:left;transition:transform var(--t-slow) var(--ease-out)}
+.pip.done::after{transform:scaleX(1)}
+.pip.cur::after{animation:pipPulse 1.3s ease-in-out infinite alternate}
+@keyframes pipPulse{from{transform:scaleX(.15)}to{transform:scaleX(.72)}}
+
+/* ---- 关卡对话流 ---- */
+.flow{max-width:640px}
+.bubble{
+  background:var(--card);border:1px solid var(--line);border-radius:12px;
+  padding:15px 19px;margin-bottom:11px;box-shadow:0 2px 10px rgba(43,43,51,.05);
+  animation:bubIn var(--t-med) var(--ease-out) both;
+}
+@keyframes bubIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.bubble .who{font-size:10px;letter-spacing:2px;color:var(--mut);margin-bottom:6px}
+.bubble h4{font-size:14px;margin-bottom:5px}
+.bubble p{font-size:12.5px;color:var(--ink-2)}
+.bubble.ok{border-left:3px solid var(--green)}
+.bubble.ok h4{display:flex;align-items:center;gap:8px}
+.okmark{color:var(--green);font-weight:800;font-size:11px;letter-spacing:1px;
+  background:var(--green-soft);padding:2px 9px;border-radius:7px}
+.bubble .hint{font-size:11.5px;color:var(--gold);background:rgba(217,164,65,.09);border-radius:8px;padding:8px 12px;margin-top:9px}
+.dn-actions{display:flex;gap:10px;margin-top:4px;align-items:center}
+.dn-stuck{font-size:11.5px;color:var(--mut);cursor:pointer;border:none;background:none;text-decoration:underline dotted}
+.dn-stuck:hover{color:var(--gold)}
+
+/* ---- 开门雾散全屏过渡 ---- */
+.fog{
+  position:fixed;inset:0;z-index:70;pointer-events:none;
+  background:
+    radial-gradient(ellipse at 30% 40%,rgba(67,50,62,.97),transparent 60%),
+    radial-gradient(ellipse at 72% 60%,rgba(46,43,51,.97),transparent 62%),
+    rgba(30,27,33,.98);
+  opacity:0;
+}
+.fog.play{animation:fogPlay .95s var(--ease-out) both}
+@keyframes fogPlay{
+  0%{opacity:0}
+  32%{opacity:1}
+  66%{opacity:1}
+  100%{opacity:0}
+}
+.fog .fog-q{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  font-size:20px;letter-spacing:8px;color:rgba(239,233,228,.85);font-weight:700;
+  opacity:0;animation:fogQ .95s both;
+}
+@keyframes fogQ{20%{opacity:1}58%{opacity:1;letter-spacing:11px}100%{opacity:0;letter-spacing:15px}}
+
+/* ============================================================
+   一锤揭晓仪式 — 时序编排：
+   暗场 .35s → 碎片飞散 .7s → 卡片 flip .7s → shimmer 1s
+   → 文案 .5s → 收藏按钮 .4s   全程 ≈ 2.6s
+   ============================================================ */
+.reveal{
+  position:fixed;inset:0;z-index:80;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  background:radial-gradient(ellipse at 50% 42%,rgba(56,44,52,.985),rgba(22,19,24,.99));
+  opacity:0;pointer-events:none;
+}
+.reveal.show{opacity:1;pointer-events:auto;transition:opacity .35s var(--ease-out)}
+/* 碎片 */
+.rv-qs{font-size:46px;font-weight:800;letter-spacing:12px;color:#EFE9E4;height:80px;user-select:none}
+.rv-qs span{display:inline-block}
+.reveal.revealing .rv-qs span{animation:shatter .72s var(--ease-out) forwards}
+.rv-qs span:nth-child(1){--dx:-150px;--dy:-96px;--dr:-48deg;animation-delay:.05s}
+.rv-qs span:nth-child(2){--dx:130px;--dy:-118px;--dr:40deg;animation-delay:.13s}
+.rv-qs span:nth-child(3){--dx:-95px;--dy:110px;--dr:52deg;animation-delay:.21s}
+.rv-qs span:nth-child(4){--dx:155px;--dy:80px;--dr:-36deg;animation-delay:.29s}
+.rv-qs span:nth-child(5){--dx:8px;--dy:-150px;--dr:26deg;animation-delay:.37s}
+@keyframes shatter{
+  to{transform:translate(var(--dx),var(--dy)) rotate(var(--dr)) scale(1.5);opacity:0;filter:blur(4px)}
+}
+/* 纪念卡 */
+.rv-card{
+  width:360px;max-width:90vw;position:relative;overflow:hidden;
+  background:linear-gradient(155deg,#FFFDFB,#F7EFE9);
+  border:1.5px solid var(--pink);border-radius:16px;padding:24px 26px;
+  opacity:0;transform:perspective(1000px) rotateY(92deg);
+}
+.reveal.revealing .rv-card{animation:cardFlip .72s .5s var(--ease-spring) forwards}
+@keyframes cardFlip{to{opacity:1;transform:perspective(1000px) rotateY(0)}}
+.rv-card::after{content:"";position:absolute;top:0;bottom:0;width:55%;left:-70%;
+  background:linear-gradient(105deg,transparent,rgba(255,255,255,.78),transparent);transform:skewX(-18deg)}
+.reveal.revealing .rv-card::after{animation:shimmer 1.05s 1.15s var(--ease-out) forwards}
+/* 揭晓文案 */
+.rv-text{text-align:center;color:#EFE9E4;margin-top:18px;min-height:58px}
+.rv-text b{font-size:17px;display:block}
+.rv-text small{display:block;font-size:11.5px;color:rgba(239,233,228,.62);margin-top:4px}
+.reveal.revealing .rv-text{animation:bubIn .5s 1.35s var(--ease-out) both}
+.rv-go{
+  margin-top:16px;border:1px solid var(--pink);background:transparent;color:#F894B4;
+  border-radius:var(--r-sm);padding:9px 26px;font-size:13px;cursor:pointer;font-weight:600;opacity:0;
+}
+.rv-go:hover{background:var(--pink-soft)}
+.reveal.revealing .rv-go{animation:bubIn .4s 1.9s both}
+/* 粉尘微粒（仪式氛围） */
+.rv-mote{position:absolute;width:4px;height:4px;border-radius:50%;background:var(--pink);opacity:0;pointer-events:none}
+.reveal.revealing .rv-mote{animation:mote 1.6s var(--ease-out) both}
+@keyframes mote{
+  0%{opacity:0;transform:translateY(0) scale(1)}
+  25%{opacity:.85}
+  100%{opacity:0;transform:translateY(-130px) scale(.4)}
+}

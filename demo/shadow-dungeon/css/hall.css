@@ -1,0 +1,123 @@
+/* ============================================================
+   hall.css — 影子候选大厅 + 收藏墙（大厅底部分区）
+   ============================================================ */
+
+/* ---- 影子候选卡：雾中之物 ---- */
+.shadow-card{
+  display:flex;align-items:center;gap:20px;position:relative;overflow:hidden;
+  background:linear-gradient(135deg,var(--shadow-fog),var(--shadow-fog-2));
+  border-radius:var(--r-lg);padding:18px 22px;margin-bottom:12px;color:#EFE9E4;
+  transition:transform var(--t-med) var(--ease-out),box-shadow var(--t-med);
+}
+.shadow-card::before{ /* 粉雾 */
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(circle at 84% 24%,rgba(251,114,153,.2),transparent 55%);
+}
+.shadow-card::after{ /* 细噪点 */
+  content:"";position:absolute;inset:0;pointer-events:none;opacity:.5;
+  background-image:radial-gradient(rgba(255,255,255,.05) 1px,transparent 1px);
+  background-size:7px 7px;
+}
+.shadow-card:hover{transform:translateY(-3px) rotate(-.35deg);box-shadow:0 14px 30px rgba(43,43,51,.26)}
+.sh-body{flex:1;min-width:0;position:relative;z-index:1}
+.sh-title{font-size:15px;font-weight:700;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.sh-title .q{letter-spacing:2px}
+.tier{font-size:10px;letter-spacing:1.5px;padding:3px 10px;border-radius:8px;font-weight:700}
+.tier.t0{background:var(--green-soft);color:#8FD6A2}
+.tier.t1{background:rgba(217,164,65,.2);color:#E8C477}
+.tier.t2{background:rgba(251,114,153,.24);color:#F894B4}
+.stars{color:var(--gold);font-size:12px;letter-spacing:2.5px}
+.stars .off{color:rgba(217,164,65,.28)}
+.req{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
+.req .chip{background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.15);color:#EFE9E4}
+.req .chip.miss{background:rgba(217,164,65,.13);border-color:rgba(217,164,65,.42);color:#E8C477}
+.sh-sub{font-size:11.5px;color:rgba(239,233,228,.55);margin-top:9px}
+.sh-actions{flex:none;position:relative;z-index:1;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+.sh-go{border:1px solid var(--pink);background:var(--pink);color:#fff;border-radius:var(--r-sm);
+  padding:9px 26px;font-size:13px;cursor:pointer;font-weight:700;transition:all var(--t-fast)}
+.sh-go:hover{background:var(--pink-deep);border-color:var(--pink-deep)}
+.sh-go:active{transform:scale(.96)}
+.sh-hint{font-size:10.5px;color:rgba(239,233,228,.45)}
+
+/* ---- 进行中卡（已开门） ---- */
+.active-card{
+  background:var(--card);border:1.5px solid var(--pink);border-radius:var(--r-lg);
+  padding:18px 22px;margin-bottom:12px;box-shadow:0 4px 18px rgba(251,114,153,.1);
+}
+.ac-top{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.ac-tag{font-size:10px;letter-spacing:2px;padding:3px 11px;border-radius:8px;background:var(--pink-soft);color:var(--pink);font-weight:700}
+.ac-title{font-size:15px;font-weight:700;letter-spacing:1px}
+.stage-track{display:flex;gap:9px;margin-bottom:14px}
+.st-pip{flex:1;display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:var(--r-sm);background:var(--paper);font-size:11.5px;color:var(--mut);border:1px solid transparent;transition:all var(--t-med)}
+.st-pip .no{width:18px;height:18px;flex:none;border-radius:50%;background:var(--line);color:var(--mut);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700}
+.st-pip.done{color:var(--ink-2);background:var(--green-soft)}
+.st-pip.done .no{background:var(--green);color:#fff}
+.st-pip.cur{border-color:var(--pink);color:var(--ink);font-weight:600}
+.st-pip.cur .no{background:var(--pink);color:#fff}
+.st-pip.cur::after{content:"进行中";margin-left:auto;font-size:9.5px;color:var(--pink);letter-spacing:1px}
+.ac-actions{display:flex;gap:10px}
+
+/* ---- 剪影槽 ---- */
+.silo-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
+.silo-slot{
+  border:1.5px dashed var(--line);border-radius:var(--r-lg);min-height:132px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;
+  color:var(--mut);transition:border-color var(--t-med);
+}
+.silo-slot:hover{border-color:var(--mut)}
+.silo{width:46px;height:46px;border-radius:12px;
+  background:repeating-linear-gradient(45deg,var(--paper),var(--paper) 4px,transparent 4px,transparent 8px)}
+.silo-slot small{font-size:11px}
+.silo-slot .q{font-size:16px;font-weight:800;color:var(--line)}
+
+/* ---- 收藏墙（卡片网格） ---- */
+.wall-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px}
+.tcard{
+  background:linear-gradient(155deg,#FFFDFB,#F7EFE9);
+  border:1.5px solid var(--pink);border-radius:var(--r-lg);padding:18px;
+  position:relative;overflow:hidden;cursor:pointer;
+  transition:transform var(--t-med) var(--ease-out),box-shadow var(--t-med);
+  animation:cardIn .55s var(--ease-out) both;
+}
+@keyframes cardIn{from{opacity:0;transform:translateY(16px) scale(.94)}to{opacity:1;transform:none}}
+.tcard:hover{transform:translateY(-4px);box-shadow:0 14px 28px rgba(43,43,51,.14)}
+.tcard::after{content:"";position:absolute;top:0;bottom:0;width:55%;left:-70%;
+  background:linear-gradient(105deg,transparent,rgba(255,255,255,.7),transparent);transform:skewX(-18deg)}
+.tcard:hover::after{animation:shimmer 1s var(--ease-out)}
+@keyframes shimmer{to{left:135%}}
+.t-badge{font-size:9.5px;letter-spacing:2px;color:var(--pink);font-weight:700}
+.t-name{font-size:16px;font-weight:800;margin:5px 0 4px}
+.t-impact{font-size:11.5px;color:var(--ink-2);line-height:1.7;max-width:78%}
+.t-meta{display:flex;gap:7px;margin-top:12px;flex-wrap:wrap}
+.t-meta span{font-size:10.5px;padding:3px 10px;border-radius:8px;background:var(--pink-soft);color:var(--pink);font-weight:600}
+.t-date{
+  position:absolute;top:15px;right:15px;width:60px;height:60px;
+  border:1.5px solid var(--pink);border-radius:50%;display:flex;align-items:center;justify-content:center;
+  text-align:center;font-size:8.5px;color:var(--pink);font-weight:700;line-height:1.4;
+  transform:rotate(-9deg);letter-spacing:.5px;
+}
+
+/* ---- 卡详情 flip 面板 ---- */
+.tdetail{
+  position:fixed;inset:0;background:rgba(24,21,26,.62);backdrop-filter:blur(3px);
+  display:flex;align-items:center;justify-content:center;z-index:60;
+  animation:fadeIn var(--t-med) both;
+}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.td-card{
+  width:400px;max-width:92vw;background:linear-gradient(155deg,#FFFDFB,#F7EFE9);
+  border:1.5px solid var(--pink);border-radius:16px;padding:26px 28px;position:relative;
+  transform:perspective(1000px);animation:tdIn .45s var(--ease-spring) both;
+}
+@keyframes tdIn{from{opacity:0;transform:perspective(1000px) rotateY(55deg) scale(.9)}to{opacity:1;transform:perspective(1000px) rotateY(0) scale(1)}}
+.td-close{position:absolute;top:14px;right:14px;width:28px;height:28px;border-radius:50%;border:1px solid var(--line);background:var(--card);color:var(--mut);cursor:pointer;font-size:13px;line-height:1}
+.td-close:hover{color:var(--ink);border-color:var(--ink)}
+.td-name{font-size:22px;font-weight:800;margin:6px 0 2px}
+.td-repo{font-size:12px;color:var(--mut);margin-bottom:10px}
+.td-impact{font-size:13px;color:var(--ink-2);line-height:1.8}
+.td-sec{margin-top:16px}
+.td-sec .grouplabel{margin:0 0 8px}
+.td-node{font-size:11.5px;padding:3px 11px;border-radius:8px;background:var(--pink-soft);color:var(--pink);font-weight:600;display:inline-block;margin:0 6px 6px 0;cursor:pointer}
+.td-node:hover{background:var(--pink);color:#fff}
+.td-foot{margin-top:18px;display:flex;align-items:center;justify-content:space-between}
+.td-cleared{font-size:11px;color:var(--mut)}
