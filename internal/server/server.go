@@ -361,6 +361,18 @@ func (s *Server) rebuildLLM() {
 	s.Exer = &exercise.Engine{Client: client, AgentsPath: s.AgentsPath, ProfilePath: s.ProfilePath}
 }
 
+// buildReadTools 只读抓取工具（trending/search/browse/fetch_file）——导读等只读任务专用，不给写入口。
+func (s *Server) buildReadTools() []tutor.Tool {
+	all := s.buildFetchTools()
+	read := all[:0] // 复用底层数组前 4 个（trending/search/browse/fetch_file 顺序固定）
+	for _, t := range all {
+		if t.Name == "gh_trending" || t.Name == "gh_search" || t.Name == "gh_browse" || t.Name == "gh_fetch_file" {
+			read = append(read, t)
+		}
+	}
+	return read
+}
+
 // buildFetchTools 助教的 GitHub 进货工具组（Gh 未配置=无工具，教学自动降级为纯对话）。
 func (s *Server) buildFetchTools() []tutor.Tool {
 	if s.Gh == nil {
@@ -1755,7 +1767,7 @@ func (s *Server) Handlers() http.Handler {
 				http.Error(w, "该条目不是 GitHub 项目，无法深入源码导读", 400)
 				return
 			}
-			brief, err := s.Tutor.ProjectBrief(briefContext(s, rd), repo, s.buildFetchTools())
+			brief, err := s.Tutor.ProjectBrief(briefContext(s, rd), repo, s.buildReadTools())
 			if err != nil {
 				http.Error(w, err.Error(), 500)
 				return
