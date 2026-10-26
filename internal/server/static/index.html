@@ -501,6 +501,7 @@ kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;paddi
       <button class="ptab" data-pt="sediment" onclick="switchProgTab('sediment')">✓ 学会的</button>
       <button class="ptab" data-pt="graph" onclick="switchProgTab('graph')">🕸 知识地图</button>
     </div>
+    <div style="max-width:min(920px,100%);margin:0 auto 6px;padding:0 24px;font-size:11.5px;color:var(--mut)">今天的安排按复习间隔（FSRS 记忆科学）推进——不是随机出题；能力估计与选题实验默认关闭。</div>
     <div id="dunHallView" class="hidden"></div>
     <div id="sediment" class="hidden"></div>
     <div id="graphWrap" class="hidden"><div class="gLegend">圆=收尾的知识点 · <span style="color:#0071e3;font-weight:600">━</span> 练习中真实调用的连接（×N=次数） · <span style="color:#b8c0c8">━</span> 课程先后 · 点圆回到对话</div><canvas id="graphCanvas"></canvas></div>
@@ -1842,8 +1843,18 @@ function appendRemindRow(){
     +'<div style="display:flex;align-items:center;gap:10px;font-size:13px;margin-top:8px">外观：<select onchange="setTheme(this.value)" style="font:inherit;padding:4px 8px;border-radius:7px;border:1px solid var(--line);background:var(--card);color:var(--ink)">'
     +'<option value=""'+(theme===''?' selected':'')+'>跟随系统</option><option value="light"'+(theme==='light'?' selected':'')+'>浅色</option><option value="dark"'+(theme==='dark'?' selected':'')+'>深色</option></select>'
     +'<label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;margin-top:8px"><input type="checkbox" '+(LAB_OPEN?'checked':'')+' onchange="setLab(this.checked)">显示全部功能（方向 / 实战副本 / 学会的 / 知识地图 / 设置）</label>'
+    +'<label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;margin-top:8px"><input type="checkbox" '+(STATE.expElo?'checked':'')+' onchange="setExp(&#39;elo&#39;,this.checked)">实验：能力估计（Elo 难度带出题——默认关，出题按收尾顺序）</label>'
+    +'<label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;margin-top:8px"><input type="checkbox" '+(STATE.expBandit?'checked':'')+' onchange="setExp(&#39;bandit&#39;,this.checked)">实验：题目选择（Thompson 采样——默认关，选题确定性）</label>'
     +'<span style="font-size:11px;color:var(--mut);display:block;margin-top:6px">快捷键：Ctrl+K 命令面板 · Esc 关弹层 · Shift+Enter 换行 · 1/2/3 切主视图</span></div>';
   sv.prepend(row);
+}
+async function setExp(k,on){
+  try{
+    const body={};body[k]=on;
+    const r=await api('/api/config/exp',body);
+    STATE.expElo=r.expElo;STATE.expBandit=r.expBandit;
+    toast('实验开关已保存——默认关闭，打开才启用');
+  }catch(e){toast('失败：'+e.message)}
 }
 function setLab(on){
   LAB_OPEN=!!on;

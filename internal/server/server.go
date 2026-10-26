@@ -139,6 +139,9 @@ type Server struct {
 	Duns []*tutor.Dungeon `json:"dungeons"`
 	// 纪念卡（副本 v2 悬念化）：通关揭晓时生成，收藏墙 + 沉淀连锚的数据源
 	Trophies []*Trophy `json:"trophies"`
+	// 实验开关（小穗收敛轮④）：Elo 能力估计 / bandit 题目选择——保留代码，默认关闭
+	ExpElo    bool `json:"expElo,omitempty"`
+	ExpBandit bool `json:"expBandit,omitempty"`
 	// 孵化器存量补齐的去重状态（进程内）
 	hatchOnce sync.Once
 	hatchDay  atomic.Value // string 日期
@@ -1241,6 +1244,9 @@ func sessionDigest(s *tutor.Session) string {
 
 // ResolveShapeCurrent 当前策略（v1：bandit 后验从 state 持久化恢复）。
 func ResolveShapeCurrent(s *Server, now time.Time) string {
+	if !s.ExpBandit {
+		return "standard" // 实验默认关：固定标准节奏（确定性）
+	}
 	arms := []string{"standard", "sprint", "maintain"}
 	best, bestSample := "standard", -1.0
 	for _, arm := range arms {
@@ -1341,7 +1347,9 @@ func (s *Server) SettleMood(mood string, completed bool) {
 	case completed:
 		reward = 0.6
 	}
-	s.Bandit.Settle("local", shape, reward)
+	if s.ExpBandit {
+		s.Bandit.Settle("local", shape, reward)
+	}
 	s.Done.Mood = mood
 	s.saveState()
 }
@@ -1414,6 +1422,21 @@ func (s *Server) Handlers() http.Handler {
 	})
 	mux.HandleFunc("/api/refresh", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, s.RefreshPlan())
+	})
+	mux.HandleFunc("/api/config/exp", func(w http.ResponseWriter, r *http.Request) { // 小穗收敛轮④：实验开关
+		var req struct {
+			Elo    *bool `json:"elo"`
+			Bandit *bool `json:"bandit"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		if req.Elo != nil {
+			s.ExpElo = *req.Elo
+		}
+		if req.Bandit != nil {
+			s.ExpBandit = *req.Bandit
+		}
+		s.saveState()
+		writeJSON(w, map[string]any{"ok": true, "expElo": s.ExpElo, "expBandit": s.ExpBandit})
 	})
 	mux.HandleFunc("/api/complete-main", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
@@ -1565,7 +1588,14 @@ func (s *Server) Handlers() http.Handler {
 			return
 		}
 		// 策略层 v1：Thompson 采样选题——高奖励的知识点多出（利用），低后验的也会被采到（探索）
-		picked := s.Bandit.PickN("practice", arms, 3)
+		// 策略层：实验开=Thompson 采样选题（利用+探索）；默认关=按收尾顺序取前 3（确定性）
+		picked := arms
+		if len(picked) > 3 {
+			picked = picked[:3]
+		}
+		if s.ExpBandit {
+			picked = s.Bandit.PickN("practice", arms, 3)
+		}
 		byID := map[string]tutor.Lesson{}
 		for _, l := range s.Tutor.Curriculum().Lessons {
 			byID[l.ID] = l
@@ -1610,7 +1640,9 @@ func (s *Server) Handlers() http.Handler {
 					tone = "学习者近期受挫——压到区间下沿，给足提示"
 				}
 			}
-			diffNote = fmt.Sprintf("\n\n学习者当前能力：Elo≈%.0f。所有题面难度必须落在 Elo %.0f–%.0f 区间（对应预期正确率约 50%%–85%%），%s：不出明显超纲的题，也不出送分题。", s.Ability.Rating("practice"), lo, hi, tone)
+			if s.ExpElo {
+				diffNote = fmt.Sprintf("\n\n学习者当前能力：Elo≈%.0f。所有题面难度必须落在 Elo %.0f–%.0f 区间（对应预期正确率约 50%%–85%%），%s：不出明显超纲的题，也不出送分题。", s.Ability.Rating("practice"), lo, hi, tone)
+			}
 		}
 		// 错题回归（Magpie 思想）：曾做错的知识点优先出换场景变式——它记得你错过的题
 		wrongList := s.pendingWrongTopics(curSub)
@@ -1674,7 +1706,7 @@ func (s *Server) Handlers() http.Handler {
 					break
 				}
 			}
-			if first && s.Ability != nil {
+			if first && s.Ability != nil && s.ExpElo {
 				s.Ability.Answer("practice", s.Ability.Rating("practice"), done)
 			}
 			// 错题回归：首次作答失败记入错题本（下次出题变式重出）；通过即转已巩固
@@ -1692,7 +1724,9 @@ func (s *Server) Handlers() http.Handler {
 				rw = 1.0
 			}
 			if s.Exercises[i].LessonID != "" {
-				s.Bandit.Settle("practice", s.Exercises[i].LessonID, rw)
+				if s.ExpBandit {
+					s.Bandit.Settle("practice", s.Exercises[i].LessonID, rw)
+				}
 			}
 			if sub := s.Exercises[i].Subject; sub != "" {
 				if s.PracBias == nil {

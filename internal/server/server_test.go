@@ -70,11 +70,16 @@ func TestServerDailyLoop(t *testing.T) {
 	// 沙盒验收通过 → 履记「用过」
 	lib := map[string]string{"main.go": "x"}
 	_ = lib
-	// 自报：完成且还想来 → bandit 收到高奖励
+	// 自报：完成且还想来 → bandit 收到高奖励（小穗收敛轮④：实验默认关——打开 ExpBandit 才结算）
 	s.Done.Shape = "standard"
 	s.SettleMood("还想来", true)
+	if s.Bandit.Posterior["local|standard"][0] >= 2 {
+		t.Fatal("bandit 默认关闭时不应结算")
+	}
+	s.ExpBandit = true
+	s.SettleMood("还想来", true)
 	if s.Bandit.Posterior["local|standard"][0] < 2 {
-		t.Fatal("bandit 应结算正向奖励")
+		t.Fatal("bandit 实验开启后应结算正向奖励")
 	}
 	// /api/state 可用
 	r2 := httptest.NewRecorder()
