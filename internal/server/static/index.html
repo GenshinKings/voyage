@@ -23,7 +23,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Micr
 .sbtn{padding:7px 12px;border-radius:8px;cursor:pointer;color:var(--mut);font-size:13.5px;margin-bottom:1px;transition:background 120ms ease-out,color 120ms ease-out,transform 100ms ease-out;user-select:none}
 .sbtn:hover{background:var(--chip);color:var(--ink)}
 .sbtn:active{transform:scale(.97)}
-.sbtn.on{color:var(--pink);background:rgba(0,113,227,.1);font-weight:600}
+.sbtn.on{color:var(--pink);background:var(--sel);font-weight:600}
 #subjectBox{padding:6px 14px 14px;display:flex;gap:8px}
 #subjectBox input{flex:1;min-width:0;border:1px solid rgba(0,0,0,.12);padding:7px 11px;font:inherit;font-size:13px;border-radius:9px;outline:none;background:#fff;transition:border-color 150ms,box-shadow 150ms}
 #subjectBox input:focus{border-color:var(--pink);box-shadow:0 0 0 3.5px rgba(0,113,227,.18)}
@@ -143,13 +143,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Micr
 .msg.u .bubble{background:var(--usr);color:#fff;border-bottom-right-radius:6px}
 .msg.u .bubble .mark{color:#fff}
 .bubble .mark{display:block;margin-top:10px;font-weight:600;color:var(--green)}
-.bubble .mark.partial{color:#c93400}
+.bubble .mark.partial{color:var(--warn)}
 .bubble .mark.propose{color:var(--pink);font-size:12.5px;font-weight:600}
 .msg.u .bubble .mark.partial{color:#ffd60a}
 .inputbar{position:absolute;bottom:0;left:0;right:0;z-index:3;padding:14px 28px 18px;background:rgba(245,245,247,.72);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border-top:1px solid rgba(0,0,0,.05)}
 #chatbox{max-width:min(920px,100%);margin:0 auto;display:flex;gap:10px}
 #chatbox textarea{flex:1;border:1px solid rgba(0,0,0,.12);border-radius:12px;padding:11px 15px;font:inherit;font-size:14px;resize:none;height:48px;outline:none;background:#fff;transition:border-color 150ms,box-shadow 150ms}
-#chatbox textarea:focus{border-color:var(--pink);box-shadow:0 0 0 3.5px rgba(0,113,227,.18)}
+#chatbox textarea:focus{border-color:var(--pink);box-shadow:0 0 0 3.5px var(--focus)}
 #chatbox button{align-self:flex-end;border:none;background:var(--pink);color:#fff;padding:10px 20px;border-radius:12px;cursor:pointer;font:inherit;font-size:14px;font-weight:600;transition:transform 100ms ease-out,filter 150ms}
 #chatbox button:active{transform:scale(.95);filter:brightness(.92)}
 .empty{color:var(--mut);text-align:center;margin-top:80px;font-size:14px;line-height:1.7}
@@ -175,7 +175,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Micr
 .proposal-card ol{margin:6px 0 12px 18px;font-size:13.5px;line-height:1.8}
 .dir-input{display:flex;gap:10px;margin-top:12px}
 .dir-input textarea{flex:1;border:1px solid rgba(0,0,0,.12);border-radius:12px;padding:11px 15px;font:inherit;font-size:14px;height:48px;resize:none;outline:none;background:#fff}
-.dir-input textarea:focus{border-color:var(--pink);box-shadow:0 0 0 3.5px rgba(0,113,227,.18)}
+.dir-input textarea:focus{border-color:var(--pink);box-shadow:0 0 0 3.5px var(--focus)}
 .dir-input button{border:none;background:var(--pink);color:#fff;padding:10px 20px;border-radius:12px;cursor:pointer;font:inherit;font-weight:600}
 .brief-card{background:var(--card);border-left:3px solid var(--pink);border-radius:8px;padding:12px 16px;margin:10px 0;font-size:13.5px;line-height:1.8}
 /* 副本 */
@@ -375,11 +375,7 @@ a:hover{text-decoration:underline}
 /* ===== UI 评审 P0 批次（小穗评审 2026-10-27） ===== */
 /* P0-5 颜色语义 token：通过=绿 / 待验证=琥珀 / 未通过=红；选中=中性灰 */
 :root{--warn:#B07F22;--bad:#E5484D;--sel:rgba(16,27,41,.055);--focus:rgba(251,114,153,.18)}
-.bubble .mark{color:var(--green)}
-.bubble .mark.partial{color:var(--warn)}
-.msg.u .bubble .mark.partial{color:var(--warn)}
 .msg.u .bubble .mark{color:#B9E8C5}
-.sbtn.on{color:var(--pink);background:var(--sel)}
 .lp.on{background:var(--sel)}
 #subjectBox input:focus{border-color:var(--pink);box-shadow:0 0 0 3.5px var(--focus)}
 .gc-form input:focus{border-color:var(--pink);box-shadow:0 0 0 3.5px var(--focus)}
@@ -400,7 +396,10 @@ a:hover{text-decoration:underline}
 /* P0-4 <1200 侧栏收图标 */
 @media (max-width:1200px){
   #side{width:64px;padding:16px 8px}
-  #side .logo .kicker,#side .logo b,#subjectBox,#lessonList,#subjFoot{display:none}
+  #side .logo .kicker,#side .logo b,#lessonList,#subjFoot{display:none}
+  #subjectBox input,#subjectBox button:first-of-type{display:none}
+  #subjectBox .sb-plus{display:inline-block;flex:1;text-align:center;font-size:18px;padding:8px 0}
+.sb-plus{display:none}
   .sbtn-t{display:none}
   .sbtn{font-size:17px;padding:10px 0 10px 24px}
   .sidebtns{margin-top:20px}
@@ -416,23 +415,23 @@ a:hover{text-decoration:underline}
     --line:#2E323B;--mut:#8B919C;--chip:rgba(228,230,235,.06);--sel:rgba(228,230,235,.08);
     --shadow-contact:0 1px 2px rgba(0,0,0,.5),0 0 0 1px rgba(228,230,235,.04);
   }
-  body{background:var(--paper);color:var(--ink)}
-  .msg .bubble{background:var(--card);color:var(--ink)}
-  .msg.u .bubble{background:#2A2E37;color:#E4E6EB}
-  .tcard,.td-card,.rv-card{background:linear-gradient(155deg,#241F23,#2B2229)}
-  .t-impact,.td-impact{color:#D8D3CE}
-  .shadow-card{background:linear-gradient(135deg,#232028,#2E2430)}
-  .silo{background:repeating-linear-gradient(45deg,#24262C,#24262C 4px,transparent 4px,transparent 8px)}
-  .active-card,.verdict-actions .va{background:var(--card)}
-  #input,#subjectBox input{background:var(--card);color:var(--ink);border-color:var(--line)}
-  #guideCard .status,.dn-clear{background:var(--chip)}
-  #topbar{background:rgba(23,25,30,.78);border-bottom-color:rgba(228,230,235,.06)}
-  .inputbar{background:var(--paper);border-top-color:rgba(228,230,235,.06)}
-  #chatbox textarea{background:var(--card);color:var(--ink);border-color:var(--line)}
-  #chatbox #input,#subjectBox button{background:var(--pink)}
-  #side{background:var(--side)}
-  .bubble,.dn-bubble{background:var(--card);color:var(--ink)}
-  .gLegend{color:var(--mut)}
+  :root:not([data-theme=light]) body{background:var(--paper);color:var(--ink)}
+  :root:not([data-theme=light]) .msg .bubble{background:var(--card);color:var(--ink)}
+  :root:not([data-theme=light]) .msg.u .bubble{background:#2A2E37;color:#E4E6EB}
+  :root:not([data-theme=light]) .tcard,.td-card,.rv-card{background:linear-gradient(155deg,#241F23,#2B2229)}
+  :root:not([data-theme=light]) .t-impact,.td-impact{color:#D8D3CE}
+  :root:not([data-theme=light]) .shadow-card{background:linear-gradient(135deg,#232028,#2E2430)}
+  :root:not([data-theme=light]) .silo{background:repeating-linear-gradient(45deg,#24262C,#24262C 4px,transparent 4px,transparent 8px)}
+  :root:not([data-theme=light]) .active-card,.verdict-actions .va{background:var(--card)}
+  :root:not([data-theme=light]) #input,#subjectBox input{background:var(--card);color:var(--ink);border-color:var(--line)}
+  :root:not([data-theme=light]) #guideCard .status,.dn-clear{background:var(--chip)}
+  :root:not([data-theme=light]) #topbar{background:rgba(23,25,30,.78);border-bottom-color:rgba(228,230,235,.06)}
+  :root:not([data-theme=light]) .inputbar{background:var(--paper);border-top-color:rgba(228,230,235,.06)}
+  :root:not([data-theme=light]) #chatbox textarea{background:var(--card);color:var(--ink);border-color:var(--line)}
+  :root:not([data-theme=light]) #chatbox #input,#subjectBox button{background:var(--pink)}
+  :root:not([data-theme=light]) #side{background:var(--side)}
+  :root:not([data-theme=light]) .bubble,.dn-bubble{background:var(--card);color:var(--ink)}
+  :root:not([data-theme=light]) .gLegend{color:var(--mut)}
 }
 /* 命令面板 */
 .palette{position:fixed;inset:0;background:rgba(10,11,14,.55);backdrop-filter:blur(2px);z-index:120;display:flex;align-items:flex-start;justify-content:center;padding-top:14vh}
@@ -481,7 +480,7 @@ kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;paddi
     <div class="sbtn" data-v="progress">◎ <span class="sbtn-t">我的进度</span></div>
     <div class="sbtn" data-v="set">⚙ <span class="sbtn-t">设置</span></div>
   </div>
-  <div id="subjectBox"><input id="subjectInput" placeholder="想学什么？一句话开课" onkeydown="if(event.key==='Enter')addSubject()"><button onclick="addSubject()">开课</button></div>
+  <div id="subjectBox"><input id="subjectInput" placeholder="想学什么？一句话开课" onkeydown="if(event.key==='Enter')addSubject()"><button onclick="addSubject()">开课</button><button class="sb-plus" onclick="switchTab('dir')" title="去方向页开新课">＋</button></div>
   <div id="lessonList"><div class="empty" style="margin-top:24px;padding:0 10px">加载中…</div></div>
   <div id="subjFoot"></div>
 </div>
