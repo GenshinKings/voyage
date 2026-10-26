@@ -502,6 +502,7 @@ kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;paddi
       <button class="ptab" data-pt="graph" onclick="switchProgTab('graph')">🕸 知识地图</button>
     </div>
     <div style="max-width:min(920px,100%);margin:0 auto 6px;padding:0 24px;font-size:11.5px;color:var(--mut)">今天的安排按复习间隔（FSRS 记忆科学）推进——不是随机出题；能力估计与选题实验默认关闭。</div>
+    <div id="progStats" style="max-width:min(920px,100%);margin:0 auto 10px;padding:0 24px;font-size:12.5px;font-weight:600"></div>
     <div id="dunHallView" class="hidden"></div>
     <div id="sediment" class="hidden"></div>
     <div id="graphWrap" class="hidden"><div class="gLegend">圆=收尾的知识点 · <span style="color:#0071e3;font-weight:600">━</span> 练习中真实调用的连接（×N=次数） · <span style="color:#b8c0c8">━</span> 课程先后 · 点圆回到对话</div><canvas id="graphCanvas"></canvas></div>
@@ -1538,6 +1539,15 @@ async function abandonDungeon(id){
 let PROG_TAB='dungeon';
 function renderProgress(){
   applyProgTab();
+  (function(){
+    const el=document.getElementById('progStats');if(!el)return;
+    const st=STATE.stats||{};
+    const today=new Date().toISOString().slice(0,10);
+    const ds=(st.daySteps||{})[today]||[0,3];
+    let avg='—';
+    if((st.stepMins||[]).length){avg=Math.round(st.stepMins.reduce((a,b)=>a+b,0)/st.stepMins.length)+' 分钟'}
+    el.textContent='今天第 '+Math.min(ds[0]+1,ds[1])+'/'+ds[1]+' 步 · 连续 '+(st.streakCount||0)+' 天 · 平均每步 '+avg;
+  })();
   if(PROG_TAB==='dungeon')renderDunHall();
   else if(PROG_TAB==='sediment')renderSediment();
   else renderGraph();

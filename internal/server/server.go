@@ -86,6 +86,15 @@ type Completed struct {
 	Shape   string   `json:"shape,omitempty"`
 }
 
+// Stats 最小埋点（小穗收敛轮⑧）：只本地统计，不联网。
+type Stats struct {
+	DaySteps    map[string][2]int `json:"daySteps"` // date -> [已完成步,总步=3]
+	StreakLast  string            `json:"streakLast,omitempty"`
+	StreakCount int               `json:"streakCount"`
+	StepMins    []int             `json:"stepMins"` // 每步耗时样本（分钟，cap 50）
+	Verdicts    map[string]int    `json:"verdicts"` // pass/partial 判定分布
+}
+
 // Trophy 纪念卡：通关揭晓时生成的战利品（收藏墙 + 沉淀连锚的数据源）。
 type Trophy struct {
 	Name      string    `json:"name"`
@@ -142,6 +151,9 @@ type Server struct {
 	// 实验开关（小穗收敛轮④）：Elo 能力估计 / bandit 题目选择——保留代码，默认关闭
 	ExpElo    bool `json:"expElo,omitempty"`
 	ExpBandit bool `json:"expBandit,omitempty"`
+	// 最小埋点（小穗收敛轮⑧）：只本地统计，不联网
+	Stats      *Stats               `json:"stats,omitempty"`
+	StepStarts map[string]time.Time `json:"-"` // 步开始时间（耗时统计用，内存态）
 	// 孵化器存量补齐的去重状态（进程内）
 	hatchOnce sync.Once
 	hatchDay  atomic.Value // string 日期
@@ -777,6 +789,70 @@ func (s *Server) saveBacklog() {
 
 func (s *Server) saveDuns() {
 	s.save("dungeons.json", s.Duns)
+}
+
+// statsEnsure 埋点结构惰性初始化。
+func (s *Server) statsEnsure() *Stats {
+	if s.Stats == nil {
+		s.Stats = &Stats{DaySteps: map[string][2]int{}, Verdicts: map[string]int{}}
+	}
+	if s.Stats.DaySteps == nil {
+		s.Stats.DaySteps = map[string][2]int{}
+	}
+	if s.Stats.Verdicts == nil {
+		s.Stats.Verdicts = map[string]int{}
+	}
+	return s.Stats
+}
+
+// recordVerdict 判定埋点：分布计数 + 连续天数 + 步耗时（open→verdict）。
+func (s *Server) recordVerdict(verdict string, nodeId string) {
+	if verdict == "" {
+		return
+	}
+	st := s.statsEnsure()
+	today := time.Now().Format("2006-01-02")
+	if verdict == "partial" {
+		st.Verdicts["partial"]++
+	} else {
+		st.Verdicts["pass"]++
+	}
+	if st.StreakLast != today {
+		yest := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+		if st.StreakLast == yest {
+			st.StreakCount++
+		} else {
+			st.StreakCount = 1
+		}
+		st.StreakLast = today
+	}
+	if s.StepStarts == nil {
+		s.StepStarts = map[string]time.Time{}
+	}
+	if t0, ok := s.StepStarts[nodeId]; ok {
+		mins := int(time.Since(t0).Minutes())
+		if mins >= 1 && mins <= 180 {
+			st.StepMins = append(st.StepMins, mins)
+			if len(st.StepMins) > 50 {
+				st.StepMins = st.StepMins[len(st.StepMins)-50:]
+			}
+		}
+		delete(s.StepStarts, nodeId)
+	}
+	// 今日步数：判定=完成了一个「讲」步
+	ds := st.DaySteps[today]
+	ds[0]++
+	ds[1] = 3
+	st.DaySteps[today] = ds
+	s.saveState()
+}
+
+// recordStepOpen 步打开埋点（耗时起点）。
+func (s *Server) recordStepOpen(nodeId string) {
+	if s.StepStarts == nil {
+		s.StepStarts = map[string]time.Time{}
+	}
+	s.StepStarts[nodeId] = time.Now()
 }
 
 func (s *Server) saveTrophies() {
@@ -1517,6 +1593,9 @@ func (s *Server) Handlers() http.Handler {
 			http.Error(w, err.Error(), 500)
 			return
 		}
+		if isNew { // ⑧埋点：步开始（耗时统计起点）
+			s.recordStepOpen(lesson.ID)
+		}
 		writeJSON(w, map[string]any{"session": sess, "isNew": isNew})
 	})
 	mux.HandleFunc("/api/tutor/send", func(w http.ResponseWriter, r *http.Request) {
@@ -1550,6 +1629,7 @@ func (s *Server) Handlers() http.Handler {
 			s.save("ledger.json", s.Ledger)
 			verdict = v.Kind
 		}
+		s.recordVerdict(verdict, lesson.ID)
 		writeJSON(w, map[string]any{"reply": v.Reply, "verdict": verdict})
 	})
 	mux.HandleFunc("/api/exercise/generate", func(w http.ResponseWriter, _ *http.Request) {
@@ -1764,6 +1844,15 @@ func (s *Server) Handlers() http.Handler {
 				s.save("ledger.json", s.Ledger)
 			}
 			s.saveState()
+			if done {
+				st := s.statsEnsure()
+				today := time.Now().Format("2006-01-02")
+				ds := st.DaySteps[today]
+				ds[0]++
+				ds[1] = 3
+				st.DaySteps[today] = ds
+				s.saveState()
+			}
 			writeJSON(w, map[string]any{"reply": reply, "verdict": done})
 			return
 		}
