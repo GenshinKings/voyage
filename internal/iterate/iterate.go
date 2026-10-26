@@ -66,12 +66,17 @@ func Build(repo string) (string, error) {
 }
 
 // Commit 提交白名单内改动（只 add internal/，只 commit 不 push）。
+// 无实际改动时返回可识别错误（不是故障——助教可能只做了等价改写）。
 func Commit(repo, msg string) error {
 	if _, err := run(repo, time.Minute, "git", "add", "internal/"); err != nil {
 		return fmt.Errorf("git add 失败: %s", tail(err.Error(), 200))
 	}
-	if _, err := run(repo, time.Minute, "git", "-c", "core.editor=true", "commit", "-m", msg); err != nil {
-		return fmt.Errorf("git commit 失败: %s", tail(err.Error(), 200))
+	if _, err := run(repo, time.Minute, "git", "diff", "--cached", "--quiet"); err == nil {
+		// --quiet 语义：无差异 exit 0 —— staged 为空 = 实现是等价改写
+		return fmt.Errorf("没有实际改动（internal/ 与上次提交一致）——观察可能无需代码变更，或实现只是等价改写")
+	}
+	if out, err := run(repo, time.Minute, "git", "-c", "core.editor=true", "commit", "-m", msg); err != nil {
+		return fmt.Errorf("git commit 失败: %s", tail(out+" | "+err.Error(), 300))
 	}
 	return nil
 }
