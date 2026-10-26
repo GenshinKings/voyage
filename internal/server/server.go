@@ -1843,6 +1843,7 @@ func (s *Server) Handlers() http.Handler {
 			}
 		}
 		resp["todayItems"], resp["todayTitles"] = len(titles), titles
+		resp["failed"] = s.FetchConf != nil && strings.HasPrefix(s.FetchConf.LastReport, "进货失败")
 		writeJSON(w, resp)
 	})
 	mux.HandleFunc("/api/fetch/config", func(w http.ResponseWriter, r *http.Request) {

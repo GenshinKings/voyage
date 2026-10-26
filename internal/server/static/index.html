@@ -51,7 +51,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Micr
 #chat{max-width:736px;margin:0 auto;padding:0 28px 130px}
 .msg{margin:14px 0;display:flex;animation:msgIn 260ms cubic-bezier(.2,.8,.2,1)}
 @keyframes msgIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-#guideCard{max-width:736px;margin:6px auto 2px;padding:0 28px}
+#guideCard{max-width:880px;margin:6px auto 2px;padding:0 28px}
 /* ===== 学习页 v3：状态卡 / 折叠条 / 航路 / 清单 ===== */
 #guideCard .status{display:flex;align-items:baseline;gap:22px;flex-wrap:wrap;background:var(--card);border-radius:10px;padding:12px 18px;box-shadow:0 1px 2px rgba(16,27,41,.05),0 0 0 1px rgba(16,27,41,.04);font-size:14px}
 #guideCard .status .seg{display:flex;align-items:baseline;gap:7px;color:var(--ink-soft)}
@@ -86,6 +86,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Micr
 #guideCard .voyage .port{position:absolute;top:18px;width:18px;height:18px;border-radius:50%;background:var(--paper);border:1.5px solid #b9c0ca}
 #guideCard .voyage .port.done{background:var(--ink);border-color:var(--ink)}
 #guideCard .voyage .port .lb{position:absolute;top:22px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:10px;color:var(--mut)}
+#guideCard .voyage .port:last-child .lb{left:auto;right:-10px;transform:none;text-align:right}
 #guideCard .voyage .port .lb b{display:block;color:var(--ink);font-size:11px;text-align:center}
 #guideCard .voyage .ship{position:absolute;top:20px;font-size:17px;transform:translateX(-50%)}
 #guideCard .voyage .pct{position:absolute;top:-2px;transform:translateX(-50%);font-size:10.5px;color:var(--pink);font-weight:700}
@@ -96,7 +97,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Micr
 #guideCard .tl .cat{font-size:10px;letter-spacing:2px;color:var(--mut)}
 #guideCard .tl .ti{font-size:15px;font-weight:600;margin-top:2px}
 #guideCard .tl .why{font-size:12px;color:var(--mut);margin-top:3px;line-height:1.6}
-#guideCard .tl .act{flex-shrink:0}
+#guideCard .tl .act{flex-shrink:0;align-self:center;min-width:92px;text-align:right}
 #guideCard .sline{display:flex;gap:20px;flex-wrap:wrap;padding:12px 16px;font-size:11.5px;color:var(--mut);border-top:1px solid var(--line)}
 #guideCard .sline span b{color:var(--ink-soft)}
 #guideCard .sline .warn b{color:var(--pink)}
@@ -158,7 +159,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Micr
 .item .m{color:var(--mut);font-size:12.5px;margin-top:1px}
 #graphWrap{height:calc(100vh - 240px);position:relative;margin:8px 24px 20px}
 #readView{max-width:736px;margin:0 auto;padding:8px 28px 130px}
-#dirView{max-width:736px;margin:0 auto;padding:8px 28px 130px}
+#dirView{max-width:880px;margin:0 auto;padding:8px 28px 130px}
 .dir-msg{margin:14px 0;display:flex}
 .dir-msg .bubble{max-width:78%;padding:11px 15px;border-radius:18px;font-size:14.5px;line-height:1.7;white-space:pre-wrap;word-break:break-word}
 .dir-msg.a .bubble{background:var(--card);box-shadow:0 1px 2px rgba(0,0,0,.05),0 0 0 1px rgba(0,0,0,.03);border-bottom-left-radius:6px}
@@ -193,9 +194,35 @@ a:hover{text-decoration:underline}
 ::selection{background:rgba(0,113,227,.22)}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 @media (prefers-reduced-transparency:reduce){#side,#topbar,.inputbar{backdrop-filter:none;-webkit-backdrop-filter:none;background:#fff}}
+/* ===== 左缘装置：竖排标注 + 航路进度药丸（大屏专属，填边缘不挤内容） ===== */
+#edge{position:fixed;left:14px;top:50%;transform:translateY(-50%);z-index:2;display:none;flex-direction:column;align-items:center;gap:14px;pointer-events:none}
+@media (min-width:1240px){#edge{display:flex}}
+#edge .vtext{writing-mode:vertical-rl;letter-spacing:6px;font-size:10px;color:#b9c0ca;font-weight:600;user-select:none}
+#edge .pill{width:4px;height:160px;background:var(--line);border-radius:4px;position:relative;overflow:hidden}
+#edge .pill i{position:absolute;left:0;top:0;width:100%;height:12%;background:var(--pink);border-radius:4px}
+#edge .pv{font-size:10px;color:var(--pink);font-weight:700}
+
+/* ===== 设置页样式系统（修复裸控件） ===== */
+#setView{max-width:1060px;margin:0 auto;padding:8px 28px 60px}
+#setView .set-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+#setView .set-card{background:var(--card);border-radius:12px;padding:16px 20px;box-shadow:0 1px 2px rgba(16,27,41,.05),0 0 0 1px rgba(16,27,41,.03)}
+#setView .set-card.wide{grid-column:1 / -1}
+#setView .grouplabel{margin:0 0 10px}
+#setView input,#setView textarea,#setView select{width:100%;border:1px solid rgba(0,0,0,.12);border-radius:9px;padding:8px 12px;font:inherit;font-size:13px;outline:none;background:#fff;transition:border-color 150ms,box-shadow 150ms;box-sizing:border-box}
+#setView input:focus,#setView textarea:focus,#setView select:focus{border-color:var(--pink);box-shadow:0 0 0 3.5px rgba(251,114,153,.14)}
+#setView textarea{font:12.5px/1.7 ui-monospace,Menlo,Consolas,monospace;resize:vertical;min-height:150px}
+#setView .backbtn{border:1px solid var(--ink);background:transparent;color:var(--ink);border-radius:8px;padding:7px 16px;font-size:12.5px;cursor:pointer;transition:.15s}
+#setView .backbtn:hover{background:var(--ink);color:#fff}
+#setView .backbtn.hot{border-color:var(--pink);color:var(--pink)}
+#setView .backbtn.hot:hover{background:var(--pink);color:#fff}
+#setView .lp{background:var(--paper);border:1px solid var(--line);margin-bottom:6px}
+#setView .lp.on{border-color:var(--pink)}
+#setView .mut{font-size:11.5px}
+#setView pre{white-space:pre-wrap;font-size:11.5px;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:10px;margin-top:8px;max-height:260px;overflow-y:auto}
 </style>
 </head>
 <body>
+<div id="edge"><span class="vtext">VOYAGE · 全托管学习机</span><div class="pill"><i id="edgePill"></i></div><span class="pv" id="edgePct">0%</span></div>
 <div id="side">
   <div class="logo"><div class="kicker">OUTPOST 2.0</div><b>全托管学习机</b></div>
   <div class="sidebtns">
@@ -554,7 +581,9 @@ function renderToday(){
     }).catch(()=>{});
     api('/api/fetch').then(ft=>{
       const el=document.getElementById('fetchLine');
-      if(el&&ft.todayItems>0)el.innerHTML='今日进货 <b>'+ft.todayItems+' 份</b>（收尾时推荐）';
+      if(!el)return;
+      if(ft.failed){el.innerHTML='<span class="warn">昨日进货失败</span> · <span style="color:var(--pink);cursor:pointer;text-decoration:underline" onclick="runFetch()">重试</span>';return}
+      if(ft.todayItems>0)el.innerHTML='今日进货 <b>'+ft.todayItems+' 份</b>（收尾时推荐）';
     }).catch(()=>{});
     api('/api/notes').then(n=>{
       const el=document.getElementById('notesLine');if(!el)return;
@@ -767,30 +796,38 @@ function renderSettings(){
   const v=$('setView');
   v.innerHTML='<div class="mut" style="margin:4px 0 12px">加载中…</div>';
   api('/api/llm/profiles').then(d=>{
-    let h='<div class="grouplabel" style="margin:4px 0 8px">AI 助教模型</div>';
+    let h='<div class="set-grid">';
+    // 左列：模型配置
+    h+='<div class="set-card"><div class="grouplabel">AI 助教模型</div>';
     const ps=d.profiles||[];
     ps.forEach(p=>{
       h+='<div class="lp'+(p.active?' on':'')+'" style="cursor:default"><span class="st">'+(p.active?'✓':'·')+'</span><span><b>'+esc(p.name)+'</b> · '+esc(p.model)+'<div class="lp-sub">'+esc(p.baseUrl)+' · key '+esc(p.keyMasked)+'</div></span>'+(p.active?'':'<span style="margin-left:auto"><button class="backbtn act-model" data-name="'+esc(p.name)+'" style="border-color:var(--line);background:var(--card);color:var(--ink)">启用</button></span>')+'</div>';
     });
-    h+='<div class="gc-form">';
-    h+='<div class="grouplabel" style="margin:16px 0 6px">新增 / 更换模型（保存即启用）</div>';
+    h+='<div class="gc-form" style="margin-top:12px">';
+    h+='<div class="grouplabel" style="margin:0 0 6px">新增 / 更换模型（保存即启用）</div>';
     h+='<input id="pfName" placeholder="名称，如 deepseek / glm / 本地 ollama">';
     h+='<input id="pfUrl" placeholder="BaseURL，如 https://api.deepseek.com">';
     h+='<input id="pfModel" placeholder="模型名，如 deepseek-chat">';
     h+='<input id="pfKey" type="password" placeholder="API Key（编辑已有配置时留空=沿用旧 key）">';
     h+='<button class="backbtn" onclick="saveModel()" style="margin-top:8px">保存并启用</button></div>';
-    h+='<div class="grouplabel" style="margin:20px 0 6px">学习者画像（每次教学/出题注入：按你的背景打比方、按目标定侧重；方向讨论同步后自动沉淀，可手编）</div>';
+    h+='</div>';
+    // 右列：内容进货
+    h+='<div class="set-card"><div class="grouplabel">内容进货（AI 助教自动从 GitHub 抓学习材料）</div>';
+    h+='<div id="fetchBox" style="font-size:12px;color:var(--mut)">加载中…</div></div>';
+    // 右列下：笔记 + 迭代 叠放
+    h+='<div class="set-card" style="margin-top:18px"><div class="grouplabel">笔记工作区（notes/ 笔记文件夹）——助教每天对照教学内容巡检</div>';
+    h+='<div id="notesBox" style="font-size:12px;color:var(--mut)">加载中…</div></div>';
+    h+='<div class="set-card" style="margin-top:18px"><div class="grouplabel">助教自迭代（低峰时段自主改进项目：反思→实现→测试→构建→提交）</div>';
+    h+='<div id="iterBox" style="font-size:12px;color:var(--mut)">加载中…</div></div>';
+    // wide：画像
+    h+='<div class="set-card wide"><div class="grouplabel">学习者画像（每次教学/出题注入：按你的背景打比方、按目标定侧重；方向讨论同步后自动沉淀，可手编）</div>';
     h+='<textarea id="profileEdit" spellcheck="false"></textarea>';
-    h+='<button class="backbtn" onclick="saveProfile()" style="margin-top:8px">保存画像</button>';
-    h+='<div class="grouplabel" style="margin:20px 0 6px">内容进货（AI 助教自动从 GitHub 抓学习材料：定时 + 手动）</div>';
-    h+='<div id="fetchBox" style="font-size:12px;color:var(--mut)">加载中…</div>';
-    h+='<div class="grouplabel" style="margin:20px 0 6px">笔记工作区（outpost2-data\\notes\\*.md）——助教每天对照教学内容巡检</div>';
-    h+='<div id="notesBox" style="font-size:12px;color:var(--mut)">加载中…</div>';
-    h+='<div class="grouplabel" style="margin:20px 0 6px">助教自迭代（低峰时段自主改进项目：反思→实现→测试→构建→提交）</div>';
-    h+='<div id="iterBox" style="font-size:12px;color:var(--mut)">加载中…</div>';
-    h+='<div class="grouplabel" style="margin:20px 0 6px">AGENTS.md — 助教行为约束（每次调用注入，改完即生效）</div>';
+    h+='<button class="backbtn" onclick="saveProfile()" style="margin-top:8px">保存画像</button></div>';
+    // wide：AGENTS
+    h+='<div class="set-card wide"><div class="grouplabel">AGENTS.md — 助教行为约束（每次调用注入，改完即生效）</div>';
     h+='<textarea id="agentsEdit" spellcheck="false">'+esc(d.agents||'')+'</textarea>';
-    h+='<button class="backbtn" onclick="saveAgents()" style="margin-top:8px">保存约束</button>';
+    h+='<button class="backbtn" onclick="saveAgents()" style="margin-top:8px">保存约束</button></div>';
+    h+='</div>'; // set-grid
     v.innerHTML=h;
     v.querySelectorAll('.act-model').forEach(b=>{b.onclick=()=>activateModel(b.dataset.name);});
     api('/api/profile').then(p=>{const el=document.getElementById('profileEdit');if(el)el.value=p.content||'';}).catch(()=>{});
@@ -838,6 +875,7 @@ function renderFetchBox(){
     h+='<button class="backbtn" onclick="saveFetchConf()">保存设置</button>';
     h+='<button class="backbtn" onclick="runFetch()" '+(d.running?'disabled':'')+' style="border-color:var(--pink);color:var(--pink)">'+(d.running?'抓取中…':'立即抓取')+'</button></div>';
     if(d.lastRun)h+='<div style="margin-top:6px">上次进货 '+esc(d.lastRun)+'：</div><pre style="white-space:pre-wrap;font-size:11.5px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px;margin-top:4px">'+esc(d.lastReport||'（无报告）')+'</pre>';
+    if(d.failed)h+='<div style="margin-top:8px;display:flex;gap:10px;align-items:center;background:#fdecec;border:1px solid #f3c1c1;border-radius:8px;padding:8px 12px"><span style="color:#c0392b;font-weight:600">上次进货失败</span><button class="backbtn hot" onclick="runFetch()">重试抓取</button></div>';
     el.innerHTML=h;
   }).catch(e=>{el.innerHTML='<div class="empty">'+esc(e.message)+'</div>'});
 }
