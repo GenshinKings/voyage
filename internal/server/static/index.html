@@ -92,7 +92,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Micr
 #guideCard .voyage .port{position:absolute;top:18px;width:18px;height:18px;border-radius:50%;background:var(--paper);border:1.5px solid #b9c0ca}
 #guideCard .voyage .port.done{background:var(--ink);border-color:var(--ink)}
 #guideCard .voyage .port .lb{position:absolute;top:22px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:10px;color:var(--mut)}
-#guideCard .voyage .port:last-child .lb{left:auto;right:-10px;transform:none;text-align:right}
+#guideCard .voyage .port:last-child .lb{left:auto;right:0;transform:none;text-align:right}
 #guideCard .voyage .port .lb b{display:block;color:var(--ink);font-size:11px;text-align:center}
 #guideCard .voyage .ship{position:absolute;top:20px;font-size:17px;transform:translateX(-50%)}
 #guideCard .voyage .pct{position:absolute;top:-2px;transform:translateX(-50%);font-size:10.5px;color:var(--pink);font-weight:700}
@@ -179,6 +179,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Micr
 .dir-input textarea:focus{border-color:var(--pink);box-shadow:0 0 0 3.5px rgba(0,113,227,.18)}
 .dir-input button{border:none;background:var(--pink);color:#fff;padding:10px 20px;border-radius:12px;cursor:pointer;font:inherit;font-weight:600}
 .brief-card{background:var(--card);border-left:3px solid var(--pink);border-radius:8px;padding:12px 16px;margin:10px 0;font-size:13.5px;line-height:1.8}
+/* 副本 */
+.dn-stages{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px}
+.dn-stage{display:flex;align-items:center;gap:7px;padding:7px 12px;border-radius:8px;background:var(--card);border:1px solid var(--line);font-size:12.5px;color:var(--mut)}
+.dn-stage .dn-no{font-family:var(--num-font);font-weight:800}
+.dn-stage.done{color:var(--ink)}
+.dn-stage.done .dn-no{color:var(--green)}
+.dn-stage.cur{border-color:var(--pink);color:var(--ink);font-weight:600}
+.dn-stage.cur .dn-no{color:var(--pink)}
+.dn-stage .dn-done{color:var(--green)}
+.dn-chat{margin-top:4px}
+.dn-clear{background:#fff;border:1.5px solid var(--pink);border-radius:10px;padding:14px 18px;font-size:14px;font-weight:600;margin-bottom:16px;line-height:1.7}
 .reading-body{background:var(--card);border-radius:12px;padding:22px 26px;font-size:14.5px;line-height:1.85;box-shadow:0 1px 2px rgba(0,0,0,.05),0 0 0 1px rgba(0,0,0,.03)}
 .reading-body h3{font-size:17px;letter-spacing:-.01em;margin:18px 0 6px}
 .reading-body h4{font-size:14.5px;margin:14px 0 4px}
@@ -214,7 +225,8 @@ a:hover{text-decoration:underline}
 #setView .set-card{background:transparent;border-radius:0;padding:4px 4px 22px;border-bottom:1px solid var(--line)}
 #setView .set-card.wide{grid-column:1 / -1}
 #setView .lp{background:#fff;border:1px solid var(--line)}
-#setView .grouplabel{margin:0 0 10px}
+#setView .grouplabel{margin:0 0 10px;padding-left:10px;border-left:3px solid var(--ink);font-size:12px;letter-spacing:1px;line-height:1.5}
+#setView .set-card .backbtn{margin-right:8px}
 #setView input,#setView textarea,#setView select{width:100%;border:1px solid rgba(0,0,0,.12);border-radius:9px;padding:8px 12px;font:inherit;font-size:13px;outline:none;background:#fff;transition:border-color 150ms,box-shadow 150ms;box-sizing:border-box}
 #setView input:focus,#setView textarea:focus,#setView select:focus{border-color:var(--pink);box-shadow:0 0 0 3.5px rgba(251,114,153,.14)}
 #setView textarea{font:12.5px/1.7 ui-monospace,Menlo,Consolas,monospace;resize:vertical;min-height:150px}
@@ -482,6 +494,7 @@ async function loadState(){
   renderSidebar();
   renderToday();
   api('/api/review/due').then(d=>{FSDUE=d.cards||[];renderSidebar();}).catch(()=>{});
+  api('/api/dungeon/list').then(d=>{STATE.dungeons=d.dungeons||[];renderSidebar();if(DN){const dd=(STATE.dungeons||[]).find(x=>x.id===DN);if(dd)renderDungeon(dd);}}).catch(()=>{});
   if(!CURRENT&&!HIST&&!EXER&&STATE.today){if(!openCached(STATE.today.id))openLesson(STATE.today.id)}
 }
 /* ---------- FSRS 到期复习（评审 P1-5） ---------- */
@@ -580,7 +593,7 @@ function renderToday(){
     }
     const anchor=prev?(prev.status==='done'?'承接你已收尾的《'+esc(prev.title)+'》✓':'前一节《'+esc(prev.title)+'》还没收尾'):'这门课的起点';
     h+='<div class="tl primary"><div class="no">01</div><div class="bd"><div class="cat">学 · 对话教学</div><div class="ti">'+esc(cur?cur.title:'')+'</div><div class="why">'+anchor+'——'+esc(cur?cur.brief:'')+'</div></div><div class="act">'+(CURRENT?'':'<button class="btn primary" onclick="openLesson(STATE.today.id)">继续学习</button>')+'</div></div>';
-    h+='<div class="tl"><div class="no">02</div><div class="bd"><div class="cat">练 · 实操练习</div><div class="ti">'+(exLeft?exLeft+' 道待做':'练习已清空')+'</div><div class="why">做完它们，收尾的知识点才落进关联图</div></div><div class="act"><button class="btn ghost" onclick="switchTab(&#39;learn&#39;)">左侧选题</button></div></div>';
+    h+='<div class="tl"><div class="no">02</div><div class="bd"><div class="cat">练 · 实操练习</div><div class="ti">'+(exLeft?exLeft+' 道待做':'今天的练习已清空')+'</div><div class="why">'+(exLeft?'做完它们，收尾的知识点才落进关联图':'明天收尾新课后会有新的练习')+'</div></div>'+(exLeft?'<div class="act"><button class="btn ghost" onclick="switchTab(&#39;learn&#39;)">左侧选题</button></div>':'')+'</div>';
     h+='<div class="tl"><div class="no">03</div><div class="bd"><div class="cat">复习 · 到期 '+dueN+' 张</div><div class="ti">'+(dueN?esc((FSDUE[0]||{}).title||'')+(dueN>1?' 等 '+dueN+' 张':''):'暂无到期')+'</div><div class="why">凭记忆先想再评——间隔按你的遗忘曲线安排</div></div><div class="act">'+(dueN?'<button class="btn ghost" onclick="openReview(FSDUE[0].id)">开始复习</button>':'')+'</div></div>';
     main.slice(0,2).forEach((m,i)=>{
       const t=String(m.Title||'');
@@ -626,6 +639,11 @@ function renderSidebar(){
   const list=$('lessonList');list.innerHTML='';
   const subs=(STATE.curriculum&&STATE.curriculum.subjects)||[];
   $('subjFoot').innerHTML=subs.length?'在学：<b>'+subs.map(esc).join('</b> · <b>')+'</b>':'';
+  // 副本进行中（AI 主导可见：入口永远在侧栏顶）
+  const act=(STATE.dungeons||[]).find(x=>x.status==='active');
+  if(act){
+    list.innerHTML='<div class="lp" onclick="openDungeon(\''+act.id+'\')"><span class="st" style="color:var(--pink)">⚔</span><span>副本 · ？？？（'+((act.stages||[]).filter(sg=>sg.done).length)+'/'+((act.stages||[]).length)+' 关）<div class="lp-sub">'+esc(act.repo)+'</div></span></div>';
+  }
   if(!STATE.curriculum||!(STATE.curriculum.lessons||[]).length){
     list.innerHTML='<div class="empty" style="margin-top:24px;padding:0 10px">输入想学的科目，<br>AI 会拆成课程，今天开始教</div>';return;
   }
@@ -718,7 +736,9 @@ function renderReading(r){
     body='<div class="mut" style="margin:8px 0">下面是中文整理版。<a href="'+esc(r.url)+'" target="_blank">读英文原文 ↗</a></div>';
   }
   if(r.brief){
-    body='<div class="brief-card"><div class="grouplabel" style="margin:0 0 6px">🤖 助教导读（深入项目后的消化）</div>'+mdRender(r.brief)+'</div>'+body;
+    body='<div class="brief-card"><div class="grouplabel" style="margin:0 0 6px">🤖 助教导读（深入项目后的消化）</div>'+mdRender(r.brief)
+      +'<div style="margin-top:14px"><button class="btn primary" onclick="startDungeon(\''+r.id+'\')" style="background:var(--ink);border:none;color:#fff">⚔ 开启副本：用你学过的知识复现这个项目</button>'
+      +'<span class="mut" style="font-size:11.5px;margin-left:10px">助教先校验与你已学内容的重合度，够格才开门</span></div></div>'+body;
   }
   if(r.url&&r.url.indexOf('github.com')>=0&&!r.done){
     const bl=r.brief&&r.brief.indexOf('失败')===0;
@@ -735,6 +755,84 @@ function renderReading(r){
     '</div><div class="mut" style="margin-bottom:8px"><a href="'+esc(r.url)+'" target="_blank">'+esc(r.url)+'</a></div>'+body;
 }
 function closeReading(){READING=null;renderReadings();}
+/* ---------- 副本学习（用已学知识复现真实项目，通关揭晓恍然大悟） ---------- */
+let DN=null; // 当前打开的副本 id
+async function startDungeon(readingId){
+  const btn=event.target;btn.disabled=true;btn.textContent='⚔ 副本设计中…（校验重合度+生成关卡）';
+  try{
+    const r=await api('/api/dungeon/start',{readingId});
+    DN=r.dungeon.id;
+    if(!STATE.dungeons)STATE.dungeons=[];
+    STATE.dungeons.push(r.dungeon);
+    openDungeon(DN);
+  }catch(e){btn.disabled=false;btn.textContent='⚔ 开启副本：用你学过的知识复现这个项目';toast(e.message)}
+}
+function openDungeon(id){
+  const d=(STATE.dungeons||[]).find(x=>x.id===id);if(!d)return;
+  leaveHistory();
+  DN=id;CURRENT=null;EXER=null;READING=null;
+  $('lessonTitle').textContent=d.status==='active'?'副本 · ？？？（通关揭晓）':'副本 · '+d.title;
+  $('kicker').textContent='DUNGEON · 副本复现';
+  renderDungeon(d);
+  switchTab('learn');
+}
+function renderDungeon(d){
+  // 关卡进度条
+  let st='<div class="dn-stages">';
+  (d.stages||[]).forEach((sg,i)=>{
+    const cls=i<d.cur?'done':(i===d.cur&&d.status==='active'?'cur':'');
+    st+='<div class="dn-stage '+cls+'"><span class="dn-no">'+(i+1)+'</span><span>'+esc(sg.title)+'</span>'+(sg.done?'<span class="dn-done">✓</span>':'')+'</div>';
+  });
+  st+='</div>';
+  let h=st;
+  // 已通关横幅
+  if(d.status==='cleared'){
+    h+='<div class="dn-clear">🎉 恭喜——你实现了「'+esc(d.project||d.title)+'」。回头看：它只用了你已经学会的东西。</div>';
+  } else if(d.status==='abandoned'){
+    h+='<div class="dn-clear" style="border-color:var(--line);color:var(--mut)">副本已放弃——随时可以再回来（项目与关卡还在）。</div>';
+  }
+  // 对话流
+  h+='<div id="dnChat" class="dn-chat">';
+  (d.messages||[]).forEach(m=>{
+    if(!m.content)return;
+    h+='<div class="msg '+(m.role==='assistant'?'a':'u')+'"><div class="bubble">'+fmtContent(m.content)+'</div></div>';
+  });
+  h+='</div>';
+  // 输入与放弃
+  if(d.status==='active'){
+    h+='<div class="dir-input" style="max-width:none"><textarea id="dnInput" placeholder="提交这一关的成果 / 说卡住了 / 问点什么…"></textarea><button onclick="sendDungeon()">提交</button></div>';
+    h+='<div style="text-align:right;margin-top:6px"><span class="mut" style="font-size:11px;cursor:pointer" onclick="abandonDungeon(\''+d.id+'\')">放弃副本（可随时回来）</span></div>';
+  }
+  const c=$('chat');
+  c.innerHTML=h;
+  const ta=document.getElementById('dnInput');
+  if(ta)ta.onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendDungeon();}};
+  $('view').scrollTop=$('view').scrollHeight;
+}
+async function sendDungeon(){
+  const ta=document.getElementById('dnInput');if(!ta)return;
+  const text=ta.value.trim();if(!text)return;
+  const d=(STATE.dungeons||[]).find(x=>x.id===DN);if(!d)return;
+  ta.value='';
+  d.messages.push({role:'user',content:text},{role:'assistant',content:'…'});
+  renderDungeon(d);
+  try{
+    const r=await api('/api/dungeon/send',{id:DN,text});
+    const nd=r.dungeon;
+    const old=d.messages;
+    Object.assign(d,nd);
+    if(!nd.messages||!nd.messages.length)d.messages=old;
+    renderDungeon(d);
+  }catch(e){d.messages.splice(d.messages.length-2,2);renderDungeon(d);toast('失败：'+e.message)}
+}
+async function abandonDungeon(id){
+  try{
+    await api('/api/dungeon/abandon',{id});
+    const d=(STATE.dungeons||[]).find(x=>x.id===id);if(d)d.status='abandoned';
+    DN=null;renderSidebar();renderReadings();switchTab('read');
+    toast('副本已收起——项目与关卡都留着，随时回来');
+  }catch(e){toast('失败：'+e.message)}
+}
 // AI 导读：助教深入项目源码后产出结构化消化（是什么/核心概念/怎么用/复现路径）
 async function genBrief(id){
   const r=(STATE.readings||[]).find(x=>x.id===id);if(!r)return;

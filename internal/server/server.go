@@ -119,6 +119,8 @@ type Server struct {
 	ContextEdges map[string]int `json:"contextEdges"`
 	// 错题回归（Magpie 思想）：答错的知识点记入错题本，下次出题优先出换场景变式——自适应让人看得见
 	WrongHits map[string]*WrongHit `json:"wrongHits"`
+	// 副本学习（用户 2026-10-26 设计）：用已收尾知识复现真实项目，通关揭晓恍然大悟
+	Duns []*tutor.Dungeon `json:"dungeons"`
 	// 模型配置口：多 Profile 热切换（key 只落本地 llm.json，0600，不入仓库）
 	LLMStore    *llm.Store       `json:"-"`
 	AgentsPath  string           `json:"-"` // AGENTS.md 约束文件（每次 LLM 调用热读）
@@ -235,6 +237,7 @@ func NewServer(dir string) *Server {
 	s.FSRS = fsrs.NewScheduler()
 	// 助教改进观察 backlog + 仓库根（自迭代工作区）
 	_ = s.load("backlog.json", &s.Obs)
+	_ = s.load("dungeons.json", &s.Duns)
 	if abs, err := filepath.Abs(dir); err == nil {
 		s.RepoDir = filepath.Dir(abs)
 	}
@@ -733,6 +736,20 @@ func (s *Server) existingObservations() string {
 
 func (s *Server) saveBacklog() {
 	s.save("backlog.json", Backlog{Updated: time.Now().Format("2006-01-02"), Observations: s.Obs})
+}
+
+func (s *Server) saveDuns() {
+	s.save("dungeons.json", s.Duns)
+}
+
+// activeDungeon 当前进行中的副本（同时只跑一个——专注）。
+func (s *Server) activeDungeon() *tutor.Dungeon {
+	for _, d := range s.Duns {
+		if d.Status == "active" {
+			return d
+		}
+	}
+	return nil
 }
 
 func (s *Server) hasOpenObservation() bool {
@@ -1612,6 +1629,112 @@ func (s *Server) Handlers() http.Handler {
 		http.Error(w, "练习不存在", 404)
 	})
 	// 助教导读：深入 GitHub 项目源码（browse→fetch 多文件）→ 结构化消化（用户 2026-10-26 指令）
+	// ---------- 副本学习（用户 2026-10-26 设计：用已收尾知识复现真实项目，通关揭晓恍然大悟） ----------
+	mux.HandleFunc("/api/dungeon/start", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			ReadingID string `json:"readingId"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		if s.Tutor == nil {
+			http.Error(w, "LLM 未配置", 400)
+			return
+		}
+		if s.activeDungeon() != nil {
+			http.Error(w, "已有进行中的副本——一次只打一个", 400)
+			return
+		}
+		for i := range s.Readings {
+			if s.Readings[i].ID != req.ReadingID {
+				continue
+			}
+			rd := &s.Readings[i]
+			repo := githubRepoFromURL(rd.URL)
+			if repo == "" {
+				http.Error(w, "该条目不是 GitHub 项目", 400)
+				return
+			}
+			if rd.Brief == "" {
+				http.Error(w, "先让助教生成项目导读，再开副本", 400)
+				return
+			}
+			d, missing, err := s.Tutor.DungeonStart(briefContext(s, rd), repo, rd.Brief)
+			if err != nil {
+				http.Error(w, err.Error(), 500)
+				return
+			}
+			if d == nil {
+				http.Error(w, missing, 400) // 重合度不足——缺什么如实告知
+				return
+			}
+			d.ID = fmt.Sprintf("dn-%s-%d", time.Now().Format("0102"), len(s.Duns)+1)
+			d.ReadingID = rd.ID
+			s.Duns = append(s.Duns, d)
+			s.saveDuns()
+			writeJSON(w, map[string]any{"dungeon": d})
+			return
+		}
+		http.Error(w, "阅读条目不存在", 404)
+	})
+	mux.HandleFunc("/api/dungeon/send", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			ID   string `json:"id"`
+			Text string `json:"text"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		d := s.activeDungeon()
+		if d == nil || d.ID != req.ID {
+			http.Error(w, "副本不在进行中", 400)
+			return
+		}
+		reply, err := s.Tutor.DungeonSend(d, req.Text, s.buildFetchTools())
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		s.saveDuns()
+		writeJSON(w, map[string]any{"reply": reply, "dungeon": d})
+	})
+	mux.HandleFunc("/api/dungeon/list", func(w http.ResponseWriter, _ *http.Request) {
+		// 列表脱敏：active 副本不回传 project 名（Sealed 机制）
+		type dunView struct {
+			ID       string         `json:"id"`
+			Repo     string         `json:"repo"`
+			Title    string         `json:"title"`
+			Status   string         `json:"status"`
+			Stages   []tutor.DStage `json:"stages"`
+			Cur      int            `json:"cur"`
+			Messages []llm.Message  `json:"messages,omitempty"`
+		}
+		out := []dunView{}
+		for _, d := range s.Duns {
+			title := d.Project
+			if d.Sealed() {
+				title = "？？？"
+			}
+			msgs := d.Messages
+			if d.Sealed() && len(msgs) > 0 {
+				msgs = msgs // 对话内容保留（导师本来就不透露）
+			}
+			out = append(out, dunView{ID: d.ID, Repo: d.Repo, Title: title, Status: d.Status, Stages: d.Stages, Cur: d.Cur, Messages: msgs})
+		}
+		writeJSON(w, map[string]any{"dungeons": out})
+	})
+	mux.HandleFunc("/api/dungeon/abandon", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			ID string `json:"id"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		for _, d := range s.Duns {
+			if d.ID == req.ID && d.Status == "active" {
+				d.Status = "abandoned"
+				s.saveDuns()
+				writeJSON(w, map[string]any{"ok": true})
+				return
+			}
+		}
+		http.Error(w, "副本不存在或已结束", 404)
+	})
+
 	mux.HandleFunc("/api/reading/brief", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			ID string `json:"id"`
