@@ -747,8 +747,34 @@ function todaySteps(){
   if((mood==='10'||mood==='30')&&steps[2]&&!steps[2].done){steps[2].light=true}
   return steps;
 }
+function isPaused(){
+  const pu=STATE.pausedUntil;
+  return pu&&new Date(pu)>new Date();
+}
+/* P0-3 体面暂停：我先停两周——不算断签、不推提醒、不显示落后；回来时一句欢迎 */
+function setPaused(days){
+  api('/api/pause',{days:days}).then(async r=>{
+    await loadState();
+    toast('已经为你按下暂停——到 '+r.pausedUntil+' 之前不推送、不断签。回来时一切都在。',4200);
+    renderTodaySteps();
+  }).catch(e=>toast('失败：'+e.message));
+}
+async function resumeNow(){
+  await api('/api/resume',{});
+  await loadState();
+  toast('欢迎回来——我们从断点继续。');
+  renderTodaySteps();
+}
 function renderTodaySteps(){
   const el=document.getElementById('planCard');if(!el)return;
+  if(isPaused()){
+    const until=new Date(STATE.pausedUntil).toLocaleDateString();
+    el.innerHTML='<div class="pc" style="padding:16px 20px;text-align:center">'
+      +'<div style="font-size:15px;font-weight:700;margin-bottom:4px">⏸ 暂停中（到 '+until+'）</div>'
+      +'<div style="font-size:12px;color:var(--mut);margin-bottom:12px">这期间不算断签、不推送、没有落后——休息是计划的一部分。</div>'
+      +'<button class="va primary" onclick="resumeNow()" style="border:1px solid var(--pink);background:var(--pink);color:#fff;padding:7px 18px;font-size:12.5px;border-radius:8px;cursor:pointer;font-weight:600">我回来了，从断点继续 →</button></div>';
+    return;
+  }
 /* 小穗闭环P0-2 看见人：今天有多少时间？三选 → /api/mood 持久化 → 三步量随状态调整 */
 let MOOD_ASKED=null;
 try{MOOD_ASKED=localStorage.getItem('voyage.moodDate')===new Date().toISOString().slice(0,10)}catch(e){}
@@ -793,7 +819,7 @@ function moodRow(){
       +'<button class="'+(primary?'va primary':'va')+'" onclick="'+s.fn+'" style="border:1px solid var(--line);background:'+(primary?'var(--pink)':'var(--card)')+';color:'+(primary?'#fff':'var(--ink)')+';padding:6px 16px;font-size:12px;border-radius:8px;cursor:pointer;'+(primary?'border-color:var(--pink);font-weight:600;':'')+'">'+esc(s.act)+'</button>'
       +'</div>';
   });
-  h+='<div style="margin-top:9px;font-size:10.5px;color:var(--mut)">做完打勾 · 当前三步会自动跟着你的进度走</div></div>';
+  h+='<div style="margin-top:9px;font-size:10.5px;color:var(--mut)">做完打勾 · 当前三步会自动跟着你的进度走 · <span style="cursor:pointer;text-decoration:underline dotted" onclick="setPaused(14)">我先停两周</span></div></div>';
   el.innerHTML=h;
 }
 function todayGoLearn(){
@@ -1580,7 +1606,11 @@ function renderProgress(){
     const ds=(st.daySteps||{})[today]||[0,3];
     let avg='—';
     if((st.stepMins||[]).length){avg=Math.round(st.stepMins.reduce((a,b)=>a+b,0)/st.stepMins.length)+' 分钟'}
-    el.textContent='今天第 '+Math.min(ds[0]+1,ds[1])+'/'+ds[1]+' 步 · 连续 '+(st.streakCount||0)+' 天 · 平均每步 '+avg;
+    if(isPaused()){
+      el.textContent='暂停中——休息是计划的一部分，回来时我们从断点继续。';
+    }else{
+      el.textContent='今天第 '+Math.min(ds[0]+1,ds[1])+'/'+ds[1]+' 步 · 连续陪伴 '+(st.streakCount||0)+' 天 · 平均每步 '+avg;
+    }
   })();
   if(PROG_TAB==='dungeon')renderDunHall();
   else if(PROG_TAB==='sediment')renderSediment();
@@ -1933,6 +1963,7 @@ try{
   };
   async function checkRemind(){
     if(!('Notification' in window)||Notification.permission!=='granted')return;
+    try{const s0=STATE||{};if(s0.pausedUntil&&new Date(s0.pausedUntil)>new Date())return}catch(e){} // 暂停期不推
     if(document.visibilityState==='visible')return; /* 窗口在前台就不用打扰 */
     const last=localStorage.getItem('voyage.remindAt');
     const today=new Date().toDateString();

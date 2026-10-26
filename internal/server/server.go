@@ -161,6 +161,8 @@ type Server struct {
 	ExpBandit bool `json:"expBandit,omitempty"`
 	// P0-1 接续（小穗闭环）：跨天记住用户停在哪一步
 	LastStop *LastStop `json:"lastStop,omitempty"`
+	// P0-3 体面暂停：暂停期不算断签、不推提醒、不显示落后
+	PausedUntil *time.Time `json:"pausedUntil,omitempty"`
 	// 最小埋点（小穗收敛轮⑧）：只本地统计，不联网
 	Stats      *Stats               `json:"stats,omitempty"`
 	StepStarts map[string]time.Time `json:"-"` // 步开始时间（耗时统计用，内存态）
@@ -827,7 +829,9 @@ func (s *Server) recordVerdict(verdict string, nodeId string) {
 	} else {
 		st.Verdicts["pass"]++
 	}
-	if st.StreakLast != today {
+	if s.PausedUntil != nil && time.Now().Before(*s.PausedUntil) {
+		// 暂停期：断签冻结——回来那天接着算（不施压）
+	} else if st.StreakLast != today {
 		yest := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
 		if st.StreakLast == yest {
 			st.StreakCount++
@@ -1508,6 +1512,25 @@ func (s *Server) Handlers() http.Handler {
 	})
 	mux.HandleFunc("/api/refresh", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, s.RefreshPlan())
+	})
+	mux.HandleFunc("/api/pause", func(w http.ResponseWriter, r *http.Request) { // P0-3 体面暂停
+		var req struct {
+			Days int `json:"days"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		if req.Days <= 0 || req.Days > 90 {
+			http.Error(w, "暂停天数限 1-90", 400)
+			return
+		}
+		t := time.Now().AddDate(0, 0, req.Days)
+		s.PausedUntil = &t
+		s.saveState()
+		writeJSON(w, map[string]any{"ok": true, "pausedUntil": t.Format("2006-01-02")})
+	})
+	mux.HandleFunc("/api/resume", func(w http.ResponseWriter, _ *http.Request) {
+		s.PausedUntil = nil
+		s.saveState()
+		writeJSON(w, map[string]any{"ok": true})
 	})
 	mux.HandleFunc("/api/config/exp", func(w http.ResponseWriter, r *http.Request) { // 小穗收敛轮④：实验开关
 		var req struct {
