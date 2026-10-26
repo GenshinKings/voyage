@@ -1609,7 +1609,11 @@ function renderProgress(){
     if(isPaused()){
       el.textContent='暂停中——休息是计划的一部分，回来时我们从断点继续。';
     }else{
-      el.textContent='今天第 '+Math.min(ds[0]+1,ds[1])+'/'+ds[1]+' 步 · 连续陪伴 '+(st.streakCount||0)+' 天 · 平均每步 '+avg;
+      if((st.streakCount||0)>=1){
+        el.textContent='今天第 '+Math.min(ds[0]+1,ds[1])+'/'+ds[1]+' 步 · 已经一起走过 '+(st.streakCount||0)+' 天 · 平均每步 '+avg;
+      }else{
+        el.textContent='今天第 '+Math.min(ds[0]+1,ds[1])+'/'+ds[1]+' 步 · 新的开始，按你的节奏来 · 平均每步 '+avg;
+      }
     }
   })();
   if(PROG_TAB==='dungeon')renderDunHall();
