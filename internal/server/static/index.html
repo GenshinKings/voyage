@@ -54,7 +54,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Micr
 .backbtn:hover{background:rgba(0,113,227,.14)}
 .backbtn:active{transform:scale(.96)}
 #view{flex:1;overflow-y:auto;padding:84px 0 0}
-#chat{max-width:736px;margin:0 auto;padding:0 28px 130px}
+#chat{max-width:min(920px,100%);margin:0 auto;padding:0 28px 130px}
 .msg{margin:14px 0;display:flex;animation:msgIn 260ms cubic-bezier(.2,.8,.2,1)}
 @keyframes msgIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 #guideCard{max-width:880px;margin:6px auto 2px;padding:0 28px}
@@ -113,7 +113,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Micr
 .meta-line .ti{font-size:14.5px;font-weight:600;color:var(--ink)}
 .meta-line .ti .why{display:block;font-size:11.5px;color:var(--mut);font-weight:400;margin-top:3px}
 .meta-line .op{margin-left:auto;letter-spacing:2px;font-size:10.5px;color:#9aa2af;flex-shrink:0}
-#planCard{max-width:736px;margin:8px auto 2px;padding:0 28px}
+#planCard{max-width:min(920px,100%);margin:8px auto 2px;padding:0 28px}
 #planCard .pc{background:var(--card);border-radius:12px;padding:12px 18px;box-shadow:0 1px 2px rgba(0,0,0,.05),0 0 0 1px rgba(0,0,0,.03);font-size:12.5px}
 #planCard .pc-goals{display:flex;gap:14px;flex-wrap:wrap;color:var(--mut)}
 #planCard .pc-goals b{color:var(--ink);font-weight:600}
@@ -147,13 +147,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Micr
 .bubble .mark.propose{color:var(--pink);font-size:12.5px;font-weight:600}
 .msg.u .bubble .mark.partial{color:#ffd60a}
 .inputbar{position:absolute;bottom:0;left:0;right:0;z-index:3;padding:14px 28px 18px;background:rgba(245,245,247,.72);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border-top:1px solid rgba(0,0,0,.05)}
-#chatbox{max-width:736px;margin:0 auto;display:flex;gap:10px}
+#chatbox{max-width:min(920px,100%);margin:0 auto;display:flex;gap:10px}
 #chatbox textarea{flex:1;border:1px solid rgba(0,0,0,.12);border-radius:12px;padding:11px 15px;font:inherit;font-size:14px;resize:none;height:48px;outline:none;background:#fff;transition:border-color 150ms,box-shadow 150ms}
 #chatbox textarea:focus{border-color:var(--pink);box-shadow:0 0 0 3.5px rgba(0,113,227,.18)}
 #chatbox button{align-self:flex-end;border:none;background:var(--pink);color:#fff;padding:10px 20px;border-radius:12px;cursor:pointer;font:inherit;font-size:14px;font-weight:600;transition:transform 100ms ease-out,filter 150ms}
 #chatbox button:active{transform:scale(.95);filter:brightness(.92)}
 .empty{color:var(--mut);text-align:center;margin-top:80px;font-size:14px;line-height:1.7}
-#sediment{max-width:736px;margin:0 auto;padding:8px 28px 130px}
+#sediment{max-width:min(920px,100%);margin:0 auto;padding:8px 28px 130px}
 .counts{display:flex;gap:36px;margin:6px 0 14px}
 .counts .c .n{font-size:34px;font-weight:700;letter-spacing:-.02em}
 .counts .c .l{color:var(--mut);font-size:12.5px;font-weight:500}
@@ -371,6 +371,105 @@ a:hover{text-decoration:underline}
 .an-label{font-size:11.5px;fill:var(--ink)}
 .an-sub{font-size:10px;fill:var(--mut)}
 .an-note{font-size:10.5px;fill:var(--mut);letter-spacing:1px}
+
+/* ===== UI 评审 P0 批次（小穗评审 2026-10-27） ===== */
+/* P0-5 颜色语义 token：通过=绿 / 待验证=琥珀 / 未通过=红；选中=中性灰 */
+:root{--warn:#B07F22;--bad:#E5484D;--sel:rgba(16,27,41,.055);--focus:rgba(251,114,153,.18)}
+.bubble .mark{color:var(--green)}
+.bubble .mark.partial{color:var(--warn)}
+.msg.u .bubble .mark.partial{color:var(--warn)}
+.msg.u .bubble .mark{color:#B9E8C5}
+.sbtn.on{color:var(--pink);background:var(--sel)}
+.lp.on{background:var(--sel)}
+#subjectBox input:focus{border-color:var(--pink);box-shadow:0 0 0 3.5px var(--focus)}
+.gc-form input:focus{border-color:var(--pink);box-shadow:0 0 0 3.5px var(--focus)}
+#agentsEdit:focus{border-color:var(--pink);box-shadow:0 0 0 3.5px var(--focus)}
+/* P0-1 判定出口动作条 */
+.verdict-actions{display:flex;gap:9px;margin:2px 0 14px;align-items:center}
+.verdict-actions .va{border:1px solid var(--line);background:var(--card);color:var(--ink);padding:7px 16px;font-size:12.5px;border-radius:9px;cursor:pointer;transition:all 120ms ease-out}
+.verdict-actions .va:hover{border-color:var(--ink)}
+.verdict-actions .va.primary{background:var(--pink);border-color:var(--pink);color:#fff;font-weight:600}
+.verdict-actions .va.primary:hover{opacity:.88}
+.verdict-actions .va-hint{font-size:11px;color:var(--mut)}
+/* P0-3 进度页 tab */
+#progressTabs{display:flex;gap:6px;max-width:920px;margin:6px auto 14px;padding:0 24px}
+.ptab{border:1px solid var(--line);background:transparent;color:var(--mut);padding:7px 18px;font-size:12.5px;border-radius:9px;cursor:pointer;transition:all 120ms}
+.ptab:hover{color:var(--ink);border-color:var(--ink)}
+.ptab.on{background:var(--ink);border-color:var(--ink);color:#fff;font-weight:600}
+/* P0-4 列宽弹性（正文列 736→920 封顶弹性） */
+/* P0-4 <1200 侧栏收图标 */
+@media (max-width:1200px){
+  #side{width:64px;padding:16px 8px}
+  #side .logo .kicker,#side .logo b,#subjectBox,#lessonList,#subjFoot{display:none}
+  .sbtn-t{display:none}
+  .sbtn{font-size:17px;padding:10px 0 10px 24px}
+  .sidebtns{margin-top:20px}
+  .side-foot{display:none}
+  .logo{padding-bottom:14px;border-bottom:1px solid var(--line)}
+}
+
+/* ===== 桌面端专项（评审补充） ===== */
+/* 深色模式：变量整套覆盖 */
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme=light]){
+    --ink:#E4E6EB;--usr:#E4E6EB;--paper:#17191E;--card:#1F2229;--side:rgba(24,26,32,.86);
+    --line:#2E323B;--mut:#8B919C;--chip:rgba(228,230,235,.06);--sel:rgba(228,230,235,.08);
+    --shadow-contact:0 1px 2px rgba(0,0,0,.5),0 0 0 1px rgba(228,230,235,.04);
+  }
+  body{background:var(--paper);color:var(--ink)}
+  .msg .bubble{background:var(--card);color:var(--ink)}
+  .msg.u .bubble{background:#2A2E37;color:#E4E6EB}
+  .tcard,.td-card,.rv-card{background:linear-gradient(155deg,#241F23,#2B2229)}
+  .t-impact,.td-impact{color:#D8D3CE}
+  .shadow-card{background:linear-gradient(135deg,#232028,#2E2430)}
+  .silo{background:repeating-linear-gradient(45deg,#24262C,#24262C 4px,transparent 4px,transparent 8px)}
+  .active-card,.verdict-actions .va{background:var(--card)}
+  #input,#subjectBox input{background:var(--card);color:var(--ink);border-color:var(--line)}
+  #guideCard .status,.dn-clear{background:var(--chip)}
+  #topbar{background:rgba(23,25,30,.78);border-bottom-color:rgba(228,230,235,.06)}
+  .inputbar{background:var(--paper);border-top-color:rgba(228,230,235,.06)}
+  #chatbox textarea{background:var(--card);color:var(--ink);border-color:var(--line)}
+  #chatbox #input,#subjectBox button{background:var(--pink)}
+  #side{background:var(--side)}
+  .bubble,.dn-bubble{background:var(--card);color:var(--ink)}
+  .gLegend{color:var(--mut)}
+}
+/* 命令面板 */
+.palette{position:fixed;inset:0;background:rgba(10,11,14,.55);backdrop-filter:blur(2px);z-index:120;display:flex;align-items:flex-start;justify-content:center;padding-top:14vh}
+.pal-box{width:560px;max-width:92vw;background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.35);overflow:hidden;animation:palIn 160ms cubic-bezier(.22,.9,.32,1) both}
+@keyframes palIn{from{opacity:0;transform:translateY(-10px) scale(.98)}to{opacity:1;transform:none}}
+.pal-box input{width:100%;border:none;outline:none;padding:15px 18px;font:inherit;font-size:14.5px;background:transparent;color:var(--ink);border-bottom:1px solid var(--line)}
+.pal-list{max-height:46vh;overflow-y:auto;padding:6px}
+.pal-item{display:flex;align-items:center;gap:10px;padding:9px 14px;border-radius:8px;cursor:pointer;font-size:13.5px}
+.pal-item:hover,.pal-item.hot{background:var(--sel)}
+.pal-item .pi-ico{width:20px;text-align:center;color:var(--pink);flex:none}
+.pal-item .pi-sub{margin-left:auto;font-size:11px;color:var(--mut)}
+.pal-empty{padding:18px;text-align:center;color:var(--mut);font-size:12.5px}
+.pal-foot{padding:8px 14px;border-top:1px solid var(--line);font-size:10.5px;color:var(--mut);display:flex;gap:14px}
+kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 5px;font-size:10px;font-family:var(--num-font,monospace)}
+:root[data-theme=dark]{
+    --ink:#E4E6EB;--usr:#E4E6EB;--paper:#17191E;--card:#1F2229;--side:rgba(24,26,32,.86);
+    --line:#2E323B;--mut:#8B919C;--chip:rgba(228,230,235,.06);--sel:rgba(228,230,235,.08);
+    --shadow-contact:0 1px 2px rgba(0,0,0,.5),0 0 0 1px rgba(228,230,235,.04);
+  }
+[data-theme=dark] body{background:var(--paper);color:var(--ink)}
+[data-theme=dark] .msg .bubble{background:var(--card);color:var(--ink)}
+[data-theme=dark] .msg.u .bubble{background:#2A2E37;color:#E4E6EB}
+[data-theme=dark] .tcard,[data-theme=dark] .td-card,[data-theme=dark] .rv-card{background:linear-gradient(155deg,#241F23,#2B2229)}
+[data-theme=dark] .t-impact,[data-theme=dark] .td-impact{color:#D8D3CE}
+[data-theme=dark] .shadow-card{background:linear-gradient(135deg,#232028,#2E2430)}
+[data-theme=dark] .silo{background:repeating-linear-gradient(45deg,#24262C,#24262C 4px,transparent 4px,transparent 8px)}
+[data-theme=dark] .active-card,[data-theme=dark] .verdict-actions .va{background:var(--card)}
+[data-theme=dark] #input,[data-theme=dark] #subjectBox input{background:var(--card);color:var(--ink);border-color:var(--line)}
+[data-theme=dark] #guideCard .status,[data-theme=dark] .dn-clear{background:var(--chip)}
+[data-theme=dark] #topbar{background:rgba(23,25,30,.78);border-bottom-color:rgba(228,230,235,.06)}
+[data-theme=dark] .inputbar{background:var(--paper);border-top-color:rgba(228,230,235,.06)}
+[data-theme=dark] #chatbox textarea{background:var(--card);color:var(--ink);border-color:var(--line)}
+[data-theme=dark] #chatbox button{background:var(--pink);color:#fff}
+[data-theme=dark] #subjectBox input{background:var(--card);color:var(--ink)}
+[data-theme=dark] #side{background:var(--side)}
+[data-theme=dark] .gLegend{color:var(--mut)}
+[data-theme=dark] .ptab{border-color:var(--line)}
 </style>
 </head>
 <body>
@@ -378,14 +477,11 @@ a:hover{text-decoration:underline}
 <div id="side">
   <div class="logo"><div class="kicker">OUTPOST 2.0</div><b>全托管学习机</b></div>
   <div class="sidebtns">
-    <div class="sbtn on" data-v="learn">◈ 学习</div>
-    <div class="sbtn" data-v="dir">◈ 方向</div>
-    <div class="sbtn" data-v="dungeon">⚔ 副本</div>
-    <div class="sbtn" data-v="sediment">◈ 沉淀</div>
-    <div class="sbtn" data-v="graph">◈ 关联</div>
-    <div class="sbtn" data-v="set">◈ 设置</div>
+    <div class="sbtn on" data-v="learn">◈ <span class="sbtn-t">今天</span></div>
+    <div class="sbtn" data-v="progress">◎ <span class="sbtn-t">我的进度</span></div>
+    <div class="sbtn" data-v="set">⚙ <span class="sbtn-t">设置</span></div>
   </div>
-  <div id="subjectBox" style="cursor:pointer" onclick="switchTab('dir')" title="和 AI 助教聊聊你想学什么"><div class="mut" style="font-size:12.5px;padding:2px 0">＋ 想学新东西？去「方向」和助教聊</div></div>
+  <div id="subjectBox"><input id="subjectInput" placeholder="想学什么？一句话开课" onkeydown="if(event.key==='Enter')addSubject()"><button onclick="addSubject()">开课</button></div>
   <div id="lessonList"><div class="empty" style="margin-top:24px;padding:0 10px">加载中…</div></div>
   <div id="subjFoot"></div>
 </div>
@@ -395,10 +491,17 @@ a:hover{text-decoration:underline}
   <div id="view">
     <div id="chatOuter"><div id="guideCard"></div><div id="planCard"></div><div id="chat"></div></div>
     <div id="dirView" class="hidden"></div>
+    <div id="progressView" class="hidden">
+    <div id="progressTabs">
+      <button class="ptab on" data-pt="dungeon" onclick="switchProgTab('dungeon')">⚔ 实战副本</button>
+      <button class="ptab" data-pt="sediment" onclick="switchProgTab('sediment')">✓ 学会的</button>
+      <button class="ptab" data-pt="graph" onclick="switchProgTab('graph')">🕸 知识地图</button>
+    </div>
     <div id="dunHallView" class="hidden"></div>
     <div id="sediment" class="hidden"></div>
-    <div id="setView" class="hidden"></div>
     <div id="graphWrap" class="hidden"><div class="gLegend">圆=收尾的知识点 · <span style="color:#0071e3;font-weight:600">━</span> 练习中真实调用的连接（×N=次数） · <span style="color:#b8c0c8">━</span> 课程先后 · 点圆回到对话</div><canvas id="graphCanvas"></canvas></div>
+    </div>
+    <div id="setView" class="hidden"></div>
   </div>
   <div class="inputbar">
     <div id="chatbox">
@@ -478,7 +581,7 @@ function updateChrome(v){
   const kb=$('kicker');
   if(v==='sediment'){kb.textContent='SEDIMENT · 已经学会的';$('lessonTitle').textContent='沉淀'}
   else if(v==='dir'){kb.textContent='DIRECTION · 学习方向';$('lessonTitle').textContent='方向'}
-  else if(v==='dungeon'){kb.textContent='DUNGEON · 副本复现';$('lessonTitle').textContent='副本'}
+  else if(v==='progress'){kb.textContent='PROGRESS · 我的进度';$('lessonTitle').textContent=PROG_TAB==='dungeon'?'实战副本':(PROG_TAB==='sediment'?'学会的':'知识地图')}
   else if(v==='graph'){kb.textContent='GRAPH · 知识地图';$('lessonTitle').textContent='关联'}
   else if(v==='set'){kb.textContent='SETTINGS · 模型与约束';$('lessonTitle').textContent='设置'}
   else if(HIST){kb.textContent='HISTORY · 对话历史'}
@@ -494,13 +597,14 @@ function switchTab(v){
   document.querySelectorAll('.sbtn').forEach(t=>t.classList.toggle('on',t.dataset.v===v));
   $('chatOuter').classList.toggle('hidden',v!=='learn');
   $('dirView').classList.toggle('hidden',v!=='dir');
-  $('dunHallView').classList.toggle('hidden',v!=='dungeon');
+  $('progressView').classList.toggle('hidden',v!=='progress');
+  if(v==='progress')applyProgTab();
   $('setView').classList.toggle('hidden',v!=='set');
   $('sediment').classList.toggle('hidden',v!=='sediment');
   $('graphWrap').classList.toggle('hidden',v!=='graph');
   updateChrome(v);
   if(v==='dir')renderDirection();
-  if(v==='dungeon')renderDunHall();
+  if(v==='progress')renderProgress();
   if(v==='set')renderSettings();
   if(v==='sediment')renderSediment();
   if(v==='graph')renderGraph();
@@ -599,8 +703,43 @@ async function send(){
     if(sess)sess.messages.push({role:'user',content:text},{role:'assistant',content:r.reply});
     c.insertAdjacentHTML('beforeend','<div class="msg a"><div class="bubble">'+fmtContent(r.reply)+'</div></div>');
     $('view').scrollTop=$('view').scrollHeight;
-    if(r.verdict&&!LASTVERDICT){LASTVERDICT=true;await loadState();toast(r.verdict==='partial'?'本节收尾（半懂记录在案）——下一节来了':'本节收尾——履历已记「知道」，可继续追问，或选下一个')}
+    if(r.verdict){LASTVERDICT=true;await loadState();renderVerdictActions(r.verdict)}
   }catch(e){const tmp=$('tmpwait');if(tmp)tmp.closest('.msg').remove();toast('失败：'+e.message)}
+}
+
+/* P0-1 判定出口：再试一次 / 看解析 / 下一节（默认高亮下一节） */
+function nextLessonId(){
+  const ls=(STATE.curriculum||{}).lessons||[];
+  const idx=ls.findIndex(l=>l.id===CURRENT);
+  for(let i=idx+1;i<ls.length;i++){if(ls[i].status!=='done')return ls[i].id}
+  for(let i=0;i<idx;i++){if(ls[i].status!=='done')return ls[i].id}
+  return null;
+}
+function renderVerdictActions(verdict){
+  const c=$('chat');
+  const old=c.querySelector('.verdict-actions');if(old)old.remove();
+  const nid=nextLessonId();
+  const nl=((STATE.curriculum||{}).lessons||[]).find(l=>l.id===nid);
+  const d=document.createElement('div');d.className='verdict-actions';
+  d.innerHTML='<button class="va" onclick="retryVerdict()">↻ 再试一次</button>'
+    +'<button class="va" onclick="explainVerdict()">📖 看解析</button>'
+    +(nid?'<button class="va primary" onclick="gotoNext()">下一节：'+esc(nl?nl.title:'')+' →</button>':'')
+    +'<span class="va-hint">'+(verdict==='partial'?'半懂已记录——再答一次可转全过':'Enter 直接继续')+'</span>';
+  c.appendChild(d);
+  $('view').scrollTop=$('view').scrollHeight;
+}
+function retryVerdict(){
+  const ta=$('input');ta.focus();ta.placeholder='把同一道题再答一遍——半懂会转全过';
+  toast('再答一次，助教会把履历更新为「知道」');
+}
+function explainVerdict(){
+  const ta=$('input');ta.value='请把这道检查题的完整解析讲一遍——我哪里想对了，哪里还有偏差';
+  send();
+}
+function gotoNext(){
+  const nid=nextLessonId();
+  if(nid){LASTVERDICT=null;openLesson(nid)}
+  else toast('这一科已经全部收尾——去「我的进度」开个新影子副本试试');
 }
 
 // 练习作答：题目对话里发解法 → 助教批改 → [PASS] 记「用过」履历
@@ -891,7 +1030,9 @@ async function commitProposal(){
 /* ---------- 设置：模型配置口 + AGENTS.md 约束 ---------- */
 function renderSettings(){
   const v=$('setView');
+  const oldRow=document.getElementById('remindRow');if(oldRow)oldRow.remove();
   v.innerHTML='<div class="mut" style="margin:4px 0 12px">加载中…</div>';
+  setTimeout(appendRemindRow,50);
   api('/api/llm/profiles').then(d=>{
     let h='<div class="set-grid">';
     // 左列：模型配置
@@ -1322,6 +1463,22 @@ async function abandonDungeon(id){
 /* ---------- 影子副本 v2（demo/shadow-dungeon 移植） ---------- */
 /* 影子候选卡 / 进行中卡 / 收藏墙 / 雾散开门 / 一锤揭晓 / 沉淀连锚 */
 
+let PROG_TAB='dungeon';
+function renderProgress(){
+  applyProgTab();
+  if(PROG_TAB==='dungeon')renderDunHall();
+  else if(PROG_TAB==='sediment')renderSediment();
+  else renderGraph();
+}
+function applyProgTab(){
+  const pv=$('progressView');
+  if(!pv||pv.classList.contains('hidden'))return;
+  pv.querySelectorAll('.ptab').forEach(t=>t.classList.toggle('on',t.dataset.pt===PROG_TAB));
+  $('dunHallView').classList.toggle('hidden',PROG_TAB!=='dungeon');
+  $('sediment').classList.toggle('hidden',PROG_TAB!=='sediment');
+  $('graphWrap').classList.toggle('hidden',PROG_TAB!=='graph');
+}
+function switchProgTab(t){PROG_TAB=t;if(curView!=='progress')switchTab('progress');else{applyProgTab();renderProgress()}}
 function starsHTML(n){let h='';for(let i=1;i<=3;i++)h+=i<=n?'★':'<span class="off">★</span>';return '<span class="stars">'+h+'</span>'}
 function tierHTML(t){const names=['巩固','拉伸','跃迁'];return '<span class="tier t'+t+'">'+(names[t]||'巩固')+'</span>'}
 function reqHTML(req){return '<div class="req">'+(req||[]).map(r=>'<span class="chip'+(r.miss?' miss':'')+'">'+esc(r.n)+(r.miss?' · 未掌握':'')+'</span>').join('')+'</div>'}
@@ -1496,14 +1653,172 @@ async function reopenDungeon(id){
     openDungeon(id);
   }catch(e){toast('失败：'+e.message)}
 }
-// 快捷键 1-7：视图顺序 = 侧栏顺序
-const VIEW_ORDER=['learn','dir','dungeon','sediment','graph','set'];
+// 快捷键 1-3：今天 / 我的进度 / 设置
+const VIEW_ORDER=['learn','progress','set'];
 document.addEventListener('keydown',e=>{
   if(e.target&&(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'))return;
   const n=parseInt(e.key);
   if(n>=1&&n<=VIEW_ORDER.length)switchTab(VIEW_ORDER[n-1]);
 });
 loadState();
+/* ---------- 桌面端专项：Ctrl+K 命令面板 / Esc 弹层 / 页面与窗口记忆 / 今日提醒 ---------- */
+
+/* 命令面板 */
+let PAL_ITEMS=[],PAL_HOT=0;
+function palSource(){
+  const items=[
+    {ico:'◈',t:'今天 · 继续学习',sub:'视图',run:()=>switchTab('learn')},
+    {ico:'◎',t:'我的进度',sub:'视图',run:()=>switchTab('progress')},
+    {ico:'⚔',t:'实战副本',sub:'进度',run:()=>{PROG_TAB='dungeon';switchTab('progress')}},
+    {ico:'✓',t:'学会的',sub:'进度',run:()=>{PROG_TAB='sediment';switchTab('progress')}},
+    {ico:'🕸',t:'知识地图',sub:'进度',run:()=>{PROG_TAB='graph';switchTab('progress')}},
+    {ico:'⚙',t:'设置',sub:'视图',run:()=>switchTab('set')},
+  ];
+  (STATE.curriculum||{}).lessons?.forEach(l=>{
+    items.push({ico:'▸',t:l.title,sub:l.status==='done'?'已收尾':'课程',run:()=>openLesson(l.id)});
+  });
+  return items;
+}
+function openPalette(){
+  let ov=document.getElementById('palette');
+  if(ov){closePalette();return}
+  ov=document.createElement('div');ov.className='palette';ov.id='palette';
+  ov.innerHTML='<div class="pal-box"><input id="palInput" placeholder="跳到课程、视图或动作…">'
+    +'<div class="pal-list" id="palList"></div>'
+    +'<div class="pal-foot"><span><kbd>↑</kbd><kbd>↓</kbd> 选择</span><span><kbd>Enter</kbd> 执行</span><span><kbd>Esc</kbd> 关闭</span></div></div>';
+  document.body.appendChild(ov);
+  ov.addEventListener('click',e=>{if(e.target===ov)closePalette()});
+  const inp=ov.querySelector('#palInput');
+  PAL_ITEMS=palSource();PAL_HOT=0;
+  const draw=()=>{
+    const q=inp.value.trim().toLowerCase();
+    const list=PAL_ITEMS.filter(x=>!q||x.t.toLowerCase().includes(q));
+    ov.querySelector('#palList').innerHTML=list.length?list.map((x,i)=>
+      '<div class="pal-item'+(i===PAL_HOT?' hot':'')+'" data-i="'+PAL_ITEMS.indexOf(x)+'"><span class="pi-ico">'+x.ico+'</span>'+esc(x.t)+'<span class="pi-sub">'+x.sub+'</span></div>').join('')
+      :'<div class="pal-empty">没有匹配项</div>';
+    ov.querySelectorAll('.pal-item').forEach(el=>el.onclick=()=>{const it=PAL_ITEMS[+el.dataset.i];closePalette();it.run()});
+  };
+  inp.oninput=()=>{PAL_HOT=0;draw()};
+  inp.onkeydown=e=>{
+    const q=inp.value.trim().toLowerCase();
+    const list=PAL_ITEMS.filter(x=>!q||x.t.toLowerCase().includes(q));
+    if(e.key==='ArrowDown'){e.preventDefault();PAL_HOT=Math.min(PAL_HOT+1,list.length-1);draw()}
+    else if(e.key==='ArrowUp'){e.preventDefault();PAL_HOT=Math.max(PAL_HOT-1,0);draw()}
+    else if(e.key==='Enter'){e.preventDefault();if(list[PAL_HOT]){closePalette();list[PAL_HOT].run()}}
+  };
+  draw();
+  setTimeout(()=>inp.focus(),30);
+}
+function closePalette(){const ov=document.getElementById('palette');if(ov)ov.remove()}
+/* Esc 关弹层（面板/纪念卡详情/揭晓——揭晓不关，是仪式） */
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){
+    closePalette();
+    const td=document.querySelector('.tdetail');if(td)td.remove();
+  }else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){
+    e.preventDefault();openPalette();
+  }
+});
+
+/* 页面记忆：刷新/重开回到上次所在视图与进度 tab */
+(function(){
+  const savedView=localStorage.getItem('voyage.lastView');
+  const savedTab=localStorage.getItem('voyage.lastProgTab');
+  if(savedTab)PROG_TAB=savedTab;
+  const _switchTab=switchTab;
+  window.switchTab=function(v){
+    localStorage.setItem('voyage.lastView',v);
+    if(v==='progress')localStorage.setItem('voyage.lastProgTab',PROG_TAB);
+    _switchTab(v);
+  };
+  const _switchProgTab=window.switchProgTab;
+  if(_switchProgTab)window.switchProgTab=function(t){localStorage.setItem('voyage.lastProgTab',t);_switchProgTab(t)};
+  if(savedView&&['learn','progress','set'].includes(savedView)){
+    setTimeout(()=>{try{switchTab(savedView)}catch(e){}},400);
+  }
+})();
+
+/* 窗口大小/位置记忆（App 窗口） */
+(function(){
+  try{
+    const w=localStorage.getItem('voyage.win');
+    if(w){
+      const o=JSON.parse(w);
+      if(o.w&&o.h){
+        window.resizeTo(o.w,o.h);
+        if(o.x!=null&&window.moveTo)try{window.moveTo(o.x,o.y)}catch(e){}
+      }
+    }
+    let t=null;
+    window.addEventListener('resize',()=>{
+      clearTimeout(t);
+      t=setTimeout(()=>{
+        try{localStorage.setItem('voyage.win',JSON.stringify({w:window.outerWidth||window.innerWidth,h:window.outerHeight||window.innerHeight}))}catch(e){}
+      },600);
+    });
+  }catch(e){}
+})();
+
+function appendRemindRow(){
+  const sv=document.getElementById('setView');
+  if(!sv||document.getElementById('remindRow'))return;
+  const on=localStorage.getItem('voyage.remind')==='1';
+  const theme=localStorage.getItem('voyage.theme')||'';
+  const row=document.createElement('div');row.id='remindRow';row.className='set-card';
+  row.style.maxWidth='min(920px,100%)';row.style.margin='0 auto 16px';
+  row.innerHTML='<div class="grouplabel">桌面体验</div>'
+    +'<label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer"><input type="checkbox" '+(on?'checked':'')+' onchange="window.setDailyRemind&&setDailyRemind(this.checked)">今日步骤提醒（窗口在后台时通知「还差 N 步」，每天最多一次，可随时关）</label>'
+    +'<div style="display:flex;align-items:center;gap:10px;font-size:13px;margin-top:8px">外观：<select onchange="setTheme(this.value)" style="font:inherit;padding:4px 8px;border-radius:7px;border:1px solid var(--line);background:var(--card);color:var(--ink)">'
+    +'<option value=""'+(theme===''?' selected':'')+'>跟随系统</option><option value="light"'+(theme==='light'?' selected':'')+'>浅色</option><option value="dark"'+(theme==='dark'?' selected':'')+'>深色</option></select>'
+    +'<span style="font-size:11px;color:var(--mut)">快捷键：Ctrl+K 命令面板 · Esc 关弹层 · Shift+Enter 换行 · 1/2/3 切主视图</span></div>';
+  sv.prepend(row);
+}
+function setTheme(v){
+  localStorage.setItem('voyage.theme',v);
+  if(v)document.documentElement.setAttribute('data-theme',v);
+  else document.documentElement.removeAttribute('data-theme');
+}
+try{const _t=localStorage.getItem('voyage.theme');if(_t)document.documentElement.setAttribute('data-theme',_t)}catch(e){}
+/* 小穗评审验收演示钩子：?demo=verdict 拍判定出口 / ?demo=narrow 拍侧栏图标模式（真实函数真实渲染） */
+try{
+  const _dp=new URLSearchParams(location.search).get('demo');
+  if(_dp==='verdict')setTimeout(()=>{renderVerdictActions('partial')},1400);
+  if(_dp==='narrow')setTimeout(()=>{try{window.resizeTo(1100,880)}catch(e){}},900);
+  if(_dp==='settings')setTimeout(()=>{try{switchTab('set')}catch(e){}},1600);
+  if(_dp==='dark')setTimeout(()=>{try{setTheme('dark');switchTab('progress')}catch(e){}},1600);
+}catch(e){}
+/* 今日提醒（可关闭）：服务端今日计划未完成时，每 30 分钟最多提醒一次 */
+(function(){
+  let timer=null;
+  window.setDailyRemind=function(on){
+    localStorage.setItem('voyage.remind',on?'1':'0');
+    if(timer){clearInterval(timer);timer=null}
+    if(on){
+      checkRemind();
+      timer=setInterval(checkRemind,30*60*1000);
+      toast('今日提醒已开启——还差步骤时会通知你');
+    }else toast('今日提醒已关闭');
+  };
+  async function checkRemind(){
+    if(!('Notification' in window)||Notification.permission!=='granted')return;
+    if(document.visibilityState==='visible')return; /* 窗口在前台就不用打扰 */
+    const last=localStorage.getItem('voyage.remindAt');
+    const today=new Date().toDateString();
+    if(last===today+':sent')return;
+    try{
+      const st=await api('/api/state');
+      const plan=st.plan||{};
+      const total=(plan.main||[]).length;
+      const doneN=(st.done&&st.done.main?st.done.main:[]).length;
+      const left=total-doneN;
+      if(left>0){
+        new Notification('前哨 · 今天还差 '+left+' 步', {body:'上次你停在「'+((st.today||{}).title||'今天的课')+'」——点开继续。'});
+        localStorage.setItem('voyage.remindAt',today+':sent');
+      }
+    }catch(e){}
+  }
+})();
+
 </script>
 </body>
 </html>
