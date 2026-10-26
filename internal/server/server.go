@@ -86,6 +86,14 @@ type Completed struct {
 	Shape   string   `json:"shape,omitempty"`
 }
 
+// LastStop 接续锚点（小穗闭环 P0-1）：跨天/冷启动时一句话把人接回来。
+type LastStop struct {
+	NodeID string    `json:"nodeId"`
+	Title  string    `json:"title"`
+	Step   string    `json:"step"` // 学/练/副本 + 进度描述
+	At     time.Time `json:"at"`
+}
+
 // Stats 最小埋点（小穗收敛轮⑧）：只本地统计，不联网。
 type Stats struct {
 	DaySteps    map[string][2]int `json:"daySteps"` // date -> [已完成步,总步=3]
@@ -151,6 +159,8 @@ type Server struct {
 	// 实验开关（小穗收敛轮④）：Elo 能力估计 / bandit 题目选择——保留代码，默认关闭
 	ExpElo    bool `json:"expElo,omitempty"`
 	ExpBandit bool `json:"expBandit,omitempty"`
+	// P0-1 接续（小穗闭环）：跨天记住用户停在哪一步
+	LastStop *LastStop `json:"lastStop,omitempty"`
 	// 最小埋点（小穗收敛轮⑧）：只本地统计，不联网
 	Stats      *Stats               `json:"stats,omitempty"`
 	StepStarts map[string]time.Time `json:"-"` // 步开始时间（耗时统计用，内存态）
@@ -1596,6 +1606,9 @@ func (s *Server) Handlers() http.Handler {
 		if isNew { // ⑧埋点：步开始（耗时统计起点）
 			s.recordStepOpen(lesson.ID)
 		}
+		if s.LastStop == nil || s.LastStop.NodeID != lesson.ID {
+			s.LastStop = &LastStop{NodeID: lesson.ID, Title: lesson.Title, Step: "讲到一半", At: time.Now()}
+		}
 		writeJSON(w, map[string]any{"session": sess, "isNew": isNew})
 	})
 	mux.HandleFunc("/api/tutor/send", func(w http.ResponseWriter, r *http.Request) {
@@ -1630,6 +1643,8 @@ func (s *Server) Handlers() http.Handler {
 			verdict = v.Kind
 		}
 		s.recordVerdict(verdict, lesson.ID)
+		s.LastStop = &LastStop{NodeID: lesson.ID, Title: lesson.Title,
+			Step: "判定结束", At: time.Now()}
 		writeJSON(w, map[string]any{"reply": v.Reply, "verdict": verdict})
 	})
 	mux.HandleFunc("/api/exercise/generate", func(w http.ResponseWriter, _ *http.Request) {

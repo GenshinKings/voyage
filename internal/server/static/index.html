@@ -748,8 +748,21 @@ function todaySteps(){
 }
 function renderTodaySteps(){
   const el=document.getElementById('planCard');if(!el)return;
+  /* P0-1 接续：隔天/冷启动 + 那节课还没收尾 → 一句话 + 一个按钮 */
+  const ls=STATE.lastStop;
+  const today=new Date().toISOString().slice(0,10);
+  let resumeHTML='';
+  if(ls&&ls.nodeId&&(ls.at||'').slice(0,10)!==today){
+    const sess=(STATE.sessions||{})[ls.nodeId];
+    const unfinished=!sess||!sess.verdict;
+    if(unfinished){
+      resumeHTML='<div style="background:var(--pink-soft,rgba(251,114,153,.12));border-radius:10px;padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;gap:10px">'
+        +'<span style="font-size:13px;flex:1">👋 上次你停在<b>「'+esc(ls.title)+'」</b>（'+esc(ls.step)+'）——今天先把这个补上。</span>'
+        +'<button class="va primary" onclick="openLesson(\'+ls.nodeId+\')" style="border:1px solid var(--pink);background:var(--pink);color:#fff;padding:6px 16px;font-size:12px;border-radius:8px;cursor:pointer;font-weight:600">从那里继续 →</button></div>';
+    }
+  }
   const steps=todaySteps();
-  let h='<div class="pc" style="padding:14px 20px"><div class="grouplabel" style="margin:0 0 10px">今天三步</div>';
+  let h='<div class="pc" style="padding:14px 20px">'+resumeHTML+'<div class="grouplabel" style="margin:0 0 10px">今天三步</div>';
   steps.forEach((s,i)=>{
     const primary=s.cur;
     h+='<div style="display:flex;align-items:center;gap:12px;padding:7px 0;'+(i<steps.length-1?'border-bottom:1px dashed var(--line);':'')+'">'
