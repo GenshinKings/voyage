@@ -1239,10 +1239,15 @@ func (s *Server) SettleMood(mood string, completed bool) {
 // Handlers 装配路由。
 func (s *Server) Handlers() http.Handler {
 	mux := http.NewServeMux()
+	// embed 静态资源随版本更新——客户端禁止缓存（否则发版后浏览器拿旧 JS，表现为「改了没生效」）
+	noCache := func(w http.ResponseWriter) {
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	}
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		if s.Plan == nil {
 			s.RefreshPlan()
 		}
+		noCache(w)
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write(indexHTML)
 	})

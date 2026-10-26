@@ -39,11 +39,20 @@ type Curriculum struct {
 
 // Session 单个知识点的教学对话。
 type Session struct {
-	NodeID    string        `json:"nodeId"`
-	Title     string        `json:"title"`
-	Messages  []llm.Message `json:"messages"`
-	Verdict   string        `json:"verdict,omitempty"` // pass | partial | ""
-	UpdatedAt time.Time     `json:"updatedAt"`
+	NodeID      string        `json:"nodeId"`
+	Title       string        `json:"title"`
+	Messages    []llm.Message `json:"messages"`
+	Verdict     string        `json:"verdict,omitempty"` // pass | partial | ""
+	OpeningMeta *OpeningMeta  `json:"openingMeta,omitempty"`
+	UpdatedAt   time.Time     `json:"updatedAt"`
+}
+
+// OpeningMeta 开场元信息：开场指令消息是给 LLM 的（前端不渲染为气泡），
+// 这份结构给前端画「元信息条」（节序号/标题/承接）——学习页重设计 v3。
+type OpeningMeta struct {
+	Index int    `json:"index"` // 节序号（1-based）
+	Title string `json:"title"`
+	Why   string `json:"why"` // 学完能做什么（承接）
 }
 
 // Tutor 教学引擎。
@@ -267,6 +276,7 @@ func (t *Tutor) StartOrResume(lesson Lesson) (*Session, bool, error) {
 		return nil, false, fmt.Errorf("LLM 未配置")
 	}
 	s := &Session{NodeID: lesson.ID, Title: lesson.Title}
+	s.OpeningMeta = &OpeningMeta{Index: lesson.Order, Title: lesson.Title, Why: lesson.Brief}
 	sys := teachSystem
 	user := fmt.Sprintf("知识点：《%s》——%s\n科目：%s\n现在开始教学：输出你的开场（讲解+检查题）。",
 		lesson.Title, lesson.Brief, lesson.Subject)
