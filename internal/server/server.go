@@ -122,6 +122,8 @@ type Trophy struct {
 	Short     string    `json:"short"` // 10·27
 	At        time.Time `json:"at"`
 	DungeonID string    `json:"dungeonId"`
+	// 小穗二轮问题1：证据必须挂用户自己的产物（他的仓库/commit/文件），不是被复现的原仓库
+	UserEvidence string `json:"userEvidence,omitempty"`
 }
 
 // Reading 孵化池条目：进货抓来的候选项目——助教孵化（Shadow）后可开门进副本。
@@ -943,9 +945,14 @@ func (s *Server) exportResume() (string, error) {
 	for _, sk := range skills {
 		b.WriteString("### " + sk + "\n")
 		for _, tr := range skill[sk] {
-			b.WriteString("- **" + tr.Name + "**（" + tr.Repo + "）：复现于 " + tr.Date + "\n")
+			b.WriteString("- **" + tr.Name + "**：复现于 " + tr.Date + "\n")
 			b.WriteString("  - " + tr.Impact + "\n")
-			b.WriteString("  - 证据：https://github.com/" + tr.Repo + "\n")
+			if tr.UserEvidence != "" {
+				b.WriteString("  - 证据（我的产物）：" + tr.UserEvidence + "\n")
+			} else {
+				b.WriteString("  - 证据：待补——把你的仓库/文件路径写进这张纪念卡，简历才有力气\n")
+			}
+			b.WriteString("  - 参考来源（被复现的项目）：" + tr.Repo + "\n")
 		}
 	}
 	b.WriteString("\n## 作品清单\n\n")
@@ -957,6 +964,26 @@ func (s *Server) exportResume() (string, error) {
 		return "", err
 	}
 	return path, nil
+}
+
+// extractUserEvidence 从副本对话里找用户自己的产物：本地文件路径 / 他的仓库链接 / commit。
+// 找不到就留空——简历里挂「待补」，绝不用被复现的原仓库冒充证据。
+func extractUserEvidence(d *tutor.Dungeon) string {
+	for i := len(d.Messages) - 1; i >= 0; i-- {
+		if d.Messages[i].Role != "user" {
+			continue
+		}
+		for _, p := range strings.Fields(d.Messages[i].Content) {
+			p = strings.Trim(p, "\t\r\n,，。;；")
+			if strings.HasPrefix(p, "http") && strings.Contains(p, "github.com") && !strings.Contains(p, d.Repo) {
+				return p // 他自己的仓库/commit 链接
+			}
+			if (strings.Contains(p, `:\`) || strings.HasPrefix(p, "/")) && strings.ContainsAny(p, ".py.go.md.js") {
+				return p // 本地产物路径
+			}
+		}
+	}
+	return ""
 }
 
 // mintTrophy 通关揭晓时铸造纪念卡（一锤揭晓的揭晓 payload 数据源）。
@@ -971,6 +998,7 @@ func (s *Server) mintTrophy(d *tutor.Dungeon) *Trophy {
 		Stages: len(d.Stages),
 		Date:   now.Format("2006-01-02"), Short: now.Format("01·02"),
 		At: now, DungeonID: d.ID,
+		UserEvidence: extractUserEvidence(d),
 	}
 	if tr.Impact == "" { // 旧数据兜底：孵化叙事缺失时给朴素回顾
 		tr.Impact = "一个真实开源项目的核心复现——它只用了你已经学会的东西。"
@@ -1570,7 +1598,35 @@ func (s *Server) Handlers() http.Handler {
 	mux.HandleFunc("/api/opportunities", func(w http.ResponseWriter, _ *http.Request) { // P1 去处：机会页
 		writeJSON(w, map[string]any{"list": s.Opportunities})
 	})
-	mux.HandleFunc("/api/resume/export", func(w http.ResponseWriter, _ *http.Request) { // P0-4 简历导出
+	mux.HandleFunc("/api/resume/doc", func(w http.ResponseWriter, _ *http.Request) { // 小穗二轮建议3：纯预览（GET 无副作用）
+		md, err := s.exportResume()
+		if err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		writeJSON(w, map[string]any{"markdown": md})
+	})
+	mux.HandleFunc("/api/trophy/evidence", func(w http.ResponseWriter, r *http.Request) { // 小穗二轮问题1：证据补填
+		var req struct {
+			DungeonID string `json:"dungeonId"`
+			Evidence  string `json:"evidence"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		for _, tr := range s.Trophies {
+			if tr.DungeonID == req.DungeonID {
+				tr.UserEvidence = strings.TrimSpace(req.Evidence)
+				s.saveTrophies()
+				writeJSON(w, map[string]any{"ok": true})
+				return
+			}
+		}
+		http.Error(w, "纪念卡不存在", 404)
+	})
+	mux.HandleFunc("/api/resume/export", func(w http.ResponseWriter, r *http.Request) { // 落盘+打开（POST——避免预取弹窗）
+		if r.Method != http.MethodPost {
+			http.Error(w, "POST only", 405)
+			return
+		}
 		path, err := s.exportResume()
 		if err != nil {
 			http.Error(w, err.Error(), 400)
@@ -1595,7 +1651,12 @@ func (s *Server) Handlers() http.Handler {
 		s.saveState()
 		writeJSON(w, map[string]any{"ok": true, "pausedUntil": t.Format("2006-01-02")})
 	})
-	mux.HandleFunc("/api/resume", func(w http.ResponseWriter, _ *http.Request) {
+	// 小穗二轮问题2：旧 /api/resume（恢复学习）与简历命名撞车且 GET 带副作用——拆为 /api/pause/end（POST）
+	mux.HandleFunc("/api/pause/end", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "POST only", 405)
+			return
+		}
 		s.PausedUntil = nil
 		s.saveState()
 		writeJSON(w, map[string]any{"ok": true})

@@ -762,7 +762,7 @@ function setPaused(days){
   }).catch(e=>toast('失败：'+e.message));
 }
 async function resumeNow(){
-  await api('/api/resume',{});
+  await api('/api/pause/end',{});
   await loadState();
   toast('欢迎回来——我们从断点继续。');
   renderTodaySteps();
@@ -1728,24 +1728,59 @@ function showReveal(rv,done){
 }
 
 /* 纪念卡详情（flip 弹入） */
+/* 小穗二轮建议3：预览优先——先在页面里看简历，再决定要不要落盘打开（半夜不弹窗） */
 async function exportResume(btn){
   if(btn){btn.disabled=true;btn.textContent='生成中…'}
   try{
-    const r=await api('/api/resume/export',{});
-    toast('简历已生成——资源管理器已打开：'+(r.path||'resume.md'),4200);
+    const r=await api('/api/resume/doc');
+    resumePreview(r.markdown||'');
   }catch(e){toast(e.message)}
   if(btn){btn.disabled=false;btn.textContent='📜 生成实践简历（Markdown，每条挂可点开的证据）'}
+}
+function resumePreview(md){
+  let ov=document.getElementById('resumePv');
+  if(ov)ov.remove();
+  ov=document.createElement('div');ov.className='tdetail';ov.id='resumePv';
+  ov.innerHTML='<div class="td-card" style="width:560px;max-height:82vh;overflow-y:auto">'
+    +'<button class="td-close" onclick="this.closest(\'.tdetail\').remove()">✕</button>'
+    +'<div class="t-badge">📜 实践简历 · 预览</div>'
+    +'<pre style="white-space:pre-wrap;font-size:12px;line-height:1.75;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:14px;margin-top:10px">'+esc(md)+'</pre>'
+    +'<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:12px">'
+    +'<button class="btn ghost" onclick="this.closest(\'.tdetail\').remove()">关闭</button>'
+    +'<button class="btn primary" id="rvOpenBtn">打开文件（生成 resume.md 并定位）</button></div></div>';
+  document.body.appendChild(ov);
+  ov.querySelector('#rvOpenBtn').onclick=async e=>{
+    e.target.disabled=true;e.target.textContent='已生成并打开 ✓';
+    try{const r=await api('/api/resume/export',{});
+      toast('已落盘并定位：'+(r.path||'resume.md'),4200);
+      setTimeout(()=>{ov.remove()},800);
+    }catch(err){toast('失败：'+err.message);e.target.disabled=false}
+  };
+  ov.addEventListener('click',e=>{if(e.target===ov)ov.remove()});
 }
 function trophyDetail(name){
   const tr=(STATE.trophies||[]).find(x=>x.name===name);if(!tr)return;
   const ov=document.createElement('div');ov.className='tdetail';
   ov.innerHTML='<div class="td-card"><button class="td-close">✕</button>'
     +'<div class="t-badge">🏆 复现成功 · 纪念卡</div><div class="td-name">'+esc(tr.name)+'</div>'
-    +'<div class="td-repo">'+esc(tr.repo)+'</div><div class="td-impact">'+esc(tr.impact)+'</div>'
+    +'<div class="td-repo">参考来源（被复现的项目）：'+esc(tr.repo)+'</div><div class="td-impact">'+esc(tr.impact)+'</div>'
+    +'<div class="grouplabel" style="margin:16px 0 8px">我的证据（写进简历——你的仓库 / 本地文件路径）</div>'
+    +'<div style="display:flex;gap:8px"><input id="tdEv" placeholder="'+esc(tr.userEvidence||'https://github.com/你的用户名/你的作品 或 本地文件路径')+'" style="flex:1;border:1px solid var(--line);border-radius:8px;padding:8px 12px;font:inherit;font-size:12.5px;background:var(--card);color:var(--ink)"><button class="btn ghost" id="tdEvSave">保存</button></div>'
+    +(tr.userEvidence?'<div style="font-size:11px;color:var(--green);margin-top:6px">✓ 已挂证据：'+esc(tr.userEvidence)+'</div>':'<div style="font-size:11px;color:var(--mut);margin-top:6px">还没挂——挂上它简历才有说服力（这是你做出来的东西）</div>')
     +'<div class="grouplabel" style="margin:16px 0 8px">用到的知识点（连锚已写入沉淀）</div>'
     +(tr.nodes||[]).map(n=>'<span class="td-node" onclick="switchTab(\'graph\')">'+esc(n)+'</span>').join('')
     +'<div style="margin-top:18px;display:flex;justify-content:space-between;align-items:center"><span class="td-cleared">复现于 '+esc(tr.date)+'</span><button class="btn ghost" onclick="this.closest(\'.tdetail\').remove()">关闭</button></div></div>';
   document.body.appendChild(ov);
+  ov.querySelector('#tdEvSave').onclick=async()=>{
+    const v=ov.querySelector('#tdEv').value.trim();
+    if(!v){toast('贴上你的仓库链接或本地文件路径');return}
+    try{
+      await api('/api/trophy/evidence',{dungeonId:tr.dungeonId,evidence:v});
+      await loadState();
+      ov.remove();trophyDetail(name);
+      toast('证据已挂进这张纪念卡——简历里会引用它');
+    }catch(e){toast('失败：'+e.message)}
+  };
   ov.addEventListener('click',e=>{if(e.target===ov||e.target.classList.contains('td-close'))ov.remove()});
 }
 
