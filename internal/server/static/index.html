@@ -238,6 +238,27 @@ a:hover{text-decoration:underline}
 #setView .lp.on{border-color:var(--pink)}
 #setView .mut{font-size:11.5px}
 #setView pre{white-space:pre-wrap;font-size:11.5px;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:10px;margin-top:8px;max-height:260px;overflow-y:auto}
+#setView .set-card{background:var(--card);border-radius:var(--r-lg);padding:16px 20px;box-shadow:var(--shadow-contact);margin-bottom:16px}
+#setView .set-card .grouplabel{border-left-color:var(--pink)}
+/* ===== 副本大厅 ===== */
+.dh-card{background:var(--card);border:1.5px solid var(--line);border-radius:var(--r-lg);padding:16px 20px;margin-bottom:8px}
+.dh-card[style*="pink"]{box-shadow:var(--shadow-contact)}
+.dh-top{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.dh-tag{font-size:10.5px;letter-spacing:2px;padding:3px 10px;border-radius:8px;background:var(--paper);color:var(--mut)}
+.dh-tag.hot{background:rgba(251,114,153,.12);color:var(--pink);font-weight:700}
+.dh-title{font-size:15px;font-weight:700}
+.dh-item{display:flex;align-items:center;gap:16px;padding:14px 4px;border-bottom:1px dashed var(--line)}
+.dh-item.dim{opacity:.75}
+.dh-item>div:first-child{flex:1;min-width:0}
+.dh-t{font-size:14.5px;font-weight:600}
+.dh-sub{font-size:11.5px;color:var(--mut);margin-top:3px;line-height:1.6}
+.dh-actions{display:flex;gap:10px;margin-top:12px}
+.btn{border:1px solid var(--ink);background:transparent;color:var(--ink);padding:7px 16px;font-size:12.5px;cursor:pointer;border-radius:8px;white-space:nowrap}
+.btn:hover{background:var(--ink);color:#fff}
+.btn.primary{background:var(--pink);border-color:var(--pink);color:#fff}
+.btn.primary:hover{opacity:.9;background:var(--pink)}
+.btn.ghost{border-color:var(--line);color:var(--mut)}
+.btn.ghost:hover{border-color:var(--ink);color:var(--ink);background:transparent}
 </style>
 </head>
 <body>
@@ -248,6 +269,7 @@ a:hover{text-decoration:underline}
     <div class="sbtn on" data-v="learn">◈ 学习</div>
     <div class="sbtn" data-v="dir">◈ 方向</div>
     <div class="sbtn" data-v="read">◈ 阅读</div>
+    <div class="sbtn" data-v="dungeon">⚔ 副本</div>
     <div class="sbtn" data-v="sediment">◈ 沉淀</div>
     <div class="sbtn" data-v="graph">◈ 关联</div>
     <div class="sbtn" data-v="set">◈ 设置</div>
@@ -262,6 +284,7 @@ a:hover{text-decoration:underline}
   <div id="view">
     <div id="chatOuter"><div id="guideCard"></div><div id="planCard"></div><div id="chat"></div></div>
     <div id="dirView" class="hidden"></div>
+    <div id="dunHallView" class="hidden"></div>
     <div id="readView" class="hidden"></div>
     <div id="sediment" class="hidden"></div>
     <div id="setView" class="hidden"></div>
@@ -345,6 +368,7 @@ function updateChrome(v){
   const kb=$('kicker');
   if(v==='sediment'){kb.textContent='SEDIMENT · 已经学会的';$('lessonTitle').textContent='沉淀'}
   else if(v==='dir'){kb.textContent='DIRECTION · 学习方向';$('lessonTitle').textContent='方向'}
+  else if(v==='dungeon'){kb.textContent='DUNGEON · 副本复现';$('lessonTitle').textContent='副本'}
   else if(v==='read'){kb.textContent='READING · 阅读原文';$('lessonTitle').textContent='阅读'}
   else if(v==='graph'){kb.textContent='GRAPH · 知识地图';$('lessonTitle').textContent='关联'}
   else if(v==='set'){kb.textContent='SETTINGS · 模型与约束';$('lessonTitle').textContent='设置'}
@@ -362,12 +386,14 @@ function switchTab(v){
   $('chatOuter').classList.toggle('hidden',v!=='learn');
   $('readView').classList.toggle('hidden',v!=='read');
   $('dirView').classList.toggle('hidden',v!=='dir');
+  $('dunHallView').classList.toggle('hidden',v!=='dungeon');
   $('setView').classList.toggle('hidden',v!=='set');
   $('sediment').classList.toggle('hidden',v!=='sediment');
   $('graphWrap').classList.toggle('hidden',v!=='graph');
   updateChrome(v);
   if(v==='read')renderReadings();
   if(v==='dir')renderDirection();
+  if(v==='dungeon')renderDunHall();
   if(v==='set')renderSettings();
   if(v==='sediment')renderSediment();
   if(v==='graph')renderGraph();
@@ -1272,6 +1298,75 @@ async function renderGraph(){
 /* 启动 */
 $('input').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}});
 document.querySelectorAll('.sbtn').forEach(t=>t.onclick=()=>switchTab(t.dataset.v));
+/* ---------- 副本大厅（一级视图：进行中 / 可开启 / 已通关） ---------- */
+async function genBriefHere(id,btn){
+  btn.disabled=true;btn.textContent='助教研读中…';
+  try{
+    const r=await api('/api/reading/brief',{id});
+    const sr=(STATE.readings||[]).find(x=>x.id===id);if(sr)sr.brief=r.brief;
+    toast('导读完成——确认感兴趣就开门');
+    renderDunHall();
+  }catch(e){btn.disabled=false;btn.textContent='生成导读';toast('失败：'+e.message)}
+}
+async function reopenDungeon(id){
+  try{
+    await api('/api/dungeon/reopen',{id});
+    await loadState();
+    openDungeon(id);
+  }catch(e){toast('失败：'+e.message)}
+}
+function renderDunHall(){
+  const v=$('dunHallView');
+  const duns=STATE.dungeons||[];
+  const act=duns.find(x=>x.status==='active');
+  const cleared=duns.filter(x=>x.status==='cleared');
+  const abandoned=duns.filter(x=>x.status==='abandoned');
+  const usedReadings=new Set(duns.map(x=>x.readingId));
+  const ready=(STATE.readings||[]).filter(r=>!usedReadings.has(r.id)&&r.brief&&r.url&&r.url.indexOf('github.com')>=0);
+  const needBrief=(STATE.readings||[]).filter(r=>!usedReadings.has(r.id)&&(!r.brief)&&r.url&&r.url.indexOf('github.com')>=0&&!r.done);
+
+  let h='<div style="max-width:880px;margin:0 auto;padding:8px 28px 130px">';
+  if(act){
+    const doneN=(act.stages||[]).filter(sg=>sg.done).length, tot=(act.stages||[]).length;
+    h+='<div class="dh-card" style="border-color:var(--pink)"><div class="dh-top"><span class="dh-tag hot">⚔ 进行中</span><span class="dh-title">？？？（'+doneN+'/'+tot+' 关）</span></div>';
+    h+='<div class="dn-stages">'+(act.stages||[]).map((sg,i)=>'<div class="dn-stage '+(sg.done?'done':(i===act.cur?'cur':''))+'"><span class="dn-no">'+(i+1)+'</span><span>'+esc(sg.title)+'</span>'+(sg.done?'<span class="dn-done">✓</span>':'')+'</div>').join('')+'</div>';
+    h+='<div class="dh-actions"><button class="btn primary" onclick="openDungeon(&#39;'+act.id+'&#39;)">继续打副本</button><button class="btn ghost" onclick="abandonDungeon(&#39;'+act.id+'&#39;)">放弃</button></div></div>';
+  }
+  h+='<div class="grouplabel" style="margin:22px 0 8px">'+(act?'更多可挑战（打完当前的再开）':'可开启的副本 —— 用你学过的知识复现真实项目')+'</div>';
+  if(ready.length){
+    ready.forEach(r=>{
+      h+='<div class="dh-item"><div><div class="dh-t">⚔ '+esc(r.title)+'</div><div class="dh-sub">'+esc((r.url||'').replace('https://github.com/',''))+' · 助教已导读 · 开门前会校验与你已学内容的重合度</div></div><button class="btn primary" onclick="startDungeon(&#39;'+r.id+'&#39;,this)">开启</button></div>';
+    });
+  } else {
+    h+='<div class="dh-item mut" style="cursor:default">暂无可开启的项目——'+(needBrief.length?'先给下面 '+needBrief.length+' 个项目生成导读':'去进货或读完材料后再来')+'</div>';
+  }
+  if(needBrief.length){
+    needBrief.forEach(r=>{
+      h+='<div class="dh-item dim"><div><div class="dh-t">'+esc(r.title)+'</div><div class="dh-sub">尚未导读——助教先深入项目，你确认感兴趣再开门</div></div><button class="btn ghost" onclick="genBriefHere(&#39;'+r.id+'&#39;,this)">生成导读</button></div>';
+    });
+  }
+  if(cleared.length){
+    h+='<div class="grouplabel" style="margin:22px 0 8px">已通关</div>';
+    cleared.forEach(d=>{
+      h+='<div class="dh-item"><div><div class="dh-t">🏆 '+esc(d.project||d.title)+'</div><div class="dh-sub">'+(d.clearedAt||'').slice(0,10)+' · '+((d.stages||[]).length)+' 关全通</div></div><button class="btn ghost" onclick="openDungeon(&#39;'+d.id+'&#39;)">回顾</button></div>';
+    });
+  }
+  if(abandoned.length){
+    h+='<div class="grouplabel" style="margin:22px 0 8px">已收起</div>';
+    abandoned.forEach(d=>{
+      h+='<div class="dh-item dim"><div><div class="dh-t">⚔ '+esc(d.project||'？？？')+'</div><div class="dh-sub">已放弃——项目和关卡都还在</div></div><button class="btn ghost" onclick="reopenDungeon(&#39;'+d.id+'&#39;)">重新开启</button></div>';
+    });
+  }
+  h+='</div>';
+  v.innerHTML=h;
+}
+// 快捷键 1-7：视图顺序 = 侧栏顺序
+const VIEW_ORDER=['learn','dir','read','dungeon','sediment','graph','set'];
+document.addEventListener('keydown',e=>{
+  if(e.target&&(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'))return;
+  const n=parseInt(e.key);
+  if(n>=1&&n<=VIEW_ORDER.length)switchTab(VIEW_ORDER[n-1]);
+});
 loadState();
 </script>
 </body>

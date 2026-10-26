@@ -1731,6 +1731,25 @@ func (s *Server) Handlers() http.Handler {
 		}
 		writeJSON(w, map[string]any{"dungeons": out})
 	})
+	mux.HandleFunc("/api/dungeon/reopen", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			ID string `json:"id"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		if s.activeDungeon() != nil {
+			http.Error(w, "已有进行中的副本——一次只打一个", 400)
+			return
+		}
+		for _, d := range s.Duns {
+			if d.ID == req.ID && d.Status == "abandoned" {
+				d.Status = "active"
+				s.saveDuns()
+				writeJSON(w, map[string]any{"ok": true, "dungeon": d})
+				return
+			}
+		}
+		http.Error(w, "副本不存在或非放弃态", 404)
+	})
 	mux.HandleFunc("/api/dungeon/abandon", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			ID string `json:"id"`
