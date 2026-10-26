@@ -1633,7 +1633,7 @@ function applyProgTab(){
   const ov=document.getElementById('oppView');
   if(ov)ov.classList.toggle('hidden',PROG_TAB!=='opp');
 }
-function switchProgTab(t){PROG_TAB=t;if(curView!=='progress')switchTab('progress');else{applyProgTab();renderProgress()}}
+function switchProgTab(t){PROG_TAB=t;if(curView!=='progress')switchTab('progress');else{applyProgTab();renderProgress();updateChrome('progress')}}
 /* P1 去处：机会页（手工维护 opportunities.json——真实 issue/实习/接单入口） */
 let OPPS=null;
 async function renderOpp(){
