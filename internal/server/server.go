@@ -93,6 +93,7 @@ type Reading struct {
 	Content     string `json:"content"`               // 正文（中文整理/翻译，Markdown）
 	Original    string `json:"original,omitempty"`    // 英文原文（如有）
 	Translation string `json:"translation,omitempty"` // Original 的中文翻译（按需生成缓存）
+	Brief       string `json:"brief,omitempty"`       // 助教导读（深入项目源码后的结构化消化，用户 2026-10-26 指令）
 	Done        bool   `json:"done"`
 	ReadAt      string `json:"readAt,omitempty"`
 }
@@ -1605,6 +1606,43 @@ func (s *Server) Handlers() http.Handler {
 		}
 		http.Error(w, "练习不存在", 404)
 	})
+	// 助教导读：深入 GitHub 项目源码（browse→fetch 多文件）→ 结构化消化（用户 2026-10-26 指令）
+	mux.HandleFunc("/api/reading/brief", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			ID string `json:"id"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		if s.Tutor == nil {
+			http.Error(w, "LLM 未配置", 400)
+			return
+		}
+		for i := range s.Readings {
+			if s.Readings[i].ID != req.ID {
+				continue
+			}
+			rd := &s.Readings[i]
+			if rd.Brief != "" {
+				writeJSON(w, map[string]any{"brief": rd.Brief})
+				return
+			}
+			repo := githubRepoFromURL(rd.URL)
+			if repo == "" {
+				http.Error(w, "该条目不是 GitHub 项目，无法深入源码导读", 400)
+				return
+			}
+			brief, err := s.Tutor.ProjectBrief(briefContext(s, rd), repo, s.buildFetchTools())
+			if err != nil {
+				http.Error(w, err.Error(), 500)
+				return
+			}
+			rd.Brief = brief
+			s.save("readings.json", s.Readings) // 教务覆盖式更新时 Brief 以 readings.json 为准
+			s.saveState()
+			writeJSON(w, map[string]any{"brief": brief})
+			return
+		}
+		http.Error(w, "阅读条目不存在", 404)
+	})
 	mux.HandleFunc("/api/reading/done", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			ID string `json:"id"`
@@ -1966,6 +2004,43 @@ func graduationReason(done int) string {
 		return "还没做过东西——能力要有实证才谈毕业"
 	}
 	return "做过 " + fmt.Sprint(done) + " 件——继续"
+}
+
+// githubRepoFromURL 从 URL 提取 owner/repo（非 GitHub 返回空）。
+func githubRepoFromURL(raw string) string {
+	raw = strings.TrimSuffix(strings.TrimSpace(raw), "/")
+	i := strings.Index(raw, "github.com/")
+	if i < 0 {
+		return ""
+	}
+	rest := raw[i+len("github.com/"):]
+	parts := strings.Split(rest, "/")
+	if len(parts) < 2 || parts[0] == "" || parts[1] == "" {
+		return ""
+	}
+	return parts[0] + "/" + parts[1]
+}
+
+// briefContext 导读生成的学习者上下文（贴合个人：在学科目+已收尾）。
+func briefContext(s *Server, rd *Reading) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "- 阅读条目：%s（%s）\n", rd.Title, rd.URL)
+	if s.Tutor != nil {
+		cur := s.Tutor.Curriculum()
+		if len(cur.Subjects) > 0 {
+			fmt.Fprintf(&b, "- 在学科目：%s\n", strings.Join(cur.Subjects, "、"))
+		}
+		var done []string
+		for _, l := range cur.Lessons {
+			if l.Status == "done" {
+				done = append(done, l.Title)
+			}
+		}
+		if len(done) > 0 {
+			fmt.Fprintf(&b, "- 已收尾知识点：%s\n", strings.Join(done, "、"))
+		}
+	}
+	return b.String()
 }
 
 func writeJSON(w http.ResponseWriter, v any) {

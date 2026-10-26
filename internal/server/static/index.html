@@ -117,6 +117,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Micr
 .dir-input textarea{flex:1;border:1px solid rgba(0,0,0,.12);border-radius:12px;padding:11px 15px;font:inherit;font-size:14px;height:48px;resize:none;outline:none;background:#fff}
 .dir-input textarea:focus{border-color:var(--pink);box-shadow:0 0 0 3.5px rgba(0,113,227,.18)}
 .dir-input button{border:none;background:var(--pink);color:#fff;padding:10px 20px;border-radius:12px;cursor:pointer;font:inherit;font-weight:600}
+.brief-card{background:var(--card);border-left:3px solid var(--pink);border-radius:8px;padding:12px 16px;margin:10px 0;font-size:13.5px;line-height:1.8}
 .reading-body{background:var(--card);border-radius:12px;padding:22px 26px;font-size:14.5px;line-height:1.85;box-shadow:0 1px 2px rgba(0,0,0,.05),0 0 0 1px rgba(0,0,0,.03)}
 .reading-body h3{font-size:17px;letter-spacing:-.01em;margin:18px 0 6px}
 .reading-body h4{font-size:14.5px;margin:14px 0 4px}
@@ -563,7 +564,11 @@ function mdRender(t){
 }
 function renderReadings(){
   const v=$('readView');
-  if(READING){renderReading(READING);return}
+  if(READING){
+    const cur=(STATE.readings||[]).find(x=>x.id===READING);
+    if(!cur){READING=null} // 条目已被教务更新移除——回列表而不是卡死
+    else{renderReading(cur);return}
+  }
   const rs=(STATE.readings||[]).slice().sort((x,y)=>(x.done?1:0)-(y.done?1:0));
   if(!rs.length){v.innerHTML='<div class="empty" style="margin-top:80px">教务策展的阅读材料会落在这里——<br>原文（或中文翻译），读完记入履历</div>';return}
   let html='<div class="grouplabel" style="margin:4px 0 8px">阅读材料</div>';
@@ -582,12 +587,30 @@ function renderReading(r){
   if(r.original&&!r.translation){
     body='<div class="mut" style="margin:8px 0">下面是中文整理版。<a href="'+esc(r.url)+'" target="_blank">读英文原文 ↗</a></div>';
   }
+  if(r.brief){
+    body='<div class="brief-card"><div class="grouplabel" style="margin:0 0 6px">🤖 助教导读（深入项目后的消化）</div>'+mdRender(r.brief)+'</div>'+body;
+  } else if(r.url&&r.url.indexOf('github.com')>=0&&!r.done){
+    body='<button class="backbtn" onclick="genBrief(\''+r.id+'\')" style="margin:8px 0;border-color:var(--pink);color:var(--pink)">🤖 让助教导读这个项目（深入源码后总结：是什么/怎么用/复现路径）</button>'+body;
+  }
   body+='<div class="reading-body">'+mdRender(r.translation||r.content||r.original||'（空）')+'</div>';
   v.innerHTML='<div style="display:flex;gap:8px;margin:4px 0 10px;flex-wrap:wrap">'+
+    '<button class="backbtn" onclick="closeReading()" style="border-color:var(--line);background:var(--card);color:var(--ink)">← 返回列表</button>'+
     (r.original?'<button class="backbtn" onclick="toggleOriginal(\''+r.id+'\')" style="border-color:var(--line);background:var(--card);color:var(--ink)">中/EN 对照</button>':'')+
     (r.url?'<button class="backbtn" onclick="window.open(\''+esc(r.url)+'\',\'_blank\')" style="border-color:var(--line);background:var(--card);color:var(--ink)">原文链接 ↗</button>':'')+
     (r.done?'<span class="mut" style="align-self:center">已读完 ✓</span>':'<button class="backbtn" onclick="finishReading(\''+r.id+'\')">✓ 读完，记入履历</button>')+
     '</div><div class="mut" style="margin-bottom:8px"><a href="'+esc(r.url)+'" target="_blank">'+esc(r.url)+'</a></div>'+body;
+}
+function closeReading(){READING=null;renderReadings();}
+// AI 导读：助教深入项目源码后产出结构化消化（是什么/核心概念/怎么用/复现路径）
+async function genBrief(id){
+  const r=(STATE.readings||[]).find(x=>x.id===id);if(!r)return;
+  const btn=event.target;btn.disabled=true;btn.textContent='助教研读中…（1-2 分钟，会翻仓库源码）';
+  try{
+    const resp=await api('/api/reading/brief',{id});
+    r.brief=resp.brief;
+    toast('导读完成——助教已把项目吃透');
+    renderReading(r);
+  }catch(e){btn.disabled=false;btn.textContent='🤖 让助教导读这个项目';toast('失败：'+e.message)}
 }
 function toggleOriginal(id){
   const r=(STATE.readings||[]).find(x=>x.id===id);if(!r)return;
