@@ -908,6 +908,46 @@ func (s *Server) hatchBacklog() {
 	}
 }
 
+// exportResume P0-4 作品 → 能力条目 → 简历：按技能聚合纪念卡，每条挂可点开的证据链接；
+// 本地生成 resume.md 并用资源管理器打开（不做云端）。
+func (s *Server) exportResume() (string, error) {
+	if len(s.Trophies) == 0 {
+		return "", fmt.Errorf("还没有作品——先通关一个影子副本")
+	}
+	skill := map[string][]*Trophy{}
+	for _, tr := range s.Trophies {
+		for _, n := range tr.Nodes {
+			skill[n] = append(skill[n], tr)
+		}
+	}
+	var b strings.Builder
+	b.WriteString("# 我的实践简历\n\n")
+	b.WriteString("> 由前哨 2.0 生成于 " + time.Now().Format("2006-01-02") + " —— 每一条都有可点开的证据。\n\n")
+	b.WriteString("## 能力（按技能聚合）\n\n")
+	skills := make([]string, 0, len(skill))
+	for k := range skill {
+		skills = append(skills, k)
+	}
+	sort.Strings(skills)
+	for _, sk := range skills {
+		b.WriteString("### " + sk + "\n")
+		for _, tr := range skill[sk] {
+			b.WriteString("- **" + tr.Name + "**（" + tr.Repo + "）：复现于 " + tr.Date + "\n")
+			b.WriteString("  - " + tr.Impact + "\n")
+			b.WriteString("  - 证据：https://github.com/" + tr.Repo + "\n")
+		}
+	}
+	b.WriteString("\n## 作品清单\n\n")
+	for _, tr := range s.Trophies {
+		b.WriteString("- " + tr.Name + "（" + tr.Repo + "）· " + fmt.Sprint(tr.Stages) + " 关 · 复现于 " + tr.Date + "\n")
+	}
+	path := filepath.Join(s.Dir, "resume.md")
+	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
 // mintTrophy 通关揭晓时铸造纪念卡（一锤揭晓的揭晓 payload 数据源）。
 func (s *Server) mintTrophy(d *tutor.Dungeon) *Trophy {
 	nodes := []string{}
@@ -925,6 +965,9 @@ func (s *Server) mintTrophy(d *tutor.Dungeon) *Trophy {
 		tr.Impact = "一个真实开源项目的核心复现——它只用了你已经学会的东西。"
 	}
 	s.Trophies = append([]*Trophy{tr}, s.Trophies...) // 新卡置顶
+	// P0-4 作品 → 能力条目：进履历（「做过」级），证据=仓库链接——每条都可点开验证
+	s.Ledger.Record("trophy:"+d.ID, "作品复现："+tr.Name, evidence.Done, time.Now(), "trophy:"+tr.Repo, tr.Impact)
+	s.save("ledger.json", s.Ledger)
 	return tr
 }
 
@@ -1512,6 +1555,17 @@ func (s *Server) Handlers() http.Handler {
 	})
 	mux.HandleFunc("/api/refresh", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, s.RefreshPlan())
+	})
+	mux.HandleFunc("/api/resume/export", func(w http.ResponseWriter, _ *http.Request) { // P0-4 简历导出
+		path, err := s.exportResume()
+		if err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		if c := exec.Command("explorer", "/select,"+path); c.Run() != nil {
+			_ = exec.Command("cmd", "/c", "start", path).Run()
+		}
+		writeJSON(w, map[string]any{"ok": true, "path": path})
 	})
 	mux.HandleFunc("/api/pause", func(w http.ResponseWriter, r *http.Request) { // P0-3 体面暂停
 		var req struct {

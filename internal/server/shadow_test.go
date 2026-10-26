@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"outpost2/internal/evidence"
 	"outpost2/internal/tutor"
 )
 
@@ -35,7 +36,7 @@ func TestTierOf(t *testing.T) {
 
 // mintTrophy：纪念卡字段完整 + 新卡置顶 + 旧数据 Impact 兜底。
 func TestMintTrophy(t *testing.T) {
-	s := &Server{}
+	s := &Server{Dir: t.TempDir(), Ledger: evidence.New()}
 	d := &tutor.Dungeon{
 		ID: "dn-test-1", Repo: "headroomlabs-ai/headroom", Project: "Token 压缩层",
 		Status: "cleared", Impact: "让长上下文 AI 应用便宜 10 倍的开源底座",
