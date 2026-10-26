@@ -86,6 +86,14 @@ type Completed struct {
 	Shape   string   `json:"shape,omitempty"`
 }
 
+// Opportunity 机会条目（P1 去处）：手工维护 opportunities.json——真实 issue/实习/接单入口。
+type Opportunity struct {
+	Type  string `json:"type"` // issue|intern|gig
+	Title string `json:"title"`
+	Link  string `json:"link"`
+	Note  string `json:"note,omitempty"`
+}
+
 // LastStop 接续锚点（小穗闭环 P0-1）：跨天/冷启动时一句话把人接回来。
 type LastStop struct {
 	NodeID string    `json:"nodeId"`
@@ -163,6 +171,8 @@ type Server struct {
 	LastStop *LastStop `json:"lastStop,omitempty"`
 	// P0-3 体面暂停：暂停期不算断签、不推提醒、不显示落后
 	PausedUntil *time.Time `json:"pausedUntil,omitempty"`
+	// P1 去处：机会页（手工维护 opportunities.json）
+	Opportunities []Opportunity `json:"opportunities,omitempty"`
 	// 最小埋点（小穗收敛轮⑧）：只本地统计，不联网
 	Stats      *Stats               `json:"stats,omitempty"`
 	StepStarts map[string]time.Time `json:"-"` // 步开始时间（耗时统计用，内存态）
@@ -302,6 +312,7 @@ func NewServer(dir string) *Server {
 	if s.Tutor != nil && s.FetchConf != nil && s.FetchConf.LastRun == time.Now().Format("2006-01-02") {
 		s.Tutor.FetchNote = truncateNote(s.FetchConf.LastReport)
 	}
+	_ = s.load("opportunities.json", &s.Opportunities)
 	loaded := s.load("state.json", s)
 	// 履历从单一真相源恢复（此前只信 state.json 的过期副本，重启即丢——事故 2026-10-20）
 	s.load("ledger.json", &s.Ledger)
@@ -1555,6 +1566,9 @@ func (s *Server) Handlers() http.Handler {
 	})
 	mux.HandleFunc("/api/refresh", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, s.RefreshPlan())
+	})
+	mux.HandleFunc("/api/opportunities", func(w http.ResponseWriter, _ *http.Request) { // P1 去处：机会页
+		writeJSON(w, map[string]any{"list": s.Opportunities})
 	})
 	mux.HandleFunc("/api/resume/export", func(w http.ResponseWriter, _ *http.Request) { // P0-4 简历导出
 		path, err := s.exportResume()

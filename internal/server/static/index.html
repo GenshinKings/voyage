@@ -500,12 +500,14 @@ kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;paddi
       <button class="ptab on" data-pt="dungeon" onclick="switchProgTab('dungeon')">⚔ 实战副本</button>
       <button class="ptab" data-pt="sediment" onclick="switchProgTab('sediment')">✓ 学会的</button>
       <button class="ptab" data-pt="graph" onclick="switchProgTab('graph')">🕸 知识地图</button>
+      <button class="ptab" data-pt="opp" onclick="switchProgTab('opp')">🚪 去处</button>
     </div>
     <div style="max-width:min(920px,100%);margin:0 auto 6px;padding:0 24px;font-size:11.5px;color:var(--mut)">今天的安排按复习间隔（FSRS 记忆科学）推进——不是随机出题；能力估计与选题实验默认关闭。</div>
     <div id="progStats" style="max-width:min(920px,100%);margin:0 auto 10px;padding:0 24px;font-size:12.5px;font-weight:600"></div>
     <div id="dunHallView" class="hidden"></div>
     <div id="sediment" class="hidden"></div>
     <div id="graphWrap" class="hidden"><div class="gLegend">圆=收尾的知识点 · <span style="color:#0071e3;font-weight:600">━</span> 练习中真实调用的连接（×N=次数） · <span style="color:#b8c0c8">━</span> 课程先后 · 点圆回到对话</div><canvas id="graphCanvas"></canvas></div>
+    <div id="oppView" class="hidden" style="max-width:min(920px,100%);margin:0 auto;padding:8px 24px 130px"></div>
     </div>
     <div id="setView" class="hidden"></div>
   </div>
@@ -1618,6 +1620,7 @@ function renderProgress(){
   })();
   if(PROG_TAB==='dungeon')renderDunHall();
   else if(PROG_TAB==='sediment')renderSediment();
+  else if(PROG_TAB==='opp')renderOpp();
   else renderGraph();
 }
 function applyProgTab(){
@@ -1627,8 +1630,36 @@ function applyProgTab(){
   $('dunHallView').classList.toggle('hidden',PROG_TAB!=='dungeon');
   $('sediment').classList.toggle('hidden',PROG_TAB!=='sediment');
   $('graphWrap').classList.toggle('hidden',PROG_TAB!=='graph');
+  const ov=document.getElementById('oppView');
+  if(ov)ov.classList.toggle('hidden',PROG_TAB!=='opp');
 }
 function switchProgTab(t){PROG_TAB=t;if(curView!=='progress')switchTab('progress');else{applyProgTab();renderProgress()}}
+/* P1 去处：机会页（手工维护 opportunities.json——真实 issue/实习/接单入口） */
+let OPPS=null;
+async function renderOpp(){
+  const v=$('oppView');
+  if(OPPS){drawOpp();return}
+  v.innerHTML='<div class="mut" style="padding:20px 0">加载中…</div>';
+  try{
+    const r=await api('/api/opportunities');
+    OPPS=r.list||[];
+  }catch(e){OPPS=[]}
+  drawOpp();
+}
+function drawOpp(){
+  const v=$('oppView');if(!v)return;
+  const meta={issue:['真实 issue','🪡'],intern:['实习','🎓'],gig:['接单','💼']};
+  let h='<div class="grouplabel">去处 —— 学的东西通向真实世界</div>';
+  h+='<div style="font-size:11.5px;color:var(--mut);margin-bottom:12px">每一条都是现在就能点开看的东西。不着急——练到哪一步，哪一步的门口就为你开着。</div>';
+  (OPPS||[]).forEach(o=>{
+    const m=meta[o.type]||['机会','•'];
+    h+='<div class="dh-item"><div><div class="dh-t">'+m[1]+' '+esc(o.title)+' <span class="chip" style="margin-left:6px">'+m[0]+'</span></div>'
+      +'<div class="dh-sub">'+esc(o.note||'')+'</div></div>'
+      +'<a class="btn ghost" href="'+esc(o.link)+'" target="_blank">去看看 →</a></div>';
+  });
+  if(!(OPPS||[]).length)h+='<div class="empty" style="margin-top:30px">机会清单待补——教务会手工维护真实入口。</div>';
+  v.innerHTML=h;
+}
 function starsHTML(n){let h='';for(let i=1;i<=3;i++)h+=i<=n?'★':'<span class="off">★</span>';return '<span class="stars">'+h+'</span>'}
 function tierHTML(t){const names=['巩固','拉伸','跃迁'];return '<span class="tier t'+t+'">'+(names[t]||'巩固')+'</span>'}
 function reqHTML(req){return '<div class="req">'+(req||[]).map(r=>'<span class="chip'+(r.miss?' miss':'')+'">'+esc(r.n)+(r.miss?' · 未掌握':'')+'</span>').join('')+'</div>'}
