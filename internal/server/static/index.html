@@ -744,10 +744,30 @@ function todaySteps(){
   const steps=[{k:'讲',fn:'todayGoLearn()',...s1},{k:'练',fn:'todayGoPractice()',...s2},{k:'副本',fn:'todayGoDungeon()',...s3}];
   const cur=steps.findIndex(s=>!s.done);
   steps.forEach((s,i)=>{s.cur=(i===cur)});
+  if((mood==='10'||mood==='30')&&steps[2]&&!steps[2].done){steps[2].light=true}
   return steps;
 }
 function renderTodaySteps(){
   const el=document.getElementById('planCard');if(!el)return;
+/* 小穗闭环P0-2 看见人：今天有多少时间？三选 → /api/mood 持久化 → 三步量随状态调整 */
+let MOOD_ASKED=null;
+try{MOOD_ASKED=localStorage.getItem('voyage.moodDate')===new Date().toISOString().slice(0,10)}catch(e){}
+function moodPick(m){
+  try{localStorage.setItem('voyage.moodDate',new Date().toISOString().slice(0,10))}catch(e){}
+  MOOD_ASKED=true;
+  try{localStorage.setItem('voyage.mood',m)}catch(e){}
+  api('/api/mood',{mood:m,completed:false}).catch(()=>{});
+  renderTodaySteps();
+  toast(m==='10'?'只有 10 分钟——今天讲透一个点就够':(m==='30'?'半小时——讲一个 + 做一道':'有整块时间——三步全上'));
+}
+function moodRow(){
+  if(MOOD_ASKED)return '';
+  const b=(v,t)=>'<button class="va" onclick="moodPick('+JSON.stringify(v)+')" style="border:1px solid var(--line);background:var(--card);color:var(--ink);padding:7px 18px;font-size:12.5px;border-radius:9px;cursor:pointer">'+t+'</button>';
+  return '<div style="background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 16px;margin-bottom:10px">'
+    +'<span style="font-size:13px;font-weight:600;margin-right:10px">今天有多少时间？</span>'
+    +b('10','只有 10 分钟')+b('30','半小时')+b('90','有整块时间')
+    +'<span style="font-size:10.5px;color:var(--mut);margin-left:8px">照实说就行——今天的量跟着你走</span></div>';
+}
   /* P0-1 接续：隔天/冷启动 + 那节课还没收尾 → 一句话 + 一个按钮 */
   const ls=STATE.lastStop;
   const today=new Date().toISOString().slice(0,10);
@@ -762,13 +782,14 @@ function renderTodaySteps(){
     }
   }
   const steps=todaySteps();
-  let h='<div class="pc" style="padding:14px 20px">'+resumeHTML+'<div class="grouplabel" style="margin:0 0 10px">今天三步</div>';
+  const mood=(function(){try{return localStorage.getItem('voyage.mood')}catch(e){return null}})();
+  let h='<div class="pc" style="padding:14px 20px">'+resumeHTML+moodRow()+'<div class="grouplabel" style="margin:0 0 10px">今天三步'+(mood?'<span style="letter-spacing:0;font-weight:500;text-transform:none;color:var(--mut);margin-left:8px">'+(mood==='10'?'· 只有 10 分钟：做第 1 步就够':(mood==='30'?'· 半小时：第 1+2 步':'· 整块时间：三步全上'))+'</span>':'')+'</div>';
   steps.forEach((s,i)=>{
     const primary=s.cur;
     h+='<div style="display:flex;align-items:center;gap:12px;padding:7px 0;'+(i<steps.length-1?'border-bottom:1px dashed var(--line);':'')+'">'
       +'<span style="width:22px;height:22px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;'
       +(s.done?'background:var(--green);color:#fff':(primary?'background:var(--pink);color:#fff':'background:var(--chip);color:var(--mut)'))+'">'+(s.done?'✓':i+1)+'</span>'
-      +'<span style="flex:1;min-width:0;font-size:13.5px;font-weight:'+(primary?'600':'500')+'">'+esc(s.k)+' · '+esc(s.title)+'</span>'
+      +'<span style="flex:1;min-width:0;font-size:13.5px;font-weight:'+(primary?'600':'500')+'">'+esc(s.k)+' · '+esc(s.title)+(s.light?' <span style="font-size:10.5px;color:var(--mut)">（时间紧可跳过）</span>':'')+'</span>'
       +'<button class="'+(primary?'va primary':'va')+'" onclick="'+s.fn+'" style="border:1px solid var(--line);background:'+(primary?'var(--pink)':'var(--card)')+';color:'+(primary?'#fff':'var(--ink)')+';padding:6px 16px;font-size:12px;border-radius:8px;cursor:pointer;'+(primary?'border-color:var(--pink);font-weight:600;':'')+'">'+esc(s.act)+'</button>'
       +'</div>';
   });
