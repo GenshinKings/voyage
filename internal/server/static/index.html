@@ -1648,7 +1648,7 @@ async function renderOpp(){
 }
 function drawOpp(){
   const v=$('oppView');if(!v)return;
-  const meta={issue:['真实 issue','🪡'],intern:['实习','🎓'],gig:['接单','💼']};
+  const meta={issue:['真实 issue','🪡'],'live-issue':['真实 issue · 按你已学的拉','🟢'],intern:['实习','🎓'],gig:['接单','💼']};
   let h='<div class="grouplabel">去处 —— 学的东西通向真实世界</div>';
   h+='<div style="font-size:11.5px;color:var(--mut);margin-bottom:12px">每一条都是现在就能点开看的东西。不着急——练到哪一步，哪一步的门口就为你开着。</div>';
   (OPPS||[]).forEach(o=>{

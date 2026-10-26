@@ -203,6 +203,48 @@ type Detail struct {
 	Stars         int    `json:"stars"`
 }
 
+// Issue GitHub issue 搜索结果（小穗三轮问题3：去处页按已学语言拉真实 good first issue）。
+type Issue struct {
+	Title   string `json:"title"`
+	HTMLURL string `json:"htmlUrl"`
+	Repo    string `json:"repo"`
+}
+
+// SearchIssues 搜 open 的 good first issue（按语言），最新优先。
+func (c *Client) SearchIssues(language string, n int) ([]Issue, error) {
+	if n <= 0 || n > 10 {
+		n = 4
+	}
+	q := url.Values{"q": {"label:\"good first issue\" state:open language:" + language}, "sort": {"created"}, "order": {"desc"}, "per_page": {strconv.Itoa(n)}}
+	b, code, _, err := c.get(c.BaseAPI+"/search/issues?"+q.Encode(), "application/vnd.github+json")
+	if err != nil {
+		return nil, err
+	}
+	if code >= 400 {
+		return nil, fmt.Errorf("search issues HTTP %d: %s", code, preview(b, 160))
+	}
+	var sr struct {
+		Items []struct {
+			Title         string `json:"title"`
+			HTMLURL       string `json:"html_url"`
+			RepositoryURL string `json:"repository_url"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(b, &sr); err != nil {
+		return nil, err
+	}
+	out := make([]Issue, 0, len(sr.Items))
+	for _, it := range sr.Items {
+		repo := ""
+		// repository_url 形如 https://api.github.com/repos/owner/name
+		if parts := strings.Split(it.RepositoryURL, "/repos/"); len(parts) == 2 {
+			repo = parts[1]
+		}
+		out = append(out, Issue{Title: it.Title, HTMLURL: it.HTMLURL, Repo: repo})
+	}
+	return out, nil
+}
+
 func (c *Client) Detail(repo string) (*Detail, error) {
 	b, code, _, err := c.get(c.BaseAPI+"/repos/"+repo, "application/vnd.github+json")
 	if err != nil {

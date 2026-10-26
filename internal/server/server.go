@@ -177,6 +177,9 @@ type Server struct {
 	PausedUntil *time.Time `json:"pausedUntil,omitempty"`
 	// P1 去处：机会页（手工维护 opportunities.json）
 	Opportunities []Opportunity `json:"opportunities,omitempty"`
+	// 小穗三轮问题3：按已学语言拉真实 good first issue（ghfetch，24h 缓存）
+	LiveIssues   []Opportunity `json:"liveIssues,omitempty"`
+	LiveIssuesAt time.Time     `json:"liveIssuesAt,omitempty"`
 	// 最小埋点（小穗收敛轮⑧）：只本地统计，不联网
 	Stats      *Stats               `json:"stats,omitempty"`
 	StepStarts map[string]time.Time `json:"-"` // 步开始时间（耗时统计用，内存态）
@@ -820,6 +823,35 @@ func (s *Server) saveBacklog() {
 
 func (s *Server) saveDuns() {
 	s.save("dungeons.json", s.Duns)
+}
+
+// fetchLiveIssues 小穗三轮问题3：按已学语言拉真实 good first issue（缓存 24h）。
+// ghfetch 走 FetchConf 代理；失败静默保留旧缓存——去处页永远有东西看，但不硬凑。
+func (s *Server) fetchLiveIssues() {
+	if s.Gh == nil {
+		return
+	}
+	lang := "python"
+	for _, sub := range s.Tutor.Curriculum().Subjects {
+		sl := strings.ToLower(sub)
+		if strings.Contains(sl, "go") && !strings.Contains(sl, "python") {
+			lang = "go"
+		}
+	}
+	issues, err := s.Gh.SearchIssues(lang, 4)
+	now := time.Now()
+	s.LiveIssuesAt = now
+	if err != nil {
+		s.saveState()
+		return
+	}
+	out := []Opportunity{}
+	for _, it := range issues {
+		out = append(out, Opportunity{Type: "live-issue", Title: it.Title,
+			Link: it.HTMLURL, Note: "真实 good first issue（" + it.Repo + "）——按你已学的 " + lang + " 拉，现在 open。助教可以陪你啃。"})
+	}
+	s.LiveIssues = out
+	s.saveState()
 }
 
 // statsEnsure 埋点结构惰性初始化。
@@ -1601,8 +1633,14 @@ func (s *Server) Handlers() http.Handler {
 	mux.HandleFunc("/api/refresh", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, s.RefreshPlan())
 	})
-	mux.HandleFunc("/api/opportunities", func(w http.ResponseWriter, _ *http.Request) { // P1 去处：机会页
-		writeJSON(w, map[string]any{"list": s.Opportunities})
+	mux.HandleFunc("/api/opportunities", func(w http.ResponseWriter, _ *http.Request) { // P1 去处：机会页（手工种子 + 真 issue）
+		if time.Since(s.LiveIssuesAt) > 24*time.Hour { // 小穗三轮问题3：24h 缓存，过期后台拉
+			s.LiveIssuesAt = time.Now()
+			go s.fetchLiveIssues()
+		}
+		list := append([]Opportunity{}, s.LiveIssues...)
+		list = append(list, s.Opportunities...)
+		writeJSON(w, map[string]any{"list": list})
 	})
 	mux.HandleFunc("/api/resume/doc", func(w http.ResponseWriter, _ *http.Request) { // 小穗二轮建议3：纯预览（GET 无副作用）
 		md, err := s.exportResume()
