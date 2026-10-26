@@ -1825,6 +1825,11 @@ func (s *Server) Handlers() http.Handler {
 	mux.HandleFunc("/api/reflib", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, reflib.LoadIndex(s.RefDir))
 	})
+	// 版本自检：前端定期比对，服务重启（=发版）后自动 reload——桌面驻留窗口永不过期
+	startedAt := time.Now()
+	mux.HandleFunc("/api/version", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, map[string]any{"started": startedAt.Unix()})
+	})
 	mux.HandleFunc("/api/fetch", func(w http.ResponseWriter, _ *http.Request) {
 		s.fetchMu.Lock()
 		running := s.fetchRunning

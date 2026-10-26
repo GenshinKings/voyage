@@ -306,6 +306,18 @@ function fmtContent(raw){
   return hints?hints+(body?'<br>'+body:''):body;
 }
 let curView='learn';
+/* 版本自检：服务重启（发版）后驻留窗口自动刷新——用户永不需要手动 Ctrl+R */
+let VER0=null;
+async function checkVersion(){
+  try{
+    const v=(await api('/api/version')).started;
+    if(VER0===null){VER0=v;return}
+    if(v!==VER0){location.reload()}
+  }catch(e){}
+}
+window.addEventListener('focus',checkVersion);
+setInterval(checkVersion,30000);
+checkVersion();
 function updateChrome(v){
   // 「跳回今日知识点」只属于沉淀/关联两页；「今天的课」只在练习态（看完课的入口）
   const back=(v==='sediment'||v==='graph')&&STATE&&STATE.today;
