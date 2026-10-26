@@ -5,7 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>前哨 2.0 · 全托管学习机</title>
 <style>
-:root{--ink:#1d1d1f;--paper:#f5f5f7;--side:rgba(255,255,255,.72);--line:rgba(0,0,0,.08);--mut:#86868b;--pink:#0071e3;--usr:#0071e3;--green:#34c759;--card:#fff;--chip:rgba(0,0,0,.045)}
+:root{
+  --ink:#101b29;--paper:#f7f7f5;--side:rgba(255,255,255,.72);--line:#e3e6ea;--mut:#8a92a0;
+  --pink:#FB7299;--usr:#101b29;--green:#34c759;--card:#fff;--chip:rgba(16,27,41,.045);
+  --num-font:"Bahnschrift","Segoe UI",sans-serif;
+  --shadow-contact:0 1px 2px rgba(16,27,41,.06),0 0 0 1px rgba(16,27,41,.03);
+  --r-lg:12px;--r-md:9px;--r-sm:7px;
+}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
 body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Microsoft YaHei",system-ui,sans-serif;background:var(--paper);color:var(--ink);display:flex;height:100vh;overflow:hidden;-webkit-font-smoothing:antialiased;font-optical-sizing:auto}
@@ -53,11 +59,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Micr
 @keyframes msgIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 #guideCard{max-width:880px;margin:6px auto 2px;padding:0 28px}
 /* ===== 学习页 v3：状态卡 / 折叠条 / 航路 / 清单 ===== */
-#guideCard .status{display:flex;align-items:baseline;gap:22px;flex-wrap:wrap;background:var(--card);border-radius:10px;padding:12px 18px;box-shadow:0 1px 2px rgba(16,27,41,.05),0 0 0 1px rgba(16,27,41,.04);font-size:14px}
+#guideCard .status{display:flex;align-items:baseline;gap:22px;flex-wrap:wrap;background:var(--card);border-radius:var(--r-md);padding:12px 18px;box-shadow:var(--shadow-contact);font-size:14px}
 #guideCard .status .seg{display:flex;align-items:baseline;gap:7px;color:var(--ink-soft)}
 #guideCard .status .k{font-size:10.5px;letter-spacing:2px;color:var(--mut)}
 #guideCard .status b{font-weight:700;color:var(--ink)}
-#guideCard .status .big{font-size:24px;font-weight:800;color:var(--ink);line-height:1}
+#guideCard .status .big{font-size:26px;font-weight:800;color:var(--ink);line-height:1;font-family:var(--num-font)}
 #guideCard .status .big i{font-style:normal;font-size:14px;color:var(--mut);font-weight:400}
 #guideCard .status .accent{color:var(--pink)}
 #guideCard .today{margin-top:10px;border:1px solid var(--line);border-radius:12px;background:var(--card);overflow:hidden}
@@ -92,7 +98,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Micr
 #guideCard .voyage .pct{position:absolute;top:-2px;transform:translateX(-50%);font-size:10.5px;color:var(--pink);font-weight:700}
 #guideCard .tl{display:flex;gap:13px;align-items:flex-start;padding:14px 16px;border-bottom:1px dashed var(--line)}
 #guideCard .tl:last-of-type{border-bottom:none}
-#guideCard .tl .no{font-size:28px;font-weight:800;line-height:1;color:transparent;-webkit-text-stroke:1px #b9c0ca;min-width:46px}
+#guideCard .tl .no{font-size:30px;font-weight:800;line-height:1;color:transparent;-webkit-text-stroke:1px #b9c0ca;min-width:46px;font-family:var(--num-font)}
 #guideCard .tl.primary .no{color:var(--pink);-webkit-text-stroke:0}
 #guideCard .tl .cat{font-size:10px;letter-spacing:2px;color:var(--mut)}
 #guideCard .tl .ti{font-size:15px;font-weight:600;margin-top:2px}
@@ -103,7 +109,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Micr
 #guideCard .sline .warn b{color:var(--pink)}
 /* 开场元条（对话流内） */
 .meta-line{border-left:4px solid var(--ink);background:var(--card);border-radius:0 10px 10px 0;padding:11px 16px;margin:0 0 16px;display:flex;align-items:baseline;gap:13px;box-shadow:0 1px 2px rgba(16,27,41,.04)}
-.meta-line .no{font-size:21px;font-weight:800;color:transparent;-webkit-text-stroke:1px #b9c0ca;line-height:1}
+.meta-line .no{font-size:22px;font-weight:800;color:transparent;-webkit-text-stroke:1px #b9c0ca;line-height:1;font-family:var(--num-font)}
 .meta-line .ti{font-size:14.5px;font-weight:600;color:var(--ink)}
 .meta-line .ti .why{display:block;font-size:11.5px;color:var(--mut);font-weight:400;margin-top:3px}
 .meta-line .op{margin-left:auto;letter-spacing:2px;font-size:10.5px;color:#9aa2af;flex-shrink:0}
@@ -205,8 +211,9 @@ a:hover{text-decoration:underline}
 /* ===== 设置页样式系统（修复裸控件） ===== */
 #setView{max-width:1060px;margin:0 auto;padding:8px 28px 60px}
 #setView .set-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
-#setView .set-card{background:var(--card);border-radius:12px;padding:16px 20px;box-shadow:0 1px 2px rgba(16,27,41,.05),0 0 0 1px rgba(16,27,41,.03)}
+#setView .set-card{background:transparent;border-radius:0;padding:4px 4px 22px;border-bottom:1px solid var(--line)}
 #setView .set-card.wide{grid-column:1 / -1}
+#setView .lp{background:#fff;border:1px solid var(--line)}
 #setView .grouplabel{margin:0 0 10px}
 #setView input,#setView textarea,#setView select{width:100%;border:1px solid rgba(0,0,0,.12);border-radius:9px;padding:8px 12px;font:inherit;font-size:13px;outline:none;background:#fff;transition:border-color 150ms,box-shadow 150ms;box-sizing:border-box}
 #setView input:focus,#setView textarea:focus,#setView select:focus{border-color:var(--pink);box-shadow:0 0 0 3.5px rgba(251,114,153,.14)}
@@ -584,6 +591,10 @@ function renderToday(){
   }
   h+='</div>';
   gc.innerHTML=h;
+  // 左缘装置同步冲刺进度
+  const ep=document.getElementById('edgePill'),ev=document.getElementById('edgePct');
+  if(ep)ep.style.height=Math.max(6,pct)+'%';
+  if(ev)ev.textContent=pct+'%';
   if(TODAYFOLD){
     api('/api/profile').then(p=>{
       const lines=(p.content||'').split('\n').filter(l=>l.trim().indexOf('-')===0).map(l=>l.trim().slice(1).trim()).filter(Boolean);
@@ -708,8 +719,12 @@ function renderReading(r){
   }
   if(r.brief){
     body='<div class="brief-card"><div class="grouplabel" style="margin:0 0 6px">🤖 助教导读（深入项目后的消化）</div>'+mdRender(r.brief)+'</div>'+body;
-  } else if(r.url&&r.url.indexOf('github.com')>=0&&!r.done){
-    body='<button class="backbtn" onclick="genBrief(\''+r.id+'\')" style="margin:8px 0;border-color:var(--pink);color:var(--pink)">🤖 让助教导读这个项目（深入源码后总结：是什么/怎么用/复现路径）</button>'+body;
+  }
+  if(r.url&&r.url.indexOf('github.com')>=0&&!r.done){
+    const bl=r.brief&&r.brief.indexOf('失败')===0;
+    const lbl=bl?'🔄 上次导读失败——重新让助教导读':(r.brief?'🔄 重新导读':'🤖 让助教导读这个项目（深入源码后总结：是什么/怎么用/复现路径）');
+    const bc=bl?'#c0392b':'var(--pink)';
+    body='<button class="backbtn" onclick="genBrief(\''+r.id+'\')" style="margin:8px 0;border-color:'+bc+';color:'+bc+'">'+lbl+'</button>'+body;
   }
   body+='<div class="reading-body">'+mdRender(r.translation||r.content||r.original||'（空）')+'</div>';
   v.innerHTML='<div style="display:flex;gap:8px;margin:4px 0 10px;flex-wrap:wrap">'+

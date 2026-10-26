@@ -7,6 +7,7 @@
 package ghfetch
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -283,11 +284,25 @@ func (c *Client) Raw(repo, branch, path string) (string, error) {
 	}
 	u := fmt.Sprintf("%s/%s/%s/%s", c.BaseRaw, repo, branch, path)
 	b, code, _, err := c.get(u, "text/plain")
-	if err != nil {
-		return "", err
-	}
-	if code >= 400 {
-		return "", fmt.Errorf("文件 %s HTTP %d", path, code)
+	if err != nil || code >= 400 {
+		// raw 域被网络掐断时降级 API contents（base64）——api.github.com 路由独立于 raw，通常仍可达
+		if b2, code2, _, err2 := c.get(fmt.Sprintf("%s/repos/%s/contents/%s?ref=%s", c.BaseAPI, repo, url.PathEscape(path), url.PathEscape(branch)), "application/vnd.github+json"); err2 == nil && code2 < 400 {
+			var jr struct {
+				Content  string `json:"content"`
+				Encoding string `json:"encoding"`
+			}
+			if json.Unmarshal(b2, &jr) == nil && jr.Encoding == "base64" {
+				if dec, decErr := base64.StdEncoding.DecodeString(strings.ReplaceAll(jr.Content, "\n", "")); decErr == nil {
+					b = dec
+				} else {
+					return "", err
+				}
+			} else {
+				return "", fmt.Errorf("文件 %s HTTP %d", path, code)
+			}
+		} else {
+			return "", fmt.Errorf("文件 %s HTTP %d（raw 与 API 均不可达）", path, code)
+		}
 	}
 	if isBinary(b) {
 		return "", fmt.Errorf("%s 是二进制文件，不抓（本工具只取文本）", path)

@@ -1626,10 +1626,7 @@ func (s *Server) Handlers() http.Handler {
 				continue
 			}
 			rd := &s.Readings[i]
-			if rd.Brief != "" {
-				writeJSON(w, map[string]any{"brief": rd.Brief})
-				return
-			}
+			// 用户点击即重新生成（覆盖旧导读——网络失败/换一次生成的重试入口）
 			repo := githubRepoFromURL(rd.URL)
 			if repo == "" {
 				http.Error(w, "该条目不是 GitHub 项目，无法深入源码导读", 400)
