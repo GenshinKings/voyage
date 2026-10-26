@@ -478,7 +478,12 @@ kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;paddi
   <div class="sidebtns">
     <div class="sbtn on" data-v="learn">◈ <span class="sbtn-t">今天</span></div>
     <div class="sbtn" data-v="progress">◎ <span class="sbtn-t">我的进度</span></div>
-    <div class="sbtn" data-v="set">⚙ <span class="sbtn-t">设置</span></div>
+    <div class="sbtn lab-extra" data-v="dir">◈ <span class="sbtn-t">方向</span></div>
+    <div class="sbtn lab-extra" data-v="dungeon">⚔ <span class="sbtn-t">实战副本</span></div>
+    <div class="sbtn lab-extra" data-v="sediment">✓ <span class="sbtn-t">学会的</span></div>
+    <div class="sbtn lab-extra" data-v="graph">🕸 <span class="sbtn-t">知识地图</span></div>
+    <div class="sbtn lab-extra" data-v="set">⚙ <span class="sbtn-t">设置</span></div>
+    <div class="sbtn" id="labToggle" onclick="toggleLab()" title="实验室：展开全部功能">⚗ <span class="sbtn-t">实验室</span></div>
   </div>
   <div id="subjectBox"><input id="subjectInput" placeholder="想学什么？一句话开课" onkeydown="if(event.key==='Enter')addSubject()"><button onclick="addSubject()">开课</button><button class="sb-plus" onclick="switchTab('dir')" title="去方向页开新课">＋</button></div>
   <div id="lessonList"><div class="empty" style="margin-top:24px;padding:0 10px">加载中…</div></div>
@@ -560,6 +565,15 @@ function fmtContent(raw){
   return hints?hints+(body?'<br>'+body:''):body;
 }
 let curView='learn';
+/* 小穗收敛轮②：实验室开关——默认只露主入口；⚗ 本会话展开，设置页「显示全部功能」持久展开 */
+let LAB_OPEN=false;
+try{LAB_OPEN=localStorage.getItem('voyage.lab')==='1'}catch(e){}
+function applyLab(){
+  document.querySelectorAll('.lab-extra').forEach(el=>el.classList.toggle('hidden',!LAB_OPEN));
+  const t=document.getElementById('labToggle');
+  if(t)t.classList.toggle('on',LAB_OPEN);
+}
+function toggleLab(){LAB_OPEN=!LAB_OPEN;try{localStorage.setItem('voyage.lab',LAB_OPEN?'1':'0')}catch(e){};applyLab()}
 /* 版本自检：服务重启（发版）后驻留窗口自动刷新——用户永不需要手动 Ctrl+R */
 let VER0=null;
 async function checkVersion(){
@@ -1445,7 +1459,8 @@ async function renderGraph(){
 
 /* 启动 */
 $('input').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}});
-document.querySelectorAll('.sbtn').forEach(t=>t.onclick=()=>switchTab(t.dataset.v));
+document.querySelectorAll('.sbtn[data-v]').forEach(t=>t.onclick=()=>switchTab(t.dataset.v));
+applyLab();
 /* ---------- 副本学习（用已学知识复现真实项目，通关揭晓恍然大悟） ---------- */
 let DN=null; // 当前打开的副本 id
 function openDungeon(id){
@@ -1826,8 +1841,14 @@ function appendRemindRow(){
     +'<label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer"><input type="checkbox" '+(on?'checked':'')+' onchange="window.setDailyRemind&&setDailyRemind(this.checked)">今日步骤提醒（窗口在后台时通知「还差 N 步」，每天最多一次，可随时关）</label>'
     +'<div style="display:flex;align-items:center;gap:10px;font-size:13px;margin-top:8px">外观：<select onchange="setTheme(this.value)" style="font:inherit;padding:4px 8px;border-radius:7px;border:1px solid var(--line);background:var(--card);color:var(--ink)">'
     +'<option value=""'+(theme===''?' selected':'')+'>跟随系统</option><option value="light"'+(theme==='light'?' selected':'')+'>浅色</option><option value="dark"'+(theme==='dark'?' selected':'')+'>深色</option></select>'
-    +'<span style="font-size:11px;color:var(--mut)">快捷键：Ctrl+K 命令面板 · Esc 关弹层 · Shift+Enter 换行 · 1/2/3 切主视图</span></div>';
+    +'<label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;margin-top:8px"><input type="checkbox" '+(LAB_OPEN?'checked':'')+' onchange="setLab(this.checked)">显示全部功能（方向 / 实战副本 / 学会的 / 知识地图 / 设置）</label>'
+    +'<span style="font-size:11px;color:var(--mut);display:block;margin-top:6px">快捷键：Ctrl+K 命令面板 · Esc 关弹层 · Shift+Enter 换行 · 1/2/3 切主视图</span></div>';
   sv.prepend(row);
+}
+function setLab(on){
+  LAB_OPEN=!!on;
+  try{localStorage.setItem('voyage.lab',on?'1':'0')}catch(e){}
+  applyLab();
 }
 function setTheme(v){
   localStorage.setItem('voyage.theme',v);
