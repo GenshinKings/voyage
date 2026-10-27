@@ -735,6 +735,9 @@ async function send(){
     if(sess)sess.messages.push({role:'user',content:text},{role:'assistant',content:r.reply});
     c.insertAdjacentHTML('beforeend','<div class="msg a"><div class="bubble">'+fmtContent(r.reply)+'</div></div>');
     $('view').scrollTop=$('view').scrollHeight;
+    // 自查修复（2026-10-28）：档位随每轮判定即时刷新——卡住/失败轮 verdict 为空不走 loadState，
+    // 此前「讲」卡小字停留在旧档位直到下一次全量刷新
+    if(typeof r.guide==='number'&&r.guide>0){STATE.guideLevels=STATE.guideLevels||{};STATE.guideLevels[CURRENT]=r.guide;renderTodaySteps()}
     if(r.verdict){LASTVERDICT=true;await loadState();renderVerdictActions(r.verdict)}
   }catch(e){const tmp=$('tmpwait');if(tmp)tmp.closest('.msg').remove();toast('失败：'+e.message)}
 }

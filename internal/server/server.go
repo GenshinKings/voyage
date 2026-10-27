@@ -2070,7 +2070,7 @@ func (s *Server) Handlers() http.Handler {
 		s.saveState()
 		s.LastStop = &LastStop{NodeID: lesson.ID, Title: lesson.Title,
 			Step: "判定结束", At: time.Now()}
-		writeJSON(w, map[string]any{"reply": v.Reply, "verdict": verdict})
+		writeJSON(w, map[string]any{"reply": v.Reply, "verdict": verdict, "guide": v.Guide})
 	})
 	mux.HandleFunc("/api/exercise/generate", func(w http.ResponseWriter, _ *http.Request) {
 		today := time.Now().Format("2006-01-02")
