@@ -2151,7 +2151,7 @@ function appendRemindRow(){
     +'<label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer"><input type="checkbox" '+(on?'checked':'')+' onchange="window.setDailyRemind&&setDailyRemind(this.checked)">今日步骤提醒（窗口在后台时通知「还差 N 步」，每天最多一次，可随时关）</label>'
     +'<div style="display:flex;align-items:center;gap:10px;font-size:13px;margin-top:8px"><a class="btn ghost" href="/api/export/all" download="voyage-data.zip" style="font-size:12px;text-decoration:none">📦 导出全部学习数据（zip，不含模型 key）</a></div>'
     +'<div style="display:flex;align-items:center;gap:10px;font-size:13px;margin-top:8px">外观：<select onchange="setTheme(this.value)" style="font:inherit;padding:4px 8px;border-radius:7px;border:1px solid var(--line);background:var(--card);color:var(--ink)">'
-    +'<option value=""'+(theme===''?' selected':'')+'>跟随系统</option><option value="light"'+(theme==='light'?' selected':'')+'>浅色</option><option value="dark"'+(theme==='dark'?' selected':'')+'>深色</option></select>'
+    +'<option value=""'+((theme===''||theme==='light')?' selected':'')+'>浅色（默认）</option><option value="dark"'+(theme==='dark'?' selected':'')+'>深色（测试中）</option></select>'
     +'<label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;margin-top:8px"><input type="checkbox" '+(LAB_OPEN?'checked':'')+' onchange="setLab(this.checked)">显示全部功能（方向 / 实战副本 / 学会的 / 知识地图 / 设置）</label>'
     +'<label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;margin-top:8px"><input type="checkbox" '+(STATE.expElo?'checked':'')+' onchange="setExp(&#39;elo&#39;,this.checked)">实验：能力估计（Elo 难度带出题——默认关，出题按收尾顺序）</label>'
     +'<label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;margin-top:8px"><input type="checkbox" '+(STATE.expBandit?'checked':'')+' onchange="setExp(&#39;bandit&#39;,this.checked)">实验：题目选择（Thompson 采样——默认关，选题确定性）</label>'
@@ -2172,11 +2172,13 @@ function setLab(on){
   applyLab();
 }
 function setTheme(v){
-  localStorage.setItem('voyage.theme',v);
-  if(v)document.documentElement.setAttribute('data-theme',v);
+  try{localStorage.setItem('voyage.theme',v)}catch(e){}
+  // 追加②：旧值 'light'/'跟随系统' 一律归浅色；只有 'dark' 显式加深
+  if(v==='dark')document.documentElement.setAttribute('data-theme','dark');
   else document.documentElement.removeAttribute('data-theme');
+  try{window.postThemeChange&&window.postThemeChange()}catch(e){}
 }
-try{const _t=localStorage.getItem('voyage.theme');if(_t)document.documentElement.setAttribute('data-theme',_t)}catch(e){}
+try{const _t=localStorage.getItem('voyage.theme');if(_t==='dark')document.documentElement.setAttribute('data-theme','dark')}catch(e){}
 /* 小穗评审验收演示钩子：?demo=verdict 拍判定出口 / ?demo=narrow 拍侧栏图标模式（真实函数真实渲染） */
 try{
   const _dp=new URLSearchParams(location.search).get('demo');
