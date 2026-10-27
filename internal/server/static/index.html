@@ -655,7 +655,8 @@ function findLessonMeta(nodeId){
 function openCached(nodeId){
   leaveHistory();
   const sess=(STATE&&STATE.sessions||{})[nodeId];
-  if(!sess)return false;
+  // 性能2/5：sessions 身份仅存元信息——有消息才走 zero-HTTP 快路径，否则 /api/tutor/open 按需拉
+  if(!sess||!(sess.messages||[]).length)return false;
   CURRENT=nodeId;LASTVERDICT=false;
   renderSidebar();
   const meta=findLessonMeta(nodeId);

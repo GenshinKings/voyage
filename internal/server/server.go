@@ -1638,24 +1638,43 @@ func (s *Server) Handlers() http.Handler {
 			g, gReason := graduation.Evaluate(graduation.DomainStats{DoneCount: d, MaintainDays: 0}, graduation.DefaultConfig(), time.Now())
 			today := (*tutor.Lesson)(nil)
 			curriculum := map[string]any{}
-			sessions := map[string]*tutor.Session{}
+			sessions := map[string]any{} // 性能2/5：值可为 *tutor.Session（最近5节全量）或元信息 map
 			if s.Tutor != nil {
 				cur := s.Tutor.Curriculum()
 				today = s.Tutor.TodayLesson()
 				curriculum = map[string]any{"subjects": cur.Subjects, "lessons": cur.Lessons}
-				// 全部已有会话打包进 state——前端打开已学知识点=纯本地渲染（用户要求 ≤2ms 级响应）
+				// 性能2/5：只下发「最近 5 节」的全量消息（零 HTTP 快路径保留），
+				// 其余节只发元信息（verdict/updatedAt/nMessages）——打开时 /api/tutor/open 按需拉。
+				all := map[string]*tutor.Session{}
 				for _, l := range cur.Lessons {
 					if sess := s.Tutor.Load(l.ID); sess != nil {
-						sessions[l.ID] = sess
+						all[l.ID] = sess
 					}
 				}
-				// 换科目后被移出课程表的历史会话：履历里出现过的 id 也打包，沉淀仍可回看
 				for _, p := range s.Ledger.List() {
-					if _, ok := sessions[p.ID]; !ok {
+					if _, ok := all[p.ID]; !ok {
 						if sess := s.Tutor.Load(p.ID); sess != nil {
-							sessions[p.ID] = sess
+							all[p.ID] = sess
 						}
 					}
+				}
+				type se struct {
+					id string
+					s  *tutor.Session
+				}
+				arr := make([]se, 0, len(all))
+				for id, sess := range all {
+					arr = append(arr, se{id, sess})
+				}
+				sort.Slice(arr, func(i, j int) bool { return arr[i].s.UpdatedAt.After(arr[j].s.UpdatedAt) })
+				for i, e := range arr {
+					if i < 5 { // 最近 5 节：全量（快路径）
+						sessions[e.id] = e.s
+						continue
+					}
+					sessions[e.id] = map[string]any{"verdict": e.s.Verdict,
+						"updatedAt": e.s.UpdatedAt, "title": e.s.Title,
+						"nMessages": len(e.s.Messages)} // 其余：元信息（懒加载）
 				}
 			}
 			// 孵化池影子化下发（ADR 0001）：title/repo/impact 不出服务端——前端只见影子画像
