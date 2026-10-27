@@ -442,6 +442,13 @@ func (s *Server) rebuildLLM() {
 	client := llm.NewClient(p.Config())
 	client.Name = p.Name
 	s.Tutor = &tutor.Tutor{Dir: s.Dir, Client: client, AgentsPath: s.AgentsPath, ProfilePath: s.ProfilePath, RefDir: s.RefDir, Tools: s.buildFetchTools(), NotesDir: s.NotesDir}
+	// 自查修复（2026-10-28）：档位挂 Tutor 内存态——重启不回填会静默滚回样例档。
+	// 取 GuideLevels 最大值（人曾到达的最高档）；老数据无 guideLevels 字段时 map 为 nil，遍历零次=样例档，无 panic。
+	for _, lv := range s.GuideLevels {
+		if lv > s.Tutor.GuideLevel {
+			s.Tutor.GuideLevel = lv
+		}
+	}
 	s.Exer = &exercise.Engine{Client: client, AgentsPath: s.AgentsPath, ProfilePath: s.ProfilePath}
 }
 
