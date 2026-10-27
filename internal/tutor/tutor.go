@@ -45,6 +45,29 @@ type Session struct {
 	Verdict     string        `json:"verdict,omitempty"` // pass | partial | ""
 	OpeningMeta *OpeningMeta  `json:"openingMeta,omitempty"`
 	UpdatedAt   time.Time     `json:"updatedAt"`
+	// 第六轮-P0-1 引导档位（随人不随课——同一会话记住，跨次续聊沿用；新知识点默认样例档）
+	Guide       int    `json:"guide,omitempty"`       // 0=未设 → 视为样例档
+	GuideStreak [2]int `json:"guideStreak,omitempty"` // [连过数, 连没过数]
+}
+
+// guide 当前档位（未设=样例）。
+func (s *Session) guide() int {
+	if s.Guide == 0 {
+		return GuideSample
+	}
+	return s.Guide
+}
+
+// guideBump 一次判定信号（pass=true 通过）推进连击并换档。
+func (s *Session) guideBump(pass bool) {
+	if pass {
+		s.GuideStreak[0]++
+		s.GuideStreak[1] = 0
+	} else {
+		s.GuideStreak[1]++
+		s.GuideStreak[0] = 0
+	}
+	s.Guide = NextGuide(s.guide(), s.GuideStreak[0], s.GuideStreak[1])
 }
 
 // OpeningMeta 开场元信息：开场指令消息是给 LLM 的（前端不渲染为气泡），
@@ -315,6 +338,8 @@ func (t *Tutor) StartOrResume(lesson Lesson) (*Session, bool, error) {
 	s := &Session{NodeID: lesson.ID, Title: lesson.Title}
 	s.OpeningMeta = &OpeningMeta{Index: lesson.Order, Title: lesson.Title, Why: lesson.Brief}
 	sys := teachSystem
+	// 第六轮-P0-1：新知识点首触=样例档（完整例子+直接指令，不让新手被问懵）
+	sys += guidePrompt(GuideSample)
 	// 小穗三轮问题1：开场同样守时间预算——10 分钟档开场一句话+一道题
 	switch t.TimeBudget {
 	case "2":
@@ -345,6 +370,7 @@ func (t *Tutor) StartOrResume(lesson Lesson) (*Session, bool, error) {
 type Verdict struct {
 	Kind  string `json:"kind"` // ""=继续对话 | pass | partial
 	Reply string `json:"reply"`
+	Guide int    `json:"guide"` // 第六轮-P0-1：本轮后的引导档位（前端「讲」卡小字与 state.guideLevels 用）
 }
 
 // Send 学习者发言 → 助教回复；解析 [PASS] 判定并落履历标记。
@@ -361,9 +387,18 @@ func (t *Tutor) Send(lesson Lesson, userText string) (Verdict, error) {
 	if t.Client == nil {
 		return Verdict{}, fmt.Errorf("LLM 未配置")
 	}
+	// 第六轮-P0-1：档位语义进 system——随人切换（连过升/连败降在 Send 末尾推进）
+	if s.Guide == 0 {
+		s.Guide = GuideSample
+	}
+	sys := teachSystem + guidePrompt(s.guide())
+	// 点「我卡住了」是一次明确的未通过信号——按判据先降一档，再让助教按（可能已降档的）档位说话
+	if strings.HasPrefix(strings.TrimSpace(userText), "(我卡住了)") {
+		s.guideBump(false)
+		sys += "\n\n【刚收到「我卡住了」】已退回一档——接下来按完整样例给他一颗定心丸：一个最小可运行的例子+一句可直接执行的动作。"
+	}
 	s.Messages = append(s.Messages, llm.Message{Role: "user", Content: userText})
 	// 小穗三轮问题1：时间预算进助教——量随人走，不随课程表
-	sys := teachSystem
 	switch t.TimeBudget {
 	case "10":
 		sys += "\n\n【今天的时间预算】学习者今天只有 10 分钟——一句话讲完（最多 3 句），然后立刻给一道检查题。宁可少讲，不要展开；检查题只出一道。"
@@ -386,8 +421,15 @@ func (t *Tutor) Send(lesson Lesson, userText string) (Verdict, error) {
 	if kind != "" {
 		s.Verdict = kind
 	}
+	if kind == "pass" {
+		s.guideBump(true)
+	} else if kind == "partial" {
+		// 半过=过了但有洞：清零连败不计升格，也别当失败惩罚
+		s.GuideStreak[0] = 0
+		s.GuideStreak[1] = 0
+	}
 	t.save(s)
-	return Verdict{Kind: kind, Reply: reply}, nil
+	return Verdict{Kind: kind, Reply: reply, Guide: s.guide()}, nil
 }
 
 // followup 收尾后的陪聊：学习者可能在回答收尾前的加深追问，或继续追问。
@@ -406,7 +448,7 @@ func (t *Tutor) followup(s *Session, userText string) (Verdict, error) {
 	}
 	s.Messages = append(s.Messages, llm.Message{Role: "assistant", Content: reply})
 	t.save(s)
-	return Verdict{Kind: "", Reply: reply}, nil
+	return Verdict{Kind: "", Reply: reply, Guide: s.guide()}, nil
 }
 
 // MarkLessonDone 课程状态推进（履历由调用方写）。

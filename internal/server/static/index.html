@@ -714,6 +714,8 @@ function stuckHint(){
     :'(我卡住了) 请只给一条最小可行提示：指向下一步的具体动作（哪个文件/哪条命令），不要给完整答案。';
   send();
   if(STUCK_N<2){toast('已请助教给最小提示——再卡一次会要完整解答')}
+  // 第六轮-P0-1：卡住视为一次未通过——引导档位已退回一级（下一轮给完整样例）
+  toast('已退回一档——接下来看完整样例，不赶你',3200);
 }
 async function send(){
   if(HIST)return;
@@ -741,8 +743,9 @@ async function send(){
 function todaySteps(){
   const st=STATE||{};
   const today=st.today;
-  // 步1 讲：今天的课存在=待讲；无（已收尾推进完）=✓
-  const s1={done:!today,title:today?today.title:'今日已讲完',act:today?'继续讲':'明天再来'};
+  // 第六轮-P0-1：引导档位小字（样例/半提示/提问）——state.guideLevels 由判定推进
+  const gl=(STATE.guideLevels||{})[(today||{}).id];
+  const s1={done:!today,title:today?today.title:'今日已讲完',act:today?'继续讲':'明天再来',gn:(typeof gl==='number'&&gl>=2)?(gl===3?'提问':'半提示'):'样例'};
   // 步2 练：今日练习全过=✓；有未过=当前
   const exs=st.exercises||[];
   const doneEx=exs.filter(e=>e.status==='done').length;
@@ -852,7 +855,7 @@ function renderPlanBody(){
     h+='<div style="display:flex;align-items:center;gap:12px;padding:7px 0;opacity:'+(dim?'.5':'1')+';'+(i<steps.length-1?'border-bottom:1px dashed var(--line);':'')+'">'
       +'<span style="width:22px;height:22px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;'
       +(s.done?'background:var(--green);color:#fff':(primary?'background:var(--pink);color:#fff':'background:var(--chip);color:var(--mut)'))+'">'+(s.done?'✓':(dim?'-':i+1))+'</span>'
-      +'<span style="flex:1;min-width:0;font-size:13.5px;font-weight:'+(primary?'600':'500')+'">'+esc(s.k)+' · '+esc(s.title)+(s.min&&!s.done?' <span style="font-size:10.5px;color:var(--mut);font-weight:400">· '+esc(s.min)+'</span>':'')+(dim?' <span style="font-size:10.5px;color:var(--mut)">（今天到此为止，明天继续）</span>':'')+'</span>'
+      +'<span style="flex:1;min-width:0;font-size:13.5px;font-weight:'+(primary?'600':'500')+'">'+esc(s.k)+' · '+esc(s.title)+(s.min&&!s.done?' <span style="font-size:10.5px;color:var(--mut);font-weight:400">· '+esc(s.min)+'</span>':'')+(s.gn&&!s.done?' <span style="font-size:10.5px;color:var(--mut);font-weight:400">· 引导：'+esc(s.gn)+'</span>':'')+(dim?' <span style="font-size:10.5px;color:var(--mut)">（今天到此为止，明天继续）</span>':'')+'</span>'
       +(dim
         ?'<span class="va" style="border:1px dashed var(--line);background:transparent;color:var(--mut);padding:6px 16px;font-size:12px;border-radius:8px">留给明天</span>'
         :'<button class="'+(primary?'va primary':'va')+'" onclick="'+s.fn+'" style="border:1px solid var(--line);background:'+(primary?'var(--pink)':'var(--card)')+';color:'+(primary?'#fff':'var(--ink)')+';padding:6px 16px;font-size:12px;border-radius:8px;cursor:pointer;'+(primary?'border-color:var(--pink);font-weight:600;':'')+'">'+esc(s.act)+'</button>')

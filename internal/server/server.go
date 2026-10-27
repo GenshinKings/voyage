@@ -167,6 +167,8 @@ type Server struct {
 	ContextEdges map[string]int `json:"contextEdges"`
 	// 错题回归（Magpie 思想）：答错的知识点记入错题本，下次出题优先出换场景变式——自适应让人看得见
 	WrongHits map[string]*WrongHit `json:"wrongHits"`
+	// 第六轮-P0-1 引导档位：lessonID → 样例(1)/半提示(2)/提问(3)——随人不随课，/api/state 可读
+	GuideLevels map[string]int `json:"guideLevels"`
 	// 副本学习（用户 2026-10-26 设计）：用已收尾知识复现真实项目，通关揭晓恍然大悟
 	Duns []*tutor.Dungeon `json:"dungeons"`
 	// 纪念卡（副本 v2 悬念化）：通关揭晓时生成，收藏墙 + 沉淀连锚的数据源
@@ -1674,6 +1676,7 @@ func (s *Server) Handlers() http.Handler {
 				}(),
 				"readings": shadowOut, "trophies": s.Trophies, "contextEdges": s.ContextEdges,
 				"wrongHits": s.WrongHits,
+				"guideLevels": s.GuideLevels,
 				"ledger":    s.Ledger.List(), "counts": map[string]int{"known": k, "used": u, "done": d},
 				"graduation": map[string]any{"state": string(g), "reason": gReason},
 				"curriculum": curriculum, "today": today, "sessions": sessions,
@@ -1967,6 +1970,14 @@ func (s *Server) Handlers() http.Handler {
 			verdict = v.Kind
 		}
 		s.recordVerdict(verdict, lesson.ID)
+		// 第六轮-P0-1：档位随判定推进——state 可读（验收），前端「讲」卡小字显示
+		if s.GuideLevels == nil {
+			s.GuideLevels = map[string]int{}
+		}
+		if v.Guide > 0 {
+			s.GuideLevels[lesson.ID] = v.Guide
+		}
+		s.saveState()
 		s.LastStop = &LastStop{NodeID: lesson.ID, Title: lesson.Title,
 			Step: "判定结束", At: time.Now()}
 		writeJSON(w, map[string]any{"reply": v.Reply, "verdict": verdict})
