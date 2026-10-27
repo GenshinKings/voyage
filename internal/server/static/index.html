@@ -1552,11 +1552,19 @@ function openDungeon(id){
   switchTab('learn');
 }
 function renderDungeon(d){
-  // 影子头部：？？？？？（通关揭晓）+ pip 进度轨
-  let st='<div style="margin-bottom:16px"><div style="font-size:30px;font-weight:800;letter-spacing:8px">'+(d.status==='active'?'？？？？？':esc(d.title||''))+'</div>'
-    +'<div style="font-size:11.5px;color:var(--mut);margin-top:2px">'+(d.status==='active'?'影子已开门 · 是什么，打完才知道':'已揭晓')+'</div>'
-    +'<div class="pip-track" style="max-width:560px">'
-    +(d.stages||[]).map((sg,i)=>'<div class="pip '+(i<d.cur?'done':(i===d.cur&&d.status==='active'?'cur':''))+'"></div>').join('')+'</div></div>';
+  // 小穗四轮三：第一屏只留一句话任务+第一步动作+开始按钮；阶段条折叠成一行小字
+  const sg=(d.stages||[])[d.cur]||{};
+  const firstMsg=((d.messages||[]).find(m=>m.role==='assistant')||{}).content||'';
+  let st='';
+  if(d.status==='active'){
+    st='<div style="margin-bottom:14px">'
+      +'<div class="dn-q" style="font-size:22px;letter-spacing:2px">⚔ '+(d.cur===0&&!d.messages.length?'影子已开门——只差你动手':esc(sg.title||'当前关'))+'</div>'
+      +'<div style="margin-top:8px"><button class="btn primary" id="dnStartBtn" onclick="dnBegin()">▶ 开始第一步</button>'
+      +'<span style="font-size:10.5px;color:var(--mut);margin-left:10px">进度 '+(d.cur+1)+'/'+((d.stages||[]).length)+' · 论什么奖励打完再揭晓</span></div></div>';
+  } else {
+    st='<div style="margin-bottom:16px"><div style="font-size:30px;font-weight:800;letter-spacing:8px">'+esc(d.title||'')+'</div>'
+      +'<div style="font-size:11.5px;color:var(--mut);margin-top:2px">已揭晓</div></div>';
+  }
   let h=st;
   // 已通关横幅
   if(d.status==='cleared'){
@@ -1573,7 +1581,7 @@ function renderDungeon(d){
   h+='</div>';
   // 输入与放弃
   if(d.status==='active'){
-    h+='<div class="dir-input" style="max-width:none"><textarea id="dnInput" placeholder="提交这一关的成果 / 说卡住了 / 问点什么…"></textarea><button onclick="sendDungeon()">提交</button></div>';
+    h+='<div style="display:flex;gap:10px;align-items:center"><button class="btn ghost dn-stuck" onclick="dnStuck()" style="font-size:11.5px;padding:8px 14px">我卡住了</button><div class="dir-input" style="max-width:none"><textarea id="dnInput" placeholder="做完这一步，把输出/报错贴上来…"></textarea><button onclick="sendDungeon()">提交</button></div></div>';
     h+='<div style="text-align:right;margin-top:6px"><span class="mut" style="font-size:11px;cursor:pointer" onclick="abandonDungeon(\''+d.id+'\')">放弃副本（可随时回来）</span></div>';
   }
   const c=$('chat');
@@ -1582,11 +1590,21 @@ function renderDungeon(d){
   if(ta)ta.onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendDungeon();}};
   $('view').scrollTop=$('view').scrollHeight;
 }
-async function sendDungeon(){
-  const ta=document.getElementById('dnInput');if(!ta)return;
-  const text=ta.value.trim();if(!text)return;
+/* 小穗四轮三：第一步动作确认（第一屏「开始」→ 助教开场）+ 卡住两次升级 */
+let DN_STUCK=0;
+function dnBegin(){
   const d=(STATE.dungeons||[]).find(x=>x.id===DN);if(!d)return;
-  ta.value='';
+  if(d.messages.length)return; // 已开场
+  dnSendText('(开始第一步) 请给我【现在就做这一件】的具体动作：那个文件/那条命令，一次只给一步。');
+}
+function dnStuck(){
+  DN_STUCK++;
+  dnSendText(DN_STUCK>=2
+    ?'(我第 '+DN_STUCK+' 次卡住了) 这次请给完整解法，一步一步带我做。'
+    :'(我卡住了) 只给一条最小可行提示：下一步的具体动作（哪个文件/哪条命令），不要给完整答案。');
+}
+async function dnSendText(text){
+  const d=(STATE.dungeons||[]).find(x=>x.id===DN);if(!d)return;
   d.messages.push({role:'user',content:text},{role:'assistant',content:'…'});
   renderDungeon(d);
   try{
@@ -1595,11 +1613,19 @@ async function sendDungeon(){
     const old=d.messages;
     Object.assign(d,nd);
     if(!nd.messages||!nd.messages.length)d.messages=old;
+    DN_STUCK=0; // 导师回应即解除计数
     renderDungeon(d);
     if(r.reveal){ // 一锤揭晓：纪念卡生成，仪式开始
       setTimeout(()=>showReveal(r.reveal,async()=>{DN=null;await loadState();switchTab('dungeon');}),900);
     }
   }catch(e){d.messages.splice(d.messages.length-2,2);renderDungeon(d);toast('失败：'+e.message)}
+}
+async function sendDungeon(){
+  const ta=document.getElementById('dnInput');if(!ta)return;
+  const text=ta.value.trim();if(!text)return;
+  const d=(STATE.dungeons||[]).find(x=>x.id===DN);if(!d)return;
+  ta.value='';
+  dnSendText(text);
 }
 async function abandonDungeon(id){
   try{
