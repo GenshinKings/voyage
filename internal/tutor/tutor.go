@@ -66,6 +66,16 @@ type Tutor struct {
 	FetchNote   string         // 今日进货提示（server 注入；开场带给助教一次——收尾时主动推荐延伸材料，用后清空防重复）
 	NotesDir    string         // 学习者笔记目录 notes/（每日巡检的检查对象，只读）
 	TimeBudget  string         // 小穗三轮问题1：今天的时间预算 10/30/90（server 从 state 同步）——决定讲解长度与检查题数量
+	// Clock 小穗四轮·架构 P1-2：注入时间源（测试用假钟测 fsrs/判定链路不睡）——nil=走 walltime
+	Clock func() time.Time
+}
+
+// now 统一取时间：Clock nil 则走真实时间。
+func (t *Tutor) now() time.Time {
+	if t.Clock != nil {
+		return t.Clock()
+	}
+	return time.Now()
 }
 
 // agents 读取用户自定义约束（AGENTS.md）。缺失/失败返回空（默认纪律兜底）。
@@ -210,7 +220,7 @@ JSON 顶层键必须是 "nodes"。`),
 	}
 	// 替换式：在学课程只能有一个
 	cur.Subjects = []string{name}
-	base := time.Now().Format("0102") + "-" + sanitize(name)
+	base := t.now().Format("0102") + "-" + sanitize(name)
 	newLessons := make([]Lesson, 0, len(lessons))
 	for i, n := range lessons {
 		newLessons = append(newLessons, Lesson{
@@ -223,14 +233,14 @@ JSON 顶层键必须是 "nodes"。`),
 		})
 	}
 	cur.Lessons = newLessons
-	cur.UpdatedAt = time.Now()
+	cur.UpdatedAt = t.now()
 	t.saveCurriculum(cur)
 	return cur, nil
 }
 
 // Curriculum 读课程（无文件返回空）。
 func (t *Tutor) Curriculum() *Curriculum {
-	cur := &Curriculum{UpdatedAt: time.Now()}
+	cur := &Curriculum{UpdatedAt: t.now()}
 	b, err := os.ReadFile(filepath.Join(t.Dir, "lessons.json"))
 	if err == nil {
 		_ = json.Unmarshal(b, cur)
@@ -289,7 +299,7 @@ func (t *Tutor) Load(nodeID string) *Session {
 
 func (t *Tutor) save(s *Session) {
 	_ = os.MkdirAll(filepath.Join(t.Dir, "tutor"), 0o755)
-	s.UpdatedAt = time.Now()
+	s.UpdatedAt = t.now()
 	b, _ := json.MarshalIndent(s, "", "  ")
 	_ = os.WriteFile(t.sessionPath(s.NodeID), b, 0o644)
 }
@@ -407,7 +417,7 @@ func (t *Tutor) MarkLessonDone(nodeID string) {
 			cur.Lessons[i].Status = "done"
 		}
 	}
-	cur.UpdatedAt = time.Now()
+	cur.UpdatedAt = t.now()
 	t.saveCurriculum(cur)
 }
 

@@ -41,6 +41,7 @@ import (
 	"outpost2/internal/reflib"
 	"outpost2/internal/sandbox"
 	"outpost2/internal/scheduler"
+	"outpost2/internal/store"
 	"outpost2/internal/tutor"
 )
 
@@ -280,54 +281,18 @@ func (s *Server) saveFetchConf() {
 	}
 }
 
-func (s *Server) load(path string, v any) bool {
-	b, err := os.ReadFile(filepath.Join(s.Dir, path))
-	if err != nil {
-		return false
-	}
-	if err := json.Unmarshal(b, v); err != nil {
-		// 小穗五轮①：损坏自愈——解析失败回退上次备份（.bak），并提示
-		backup := filepath.Join(s.Dir, path+".bak")
-		if bb, err2 := os.ReadFile(backup); err2 == nil {
-			if json.Unmarshal(bb, v) == nil {
-				log.Printf("[恢复] %s 解析失败（%v），已自动回退到上次备份", path, err)
-				return true
-			}
-		}
-		log.Printf("[恢复失败] %s 解析失败且无可用备份： %v", path, err)
-		return false
-	}
-	return true
+func (s *Server) load(path string, v any) bool { // 架构 P1-1：原始逻辑收敛至 internal/store
+	return store.Load(s.Dir, path, v)
 }
 
 // stateMutex 保住 state 的「读-改-写」临界区（小穗五轮①：并发保存互相覆盖的根因治理）
-var stateMutex sync.Mutex
+var stateMutex = &store.StateMutex
 
 // saveMutex 串行化全部文件落盘（state 与各数据文件共用一把=够用且简单）
-var saveMutex sync.Mutex
+var saveMutex = &store.WriteMutex
 
-func (s *Server) save(path string, v any) {
-	saveMutex.Lock()
-	defer saveMutex.Unlock()
-	_ = os.MkdirAll(s.Dir, 0o755)
-	b, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		return
-	}
-	final := filepath.Join(s.Dir, path)
-	tmp := final + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o644); err != nil {
-		return
-	}
-	// 同盘 rename=原子替换；写一半断电也只会留下完整旧文件或完整新文件
-	if err := os.Rename(tmp, final); err != nil {
-		// Windows 上 rename 覆盖已存在文件可能报错——退化为「先删再换」+ 留 .bak
-		_ = os.Remove(final)
-		if os.Rename(tmp, final) != nil {
-			return
-		}
-	}
-	_ = os.WriteFile(final+".bak", b, 0o644) // 每次成功落盘都留一份 .bak 供损坏回退
+func (s *Server) save(path string, v any) { // 架构 P1-1：原子写收敛至 internal/store
+	store.Save(s.Dir, path, v)
 }
 
 // NewServer 装配：缺 goals 时写入种子（90 天冲刺三产出物）。
