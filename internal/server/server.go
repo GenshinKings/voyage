@@ -169,6 +169,9 @@ type Server struct {
 	WrongHits map[string]*WrongHit `json:"wrongHits"`
 	// 第六轮-P0-1 引导档位：lessonID → 样例(1)/半提示(2)/提问(3)——随人不随课，/api/state 可读
 	GuideLevels map[string]int `json:"guideLevels"`
+	// 第六轮-P0-2 误因分类：lessonID → 误因分布；WrongNotes 记最近一条证据（开场引用用）
+	WrongReasons map[string]map[string]int `json:"wrongReasons"`
+	WrongNotes   map[string]string         `json:"wrongNotes"`
 	// 副本学习（用户 2026-10-26 设计）：用已收尾知识复现真实项目，通关揭晓恍然大悟
 	Duns []*tutor.Dungeon `json:"dungeons"`
 	// 纪念卡（副本 v2 悬念化）：通关揭晓时生成，收藏墙 + 沉淀连锚的数据源
@@ -883,6 +886,37 @@ func (s *Server) statsEnsure() *Stats {
 		s.Stats.Verdicts = map[string]int{}
 	}
 	return s.Stats
+}
+
+// mistakeNote 第六章-P0-2：把此节点误因分布+最近证据排成一句话（开场引用；无记录=空）。
+func (s *Server) mistakeNote(nodeID string) string {
+	dist := s.WrongReasons[nodeID]
+	if len(dist) == 0 {
+		return ""
+	}
+	parts := []string{}
+	add := func(k, label string, n int) {
+		if n > 0 {
+			parts = append(parts, fmt.Sprintf("%s×%d（%s）", label, n, reasonWord(k)))
+		}
+	}
+	add("condition", "看漏条件", dist["condition"])
+	add("concept", "概念没懂", dist["concept"])
+	add("env", "环境问题", dist["env"])
+	add("slip", "手滑/拼写", dist["slip"])
+	if len(parts) == 0 {
+		return ""
+	}
+	note := strings.Join(parts, "、")
+	if ev := s.WrongNotes[nodeID]; ev != "" {
+		note += "；最近一次证据：" + ev
+	}
+	return note
+}
+
+// reasonWord 误因类别白名单的中文短词（非法类别不进分布，这里只是兜底标注）。
+func reasonWord(k string) string {
+	return k // 分布 key 本身已用英文标签（concept/condition/env/slip），保持原样便于审计
 }
 
 // recordVerdict 判定埋点：分布计数 + 连续天数 + 步耗时（open→verdict）。
@@ -1675,9 +1709,10 @@ func (s *Server) Handlers() http.Handler {
 					return s.Duns
 				}(),
 				"readings": shadowOut, "trophies": s.Trophies, "contextEdges": s.ContextEdges,
-				"wrongHits": s.WrongHits,
-				"guideLevels": s.GuideLevels,
-				"ledger":    s.Ledger.List(), "counts": map[string]int{"known": k, "used": u, "done": d},
+				"wrongHits":    s.WrongHits,
+				"guideLevels":  s.GuideLevels,
+				"wrongReasons": s.WrongReasons,
+				"ledger":       s.Ledger.List(), "counts": map[string]int{"known": k, "used": u, "done": d},
 				"graduation": map[string]any{"state": string(g), "reason": gReason},
 				"curriculum": curriculum, "today": today, "sessions": sessions,
 			}, nil
@@ -1923,6 +1958,8 @@ func (s *Server) Handlers() http.Handler {
 			http.Error(w, "知识点不存在", 404)
 			return
 		}
+		// 第六轮-P0-2：误因回看——此前在此记录过失败的，开场第一句先点它
+		s.Tutor.MistakeNote = s.mistakeNote(lesson.ID)
 		sess, isNew, err := s.Tutor.StartOrResume(*lesson)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
@@ -1968,6 +2005,22 @@ func (s *Server) Handlers() http.Handler {
 			s.Tutor.MarkLessonDone(lesson.ID)
 			s.save("ledger.json", s.Ledger)
 			verdict = v.Kind
+		} else if reason, evid := tutor.ParseCause(v.Reply); tutor.ValidCause(reason) {
+			// 第六轮-P0-2：检查题判定失败——误因分布入学习者模型（开场引用用）
+			if s.WrongReasons == nil {
+				s.WrongReasons = map[string]map[string]int{}
+			}
+			if s.WrongReasons[lesson.ID] == nil {
+				s.WrongReasons[lesson.ID] = map[string]int{}
+			}
+			s.WrongReasons[lesson.ID][reason]++
+			if s.WrongNotes == nil {
+				s.WrongNotes = map[string]string{}
+			}
+			if evid != "" {
+				s.WrongNotes[lesson.ID] = evid
+			}
+			s.saveState()
 		}
 		s.recordVerdict(verdict, lesson.ID)
 		// 第六轮-P0-1：档位随判定推进——state 可读（验收），前端「讲」卡小字显示

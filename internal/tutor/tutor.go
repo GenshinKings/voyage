@@ -87,6 +87,7 @@ type Tutor struct {
 	RefDir      string         // 教学参考库 kb/（教务抓取的原文资料，热读注入清单——讲解优先依据原文）
 	Tools       []Tool         // 助教可用工具（server 组装：GitHub 抓取/入库/阅读；nil=无工具）
 	FetchNote   string         // 今日进货提示（server 注入；开场带给助教一次——收尾时主动推荐延伸材料，用后清空防重复）
+	MistakeNote string         // 第六轮-P0-2 误因回看（server 注入；开场第一句必须先点它，用后清空）
 	NotesDir    string         // 学习者笔记目录 notes/（每日巡检的检查对象，只读）
 	TimeBudget  string         // 小穗三轮问题1：今天的时间预算 10/30/90（server 从 state 同步）——决定讲解长度与检查题数量
 	// Clock 小穗四轮·架构 P1-2：注入时间源（测试用假钟测 fsrs/判定链路不睡）——nil=走 walltime
@@ -157,6 +158,7 @@ const teachSystem = `你是前哨 2.0 的 AI 助教，正在一对一把一个�
 - 禁止「请解释 X 的原理/谈谈你的理解」这类没有输出的题。
 - 判定标准：能做出来=通过；做不出来=给下一步最小提示（一处、一句），连续两次做不出来才给完整解答。
 - 答对 → 先肯定他做对的关键点，再给一个加深的小追问或真实应用场景，然后单独一行输出标记 [PASS]；[PASS:partial]（半懂）同理。
+- 做不出来（检查题判定失败或半懂） → 回复末尾**必须**再单独一行输出误因标签，格式：[CAUSE:类别|证据一句话]。类别只有四种：concept（概念没懂）、condition（看漏条件）、env（环境/报错相关）、slip（手滑/拼写）。证据写具体差在哪一步（如「他写的 a==b 应该是 a!=b」）。标签行前后不加别的字；日常提问（非检查题作答）时不输出此标签。
 
 轻量出口（小穗五轮三「看见人」）：
 - 学习者消息以「(这个我会)」开头 → 出一道最有挑战的判定式验收题，过了直接 [PASS]（履历记「已验证」，不重新讲基础）；没过就当正常教学继续，不羞辱。
@@ -356,6 +358,11 @@ func (t *Tutor) StartOrResume(lesson Lesson) (*Session, bool, error) {
 		user += "\n\n【今日进货】以下是你刚抓取入库的学习材料——若与本次知识点相关，收尾时主动推荐给学习者（说清为什么值得读/做）；无关则不提：\n" + t.FetchNote
 		t.FetchNote = "" // 只带一次，防每课重复推销
 	}
+	if t.MistakeNote != "" {
+		// 第六轮-P0-2：误因回看——不重头讲一遍，开场第一句先点上次卡在哪
+		user += "\n\n【误因回看】这个知识点学习者此前有过这些错误记录：" + t.MistakeNote + "\n开场第一句必须先点它（「上次你这里是想反了」式的回顾引用），而不是从头再讲；讲完再给检查题。"
+		t.MistakeNote = ""
+	}
 	s.Messages = append(s.Messages, llm.Message{Role: "user", Content: user})
 	reply, err := t.Client.Chat(t.withAgents(sys), s.Messages)
 	if err != nil {
@@ -427,6 +434,9 @@ func (t *Tutor) Send(lesson Lesson, userText string) (Verdict, error) {
 		// 半过=过了但有洞：清零连败不计升格，也别当失败惩罚
 		s.GuideStreak[0] = 0
 		s.GuideStreak[1] = 0
+	} else if reason, _ := ParseCause(reply); ValidCause(reason) {
+		// 第六轮-P0-2：检查题判定失败（显式 [CAUSE] 标签）= 一次未通过，进入引导降档判据
+		s.guideBump(false)
 	}
 	t.save(s)
 	return Verdict{Kind: kind, Reply: reply, Guide: s.guide()}, nil
