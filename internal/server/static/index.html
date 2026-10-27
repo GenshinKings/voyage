@@ -514,6 +514,7 @@ kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;paddi
   <div class="inputbar">
     <div id="chatbox">
       <textarea id="input" placeholder="回答检查题，或问点什么…（Enter 发送）"></textarea>
+      <button onclick="stuckHint()">我卡住了</button>
       <button onclick="send()">发送</button>
     </div>
   </div>
@@ -703,11 +704,25 @@ function renderChat(msgs,meta){
   $('view').scrollTop=$('view').scrollHeight;
 }
 
+/* 小穗四轮 2.2：「我卡住了」——第一次只给最小提示，连续两次才给完整解答；正常发言即重置 */
+let STUCK_N=0;
+function stuckHint(){
+  if(HIST){toast('历史对话只读');return}
+  if(!CURRENT){toast('先从《今天做什么》的第一步开始');return}
+  STUCK_N++;
+  const ta=$('input');
+  ta.value=STUCK_N>=2
+    ?'(我第 ' + STUCK_N + ' 次卡住了) 还是做不出来——这次请给完整解答，一步一步带我做。'
+    :'(我卡住了) 请只给一条最小可行提示：指向下一步的具体动作（哪个文件/哪条命令），不要给完整答案。';
+  send();
+  if(STUCK_N<2){toast('已请助教给最小提示——再卡一次会要完整解答')}
+}
 async function send(){
   if(HIST)return;
   if(EXER)return sendExercise($('input').value.trim());
   if(!CURRENT){toast('先回答今天的检查题，或点一道练习');return}
   const text=$('input').value.trim();if(!text)return;
+  if(STUCK_N>=1&&!text.startsWith('(我'))STUCK_N=0; // 正常发言=解除卡住计数
   garbleWarn(text);
   $('input').value='';
   const c=$('chat');c.insertAdjacentHTML('beforeend','<div class="msg u"><div class="bubble">'+esc(text)+'</div></div>');
