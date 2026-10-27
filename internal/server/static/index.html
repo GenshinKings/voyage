@@ -511,6 +511,8 @@ kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;paddi
   <div class="inputbar">
     <div id="chatbox">
       <textarea id="input" placeholder="回答检查题，或问点什么…（Enter 发送）"></textarea>
+      <button onclick="skipChallenge()" title="这个我会：直接给验收题，过了就跳过">我会</button>
+      <button onclick="deepen()" title="太浅了：加深一档">深</button>
       <button onclick="stuckHint()">我卡住了</button>
       <button onclick="openSandbox()" title="打开代码沙箱：修一个真实 bug">🧪</button>
       <button onclick="send()">发送</button>
@@ -704,6 +706,19 @@ function renderChat(msgs,meta){
 
 /* 小穗四轮 2.2：「我卡住了」——第一次只给最小提示，连续两次才给完整解答；正常发言即重置 */
 let STUCK_N=0;
+/* 小穗五轮三：轻量出口——这个我会（直接验收）/ 太浅了（加深一档） */
+function skipChallenge(){
+  STUCK_N=0;
+  const ta=$('input');
+  ta.value='(这个我会) 给我最有挑战的判定式验收题——我直接做出来给你看。';
+  send();
+}
+function deepen(){
+  STUCK_N=0;
+  const ta=$('input');
+  ta.value='(太浅了) 这一节加深一档再讲——少铺垫，多硬货，动作模板不变。';
+  send();
+}
 function stuckHint(){
   if(HIST){toast('历史对话只读');return}
   if(!CURRENT){toast('先从《今天做什么》的第一步开始');return}
