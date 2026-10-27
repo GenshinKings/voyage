@@ -1453,6 +1453,24 @@ async function renderGraph(){
   const nodes=(g.nodes||[]).filter(n=>learned[n.id]).filter((n,i,arr)=>arr.findIndex(m=>m.id===n.id)===i);
   const ctxEdges=(g.edges||[]).filter(e=>(e.type==='context'||e.type==='usage')&&learned[e.from]&&learned[e.to]);
   const seqEdges=(g.edges||[]).filter(e=>e.type==='sequence'&&learned[e.from]&&learned[e.to]);
+  // 小穗五轮①空态：还没有收尾知识点时整个画布是白的——观感等于坏了。空态必须可见+给一个明确动作
+  const gEmpty=$('graphEmpty');if(gEmpty)gEmpty.remove();
+  const gCv=$('graphCanvas');if(gCv)gCv.style.display='';
+  if(!nodes.length){
+    if(gCv)gCv.style.display='none';
+    const wrap=$('graphWrap')||gCv&&gCv.parentNode;
+    let empty=$('graphEmpty');
+    if(!empty&&wrap){
+      empty=document.createElement('div');empty.id='graphEmpty';
+      empty.style.cssText='display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;min-height:380px;color:var(--mut)';
+      wrap.appendChild(empty);
+    }
+    if(empty)empty.innerHTML='<div style="font-size:34px">🕸</div>'
+      +'<div style="font-size:15px;font-weight:600;color:var(--ink);margin-top:12px">还没有点亮的知识点</div>'
+      +'<div style="max-width:430px;font-size:12.5px;margin-top:8px;line-height:1.8">学完并收尾一节课，这里会亮起第一个点；练习里真实用到的知识点之间会自动连成边。</div>'
+      +'<button class="va primary" onclick="todayGoLearn()" style="margin-top:16px;border:1px solid var(--pink);background:var(--pink);color:#fff;padding:7px 18px;font-size:12.5px;border-radius:8px;cursor:pointer;font-weight:600">去完成今天的第一步 →</button>';
+    return;
+  }
   try{
     window.__graphErr='drawing';
     await new Promise(r=>setTimeout(r,60)); // 布局兜底。不用 rAF：后台页 rAF 会被节流
