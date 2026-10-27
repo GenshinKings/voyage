@@ -404,32 +404,29 @@ a:hover{text-decoration:underline}
   .logo{padding-bottom:14px;border-bottom:1px solid var(--line)}
 }
 
-/* ===== 桌面端专项（评审补充） ===== */
-/* 深色模式：变量整套覆盖 */
-@media (prefers-color-scheme:dark){
-  :root:not([data-theme=light]){
-    --ink:#E4E6EB;--usr:#E4E6EB;--paper:#17191E;--card:#1F2229;--side:rgba(24,26,32,.86);
-    --line:#2E323B;--mut:#8B919C;--chip:rgba(228,230,235,.06);--sel:rgba(228,230,235,.08);
-    --shadow-contact:0 1px 2px rgba(0,0,0,.5),0 0 0 1px rgba(228,230,235,.04);
-  }
-  :root:not([data-theme=light]) body{background:var(--paper);color:var(--ink)}
-  :root:not([data-theme=light]) .msg .bubble{background:var(--card);color:var(--ink)}
-  :root:not([data-theme=light]) .msg.u .bubble{background:#2A2E37;color:#E4E6EB}
-  :root:not([data-theme=light]) .tcard,.td-card,.rv-card{background:linear-gradient(155deg,#241F23,#2B2229)}
-  :root:not([data-theme=light]) .t-impact,.td-impact{color:#D8D3CE}
-  :root:not([data-theme=light]) .shadow-card{background:linear-gradient(135deg,#232028,#2E2430)}
-  :root:not([data-theme=light]) .silo{background:repeating-linear-gradient(45deg,#24262C,#24262C 4px,transparent 4px,transparent 8px)}
-  :root:not([data-theme=light]) .active-card,.verdict-actions .va{background:var(--card)}
-  :root:not([data-theme=light]) #input,#subjectBox input{background:var(--card);color:var(--ink);border-color:var(--line)}
-  :root:not([data-theme=light]) #guideCard .status,.dn-clear{background:var(--chip)}
-  :root:not([data-theme=light]) #topbar{background:rgba(23,25,30,.78);border-bottom-color:rgba(228,230,235,.06)}
-  :root:not([data-theme=light]) .inputbar{background:var(--paper);border-top-color:rgba(228,230,235,.06)}
-  :root:not([data-theme=light]) #chatbox textarea{background:var(--card);color:var(--ink);border-color:var(--line)}
-  :root:not([data-theme=light]) #chatbox #input,#subjectBox button{background:var(--pink)}
-  :root:not([data-theme=light]) #side{background:var(--side)}
-  :root:not([data-theme=light]) .bubble,.dn-bubble{background:var(--card);color:var(--ink)}
-  :root:not([data-theme=light]) .gLegend{color:var(--mut)}
+/* ===== 深色模式（小穗五轮追加）：不再跟随系统——只有显式 [data-theme=dark] 生效；默认浅色 ===== */
+:root[data-theme=dark]{
+  --ink:#E4E6EB;--usr:#E4E6EB;--paper:#17191E;--card:#1F2229;--side:rgba(24,26,32,.86);
+  --line:#2E323B;--mut:#8B919C;--chip:rgba(228,230,235,.06);--sel:rgba(228,230,235,.08);
+  --shadow-contact:0 1px 2px rgba(0,0,0,.5),0 0 0 1px rgba(228,230,235,.04);
 }
+[data-theme=dark] body{background:var(--paper);color:var(--ink)}
+[data-theme=dark] .msg .bubble{background:var(--card);color:var(--ink)}
+[data-theme=dark] .msg.u .bubble{background:#2A2E37;color:#E4E6EB}
+[data-theme=dark] .tcard,.td-card,.rv-card{background:linear-gradient(155deg,#241F23,#2B2229)}
+[data-theme=dark] .t-impact,.td-impact{color:#D8D3CE}
+[data-theme=dark] .shadow-card{background:linear-gradient(135deg,#232028,#2E2430)}
+[data-theme=dark] .silo{background:repeating-linear-gradient(45deg,#24262C,#24262C 4px,transparent 4px,transparent 8px)}
+[data-theme=dark] .active-card,.verdict-actions .va{background:var(--card)}
+[data-theme=dark] #input,#subjectBox input{background:var(--card);color:var(--ink);border-color:var(--line)}
+[data-theme=dark] #guideCard .status,.dn-clear{background:var(--chip)}
+[data-theme=dark] #topbar{background:rgba(23,25,30,.78);border-bottom-color:rgba(228,230,235,.06)}
+[data-theme=dark] .inputbar{background:var(--paper);border-top-color:rgba(228,230,235,.06)}
+[data-theme=dark] #chatbox textarea{background:var(--card);color:var(--ink);border-color:var(--line)}
+[data-theme=dark] #chatbox #input,#subjectBox button{background:var(--pink)}
+[data-theme=dark] #side{background:var(--side)}
+[data-theme=dark] .bubble,.dn-bubble{background:var(--card);color:var(--ink)}
+[data-theme=dark] .gLegend{color:var(--mut)}
 /* 命令面板 */
 .palette{position:fixed;inset:0;background:rgba(10,11,14,.55);backdrop-filter:blur(2px);z-index:120;display:flex;align-items:flex-start;justify-content:center;padding-top:14vh}
 .pal-box{width:560px;max-width:92vw;background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.35);overflow:hidden;animation:palIn 160ms cubic-bezier(.22,.9,.32,1) both}
