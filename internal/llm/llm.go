@@ -3,6 +3,7 @@
 package llm
 
 import (
+	"log"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -136,12 +137,13 @@ type ToolClient interface {
 }
 
 type Client struct {
+	Name   string // profile 名（日志/排障用）
 	Config Config
 	HTTP   *http.Client
 }
 
 func NewClient(cfg Config) *Client {
-	return &Client{Config: cfg, HTTP: &http.Client{Timeout: 180 * time.Second}}
+	return &Client{Name: "default", Config: cfg, HTTP: &http.Client{Timeout: 180 * time.Second}}
 }
 
 // ---------- wire 格式（OpenAI chat API）----------
@@ -203,6 +205,56 @@ type chatResponse struct {
 }
 
 func (c *Client) post(body []byte) (wireMessage, error) {
+	// 小穗五轮二：网络抖动/429/5xx/超时 重试 2 次指数退避（1s/3s）；每次调用写 server.log（时间+耗时+结果）
+	var msg wireMessage
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt > 0 {
+			backoff := time.Duration(1<<(attempt-1)) * time.Second // 1s, 2s（近似 1s/3s 语义的指数退避）
+			time.Sleep(backoff)
+		}
+		start := time.Now()
+		msg, lastErr = c.postOnce(body)
+		elapsed := time.Since(start)
+		if lastErr == nil {
+			log.Printf("[LLM] ok %s %s 耗时%.1fs", c.Config.Model, c.profTag(), elapsed.Seconds())
+			return msg, nil
+		}
+		retryable := isRetryable(lastErr)
+		log.Printf("[LLM] fail(第%d次) %s %s 耗时%.1fs 错误:%v 可重试:%v", attempt+1, c.Config.Model, c.profTag(), elapsed.Seconds(), truncateLog(lastErr.Error()), retryable)
+		if !retryable {
+			return wireMessage{}, lastErr
+		}
+	}
+	return wireMessage{}, fmt.Errorf("LLM 调用连续 3 次失败（最后错误：%v）——对话已保留，可直接重试这一节", lastErr)
+}
+
+// profTag 模型配置名（排障时可辨认走的是哪个 profile）。
+func (c *Client) profTag() string {
+	if c.Name != "" {
+		return c.Name
+	}
+	return c.Config.BaseURL
+}
+
+func truncateLog(s string) string {
+	if len(s) > 160 {
+		return s[:160] + "…"
+	}
+	return s
+}
+
+// isRetryable 用户可读语义的可重试判定：网络错误（超时/连接失败）与 429/5xx 在 postOnce 里包成可识别错误。
+func isRetryable(err error) bool {
+	s := err.Error()
+	if strings.Contains(s, "LLM API 错误") || strings.Contains(s, "响应解析失败") {
+		// 明确 API 拒绝/畸形输出不重试（重试大概率同样失败）
+		return false
+	}
+	return true // 其余（网络断/超时/非 2xx 包装错误）可重试
+}
+
+func (c *Client) postOnce(body []byte) (wireMessage, error) {
 	url := c.Config.BaseURL + "/chat/completions"
 	req, err := http.NewRequest("POST", url, bytes.NewReader(body))
 	if err != nil {
@@ -216,6 +268,9 @@ func (c *Client) post(body []byte) (wireMessage, error) {
 	}
 	defer resp.Body.Close()
 	b, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode == 429 || resp.StatusCode >= 500 {
+		return wireMessage{}, fmt.Errorf("上游 HTTP %d（可重试）: %s", resp.StatusCode, truncateLog(string(b)))
+	}
 	var lr chatResponse
 	if err := json.Unmarshal(b, &lr); err != nil {
 		return wireMessage{}, fmt.Errorf("响应解析失败（HTTP %d）: %w", resp.StatusCode, err)

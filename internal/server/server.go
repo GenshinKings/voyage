@@ -461,6 +461,7 @@ func (s *Server) rebuildLLM() {
 		return
 	}
 	client := llm.NewClient(p.Config())
+	client.Name = p.Name
 	s.Tutor = &tutor.Tutor{Dir: s.Dir, Client: client, AgentsPath: s.AgentsPath, ProfilePath: s.ProfilePath, RefDir: s.RefDir, Tools: s.buildFetchTools(), NotesDir: s.NotesDir}
 	s.Exer = &exercise.Engine{Client: client, AgentsPath: s.AgentsPath, ProfilePath: s.ProfilePath}
 }
