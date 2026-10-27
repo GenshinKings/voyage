@@ -48,6 +48,8 @@ type Session struct {
 	// 第六轮-P0-1 引导档位（随人不随课——同一会话记住，跨次续聊沿用；新知识点默认样例档）
 	Guide       int    `json:"guide,omitempty"`       // 0=未设 → 视为样例档
 	GuideStreak [2]int `json:"guideStreak,omitempty"` // [连过数, 连没过数]
+	// 第六轮-P1-1 追问判真会：首次通过后挂起「你为什么会这么写」，答上才收尾（履历延迟入账，不违反「履历不撤回」）
+	AskWhy bool `json:"askWhy,omitempty"`
 }
 
 // guide 当前档位（未设=样例）。
@@ -444,9 +446,35 @@ func (t *Tutor) Send(lesson Lesson, userText string) (Verdict, error) {
 
 // followup 收尾后的陪聊：学习者可能在回答收尾前的加深追问，或继续追问。
 // 正常回应，但不改变判定、不再输出收尾标记（履历已记，不重复）。
+//
+// 第六轮-P1-1：若「为什么这么写」追问挂起（AskWhy），这一轮改为真会度判定：
+// 答得出 → [FU-PASS]（调用方收尾入账）；答不上/含糊 → [FU-FUZZY]（不收尾 + 给一道更小的同类题）。
 func (t *Tutor) followup(s *Session, userText string) (Verdict, error) {
 	if t.Client == nil {
 		return Verdict{}, fmt.Errorf("LLM 未配置")
+	}
+	if s.AskWhy {
+		sys := `学习者刚刚判定通过这是「真会度」追问「你为什么会这么写？一句话。」的答复。只判这一句：
+- 答得出原理/说得清理由（哪怕不完美）→ 回复先简短点评一句，然后单独一行输出标记 [FU-PASS]。
+- 答不上/含糊其辞/只是复述表象（如「我看着对」「因为教程这么写」）→ 单独一行输出标记 [FU-FUZZY]，然后直接给一道**更小的同类题**（比刚才的检查题更简单、更具体、给半个开头），不批评不说教。
+[FU-PASS] 与 [FU-FUZZY] 必须单独成行。`
+		s.Messages = append(s.Messages, llm.Message{Role: "user", Content: userText})
+		reply, err := t.Client.Chat(t.withAgents(sys), s.Messages)
+		if err != nil {
+			return Verdict{}, err
+		}
+		s.Messages = append(s.Messages, llm.Message{Role: "assistant", Content: reply})
+		s.AskWhy = false
+		kind := ""
+		if strings.Contains(reply, "[FU-FUZZY]") {
+			kind = "fu-fuzzy"
+			// 真会度未过：会话判定降为半懂（履历本就未记账，无「撤回」冲突）
+			s.Verdict = "partial"
+		} else if strings.Contains(reply, "[FU-PASS]") {
+			kind = "fu-pass"
+		}
+		t.save(s)
+		return Verdict{Kind: kind, Reply: reply, Guide: s.guide()}, nil
 	}
 	sys := `这个知识点已经学习收尾。学习者还在继续输入——可能是在回答你收尾前的加深追问，也可能是新问题。
 正常回应：如果他在回答你的追问，判断对错并点评；如果是新问题，直接解答。≤250 字，保持助教口吻。
@@ -459,6 +487,22 @@ func (t *Tutor) followup(s *Session, userText string) (Verdict, error) {
 	s.Messages = append(s.Messages, llm.Message{Role: "assistant", Content: reply})
 	t.save(s)
 	return Verdict{Kind: "", Reply: reply, Guide: s.guide()}, nil
+}
+
+// AskRealUse 首次通过后的「真会度」追问：追加一条助教消息「你为什么会这么写？」并挂起判定。
+// 履历与收尾动作由调用方在 [FU-PASS] 到达后执行（延迟入账，符合「履历不撤回」宪法）。
+func (t *Tutor) AskRealUse(nodeID string) {
+	s := t.Load(nodeID)
+	if s == nil {
+		return
+	}
+	s.AskWhy = true
+	if s.Verdict == "" {
+		s.Verdict = "pass" // 收尾在途：会话不再走主判定流，后续输入进追问分支
+	}
+	s.Messages = append(s.Messages, llm.Message{Role: "assistant",
+		Content: "判定通过。不过收尾前只差一步——**你为什么会这么写？一句话。**"})
+	t.save(s)
 }
 
 // MarkLessonDone 课程状态推进（履历由调用方写）。

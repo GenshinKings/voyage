@@ -1986,13 +1986,18 @@ func (s *Server) Handlers() http.Handler {
 			http.Error(w, "知识点不存在", 404)
 			return
 		}
+		// 第六轮-P1-1「首次通过」判据：Send 前快照会话判定态
+		pre := s.Tutor.Load(req.NodeID)
+		firstPass := pre == nil || pre.Verdict == ""
 		v, err := s.Tutor.Send(*lesson, req.Text)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
 		}
 		verdict := ""
-		if v.Kind == "pass" || v.Kind == "partial" {
+		// settlePass 收尾入账（履历+FSRS 建卡+课程 done）——延迟记触发：
+		// 首次通过先追问「为什么这么写」，答上（FU-pass 或非首次）才入账；履历不撤回原则=先不记，不事后删。
+		settlePass := func() {
 			s.Ledger.Record(lesson.ID, lesson.Title, evidence.Known, time.Now(), "tutor:"+lesson.Subject, "")
 			// FSRS 建卡（评审 P1-5）：收尾即入遗忘防御——到期由复习闭环召回
 			if s.FSCards == nil {
@@ -2004,23 +2009,46 @@ func (s *Server) Handlers() http.Handler {
 			}
 			s.Tutor.MarkLessonDone(lesson.ID)
 			s.save("ledger.json", s.Ledger)
-			verdict = v.Kind
-		} else if reason, evid := tutor.ParseCause(v.Reply); tutor.ValidCause(reason) {
+		}
+		switch {
+		case v.Kind == "pass":
+			if firstPass {
+				// 第六轮-P1-1：首次通过必追问，追问过了才真正收尾
+				s.Tutor.AskRealUse(lesson.ID)
+			} else {
+				settlePass()
+			}
+			verdict = "pass"
+		case v.Kind == "partial":
+			settlePass()
+			verdict = "partial"
+		case v.Kind == "fu-pass":
+			// 真会度追问守住了——此刻才收尾入账
+			settlePass()
+			verdict = "pass"
+			s.recordVerdict("fuzzy-pass", lesson.ID)
+		case v.Kind == "fu-fuzzy":
+			// 真会度未过：不收尾（履历从未写入）、不推进更小结；会话判定已在 tutor 侧降为 partial
+			s.recordVerdict("fuzzy", lesson.ID)
+			verdict = "partial"
+		default:
 			// 第六轮-P0-2：检查题判定失败——误因分布入学习者模型（开场引用用）
-			if s.WrongReasons == nil {
-				s.WrongReasons = map[string]map[string]int{}
+			if reason, evid := tutor.ParseCause(v.Reply); tutor.ValidCause(reason) {
+				if s.WrongReasons == nil {
+					s.WrongReasons = map[string]map[string]int{}
+				}
+				if s.WrongReasons[lesson.ID] == nil {
+					s.WrongReasons[lesson.ID] = map[string]int{}
+				}
+				s.WrongReasons[lesson.ID][reason]++
+				if s.WrongNotes == nil {
+					s.WrongNotes = map[string]string{}
+				}
+				if evid != "" {
+					s.WrongNotes[lesson.ID] = evid
+				}
+				s.saveState()
 			}
-			if s.WrongReasons[lesson.ID] == nil {
-				s.WrongReasons[lesson.ID] = map[string]int{}
-			}
-			s.WrongReasons[lesson.ID][reason]++
-			if s.WrongNotes == nil {
-				s.WrongNotes = map[string]string{}
-			}
-			if evid != "" {
-				s.WrongNotes[lesson.ID] = evid
-			}
-			s.saveState()
 		}
 		s.recordVerdict(verdict, lesson.ID)
 		// 第六轮-P0-1：档位随判定推进——state 可读（验收），前端「讲」卡小字显示
