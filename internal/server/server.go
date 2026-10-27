@@ -2063,6 +2063,8 @@ func (s *Server) Handlers() http.Handler {
 			}
 		}
 		// 真实知识连接累积：每道语境式练习 = 核心与语境之间的一次真实调用（关联图强边）
+		// 小穗四轮·P0-3（诚实化 A）：这条边就是图例承诺的 usage 边——
+		// 计数来源 = 语境式练习真实发生过（非手动标注），type 与 /api/graph 输出对齐。
 		if s.ContextEdges == nil {
 			s.ContextEdges = map[string]int{}
 		}
@@ -2664,7 +2666,8 @@ func (s *Server) Handlers() http.Handler {
 			if len(parts) != 2 {
 				continue
 			}
-			edges = append(edges, map[string]any{"from": parts[0], "to": parts[1], "type": "context", "weight": n})
+			edges = append(edges, map[string]any{"from": parts[0], "to": parts[1], "type": "usage", "weight": n,
+				"origin": "语境式练习真实调用（练习一条被记一次）"}) // 小穗四轮P0-3：诚实化 A
 		}
 		for _, p := range s.Ledger.List() {
 			dup := false

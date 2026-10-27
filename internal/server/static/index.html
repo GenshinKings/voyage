@@ -503,7 +503,7 @@ kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;paddi
     <div id="progStats" style="max-width:min(920px,100%);margin:0 auto 10px;padding:0 24px;font-size:12.5px;font-weight:600"></div>
     <div id="dunHallView" class="hidden"></div>
     <div id="sediment" class="hidden"></div>
-    <div id="graphWrap" class="hidden"><div class="gLegend">圆=收尾的知识点 · <span style="color:#0071e3;font-weight:600">━</span> 练习中真实调用的连接（×N=次数） · <span style="color:#b8c0c8">━</span> 课程先后 · 点圆回到对话</div><canvas id="graphCanvas"></canvas></div>
+    <div id="graphWrap" class="hidden"><div class="gLegend">圆=收尾的知识点 · <span style="color:#0071e3;font-weight:600">━</span> 练习中真实调用的连接（×N=次数；来源：语境式练习每做一题记一次，非手动标注） · <span style="color:#b8c0c8">━</span> 课程先后 · 点圆回到对话</div><canvas id="graphCanvas"></canvas></div>
     <div id="oppView" class="hidden" style="max-width:min(920px,100%);margin:0 auto;padding:8px 24px 130px"></div>
     </div>
     <div id="setView" class="hidden"></div>
@@ -1438,7 +1438,7 @@ async function renderGraph(){
   const learned={};
   ((STATE.curriculum||{}).lessons||[]).forEach(l=>{if(l.status==='done')learned[l.id]=true});
   const nodes=(g.nodes||[]).filter(n=>learned[n.id]).filter((n,i,arr)=>arr.findIndex(m=>m.id===n.id)===i);
-  const ctxEdges=(g.edges||[]).filter(e=>e.type==='context'&&learned[e.from]&&learned[e.to]);
+  const ctxEdges=(g.edges||[]).filter(e=>(e.type==='context'||e.type==='usage')&&learned[e.from]&&learned[e.to]);
   const seqEdges=(g.edges||[]).filter(e=>e.type==='sequence'&&learned[e.from]&&learned[e.to]);
   try{
     window.__graphErr='drawing';
