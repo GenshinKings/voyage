@@ -52,7 +52,8 @@ func (t *Tutor) Reflect(today, existing string) ([]Observation, error) {
 	}
 	valid := out.Observations[:0]
 	for _, o := range out.Observations {
-		if strings.TrimSpace(o.Observation) == "" {
+		o.Observation = strings.TrimSpace(o.Observation)
+		if o.Observation == "" {
 			continue
 		}
 		switch o.Priority {

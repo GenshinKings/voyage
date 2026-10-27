@@ -45,31 +45,12 @@ type Session struct {
 	Verdict     string        `json:"verdict,omitempty"` // pass | partial | ""
 	OpeningMeta *OpeningMeta  `json:"openingMeta,omitempty"`
 	UpdatedAt   time.Time     `json:"updatedAt"`
-	// 第六轮-P0-1 引导档位（随人不随课——同一会话记住，跨次续聊沿用；新知识点默认样例档）
-	Guide       int    `json:"guide,omitempty"`       // 0=未设 → 视为样例档
-	GuideStreak [2]int `json:"guideStreak,omitempty"` // [连过数, 连没过数]
+	// 第六轮-P0-1 引导档位：推进挂在 Tutor（人）级——单课一次 [PASS] 即收尾，Session 级连击永远攒不满 3 次（测试暴露的设计缺陷，2026-10-28 修正）。
+	// 此字段保留为「进课时的档位快照」（旧会话文件兼容），不再推进。
+	Guide       int    `json:"guide,omitempty"`
+	GuideStreak [2]int `json:"guideStreak,omitempty"` // 遗留字段，不再使用
 	// 第六轮-P1-1 追问判真会：首次通过后挂起「你为什么会这么写」，答上才收尾（履历延迟入账，不违反「履历不撤回」）
 	AskWhy bool `json:"askWhy,omitempty"`
-}
-
-// guide 当前档位（未设=样例）。
-func (s *Session) guide() int {
-	if s.Guide == 0 {
-		return GuideSample
-	}
-	return s.Guide
-}
-
-// guideBump 一次判定信号（pass=true 通过）推进连击并换档。
-func (s *Session) guideBump(pass bool) {
-	if pass {
-		s.GuideStreak[0]++
-		s.GuideStreak[1] = 0
-	} else {
-		s.GuideStreak[1]++
-		s.GuideStreak[0] = 0
-	}
-	s.Guide = NextGuide(s.guide(), s.GuideStreak[0], s.GuideStreak[1])
 }
 
 // OpeningMeta 开场元信息：开场指令消息是给 LLM 的（前端不渲染为气泡），
@@ -94,6 +75,29 @@ type Tutor struct {
 	TimeBudget  string         // 小穗三轮问题1：今天的时间预算 10/30/90（server 从 state 同步）——决定讲解长度与检查题数量
 	// Clock 小穗四轮·架构 P1-2：注入时间源（测试用假钟测 fsrs/判定链路不睡）——nil=走 walltime
 	Clock func() time.Time
+	// 第六轮-P0-1 引导档位（随人不随课——挂在 Tutor 级跨课程累计；server 常驻期间有效）
+	GuideLevel  int    `json:"-"` // 0=未设 → 视为样例档
+	GuideStreak [2]int `json:"-"` // [连过数, 连没过数]
+}
+
+// guideLevel 当前引导档位（未设=样例）。
+func (t *Tutor) guideLevel() int {
+	if t.GuideLevel == 0 {
+		return GuideSample
+	}
+	return t.GuideLevel
+}
+
+// guideBump 一次判定信号（pass=true 通过）推进人级连击并换档。
+func (t *Tutor) guideBump(pass bool) {
+	if pass {
+		t.GuideStreak[0]++
+		t.GuideStreak[1] = 0
+	} else {
+		t.GuideStreak[1]++
+		t.GuideStreak[0] = 0
+	}
+	t.GuideLevel = NextGuide(t.guideLevel(), t.GuideStreak[0], t.GuideStreak[1])
 }
 
 // now 统一取时间：Clock nil 则走真实时间。
@@ -343,7 +347,7 @@ func (t *Tutor) StartOrResume(lesson Lesson) (*Session, bool, error) {
 	s.OpeningMeta = &OpeningMeta{Index: lesson.Order, Title: lesson.Title, Why: lesson.Brief}
 	sys := teachSystem
 	// 第六轮-P0-1：新知识点首触=样例档（完整例子+直接指令，不让新手被问懵）
-	sys += guidePrompt(GuideSample)
+	sys += guidePrompt(t.guideLevel())
 	// 小穗三轮问题1：开场同样守时间预算——10 分钟档开场一句话+一道题
 	switch t.TimeBudget {
 	case "2":
@@ -397,13 +401,17 @@ func (t *Tutor) Send(lesson Lesson, userText string) (Verdict, error) {
 		return Verdict{}, fmt.Errorf("LLM 未配置")
 	}
 	// 第六轮-P0-1：档位语义进 system——随人切换（连过升/连败降在 Send 末尾推进）
-	if s.Guide == 0 {
-		s.Guide = GuideSample
-	}
-	sys := teachSystem + guidePrompt(s.guide())
-	// 点「我卡住了」是一次明确的未通过信号——按判据先降一档，再让助教按（可能已降档的）档位说话
+	// 点「我卡住了」=显式退档信号：立即退一档（不等 2 次累计——验收口径「点了卡住→退回一级」），
+	// 再让助教按降档后的档位说话
 	if strings.HasPrefix(strings.TrimSpace(userText), "(我卡住了)") {
-		s.guideBump(false)
+		t.GuideLevel = t.guideLevel() - 1
+		if t.GuideLevel < GuideSample {
+			t.GuideLevel = GuideSample
+		}
+		t.GuideStreak = [2]int{}
+	}
+	sys := teachSystem + guidePrompt(t.guideLevel())
+	if strings.HasPrefix(strings.TrimSpace(userText), "(我卡住了)") {
 		sys += "\n\n【刚收到「我卡住了」】已退回一档——接下来按完整样例给他一颗定心丸：一个最小可运行的例子+一句可直接执行的动作。"
 	}
 	s.Messages = append(s.Messages, llm.Message{Role: "user", Content: userText})
@@ -431,17 +439,17 @@ func (t *Tutor) Send(lesson Lesson, userText string) (Verdict, error) {
 		s.Verdict = kind
 	}
 	if kind == "pass" {
-		s.guideBump(true)
+		t.guideBump(true)
 	} else if kind == "partial" {
 		// 半过=过了但有洞：清零连败不计升格，也别当失败惩罚
-		s.GuideStreak[0] = 0
-		s.GuideStreak[1] = 0
+		t.GuideStreak[0] = 0
+		t.GuideStreak[1] = 0
 	} else if reason, _ := ParseCause(reply); ValidCause(reason) {
 		// 第六轮-P0-2：检查题判定失败（显式 [CAUSE] 标签）= 一次未通过，进入引导降档判据
-		s.guideBump(false)
+		t.guideBump(false)
 	}
 	t.save(s)
-	return Verdict{Kind: kind, Reply: reply, Guide: s.guide()}, nil
+	return Verdict{Kind: kind, Reply: reply, Guide: t.guideLevel()}, nil
 }
 
 // followup 收尾后的陪聊：学习者可能在回答收尾前的加深追问，或继续追问。
@@ -474,7 +482,7 @@ func (t *Tutor) followup(s *Session, userText string) (Verdict, error) {
 			kind = "fu-pass"
 		}
 		t.save(s)
-		return Verdict{Kind: kind, Reply: reply, Guide: s.guide()}, nil
+		return Verdict{Kind: kind, Reply: reply, Guide: t.guideLevel()}, nil
 	}
 	sys := `这个知识点已经学习收尾。学习者还在继续输入——可能是在回答你收尾前的加深追问，也可能是新问题。
 正常回应：如果他在回答你的追问，判断对错并点评；如果是新问题，直接解答。≤250 字，保持助教口吻。
@@ -486,7 +494,7 @@ func (t *Tutor) followup(s *Session, userText string) (Verdict, error) {
 	}
 	s.Messages = append(s.Messages, llm.Message{Role: "assistant", Content: reply})
 	t.save(s)
-	return Verdict{Kind: "", Reply: reply, Guide: s.guide()}, nil
+	return Verdict{Kind: "", Reply: reply, Guide: t.guideLevel()}, nil
 }
 
 // AskRealUse 首次通过后的「真会度」追问：追加一条助教消息「你为什么会这么写？」并挂起判定。

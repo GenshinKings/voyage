@@ -32,8 +32,8 @@ func GuideName(level int) string {
 	}
 }
 
-// NextGuide 纯函数：凑满升档阈值升一档（封顶提问），凑满降档阈值降一档（保底样例）。
-// 多出的计数保留（连对两次后又连过一次，仍会触发升档——分数不清零能容忍跨档位切换的间隔）。
+// NextGuide 纯函数：凑满阈值升/降**一级**并把连击清零——每档至少停留一次事件，
+// 防止长连击跨档跳级（半提示还没体验过就跳到提问，渐隐失去中间态）。
 func NextGuide(level, passStreak, failStreak int) int {
 	if level < GuideSample {
 		level = GuideSample
@@ -41,13 +41,13 @@ func NextGuide(level, passStreak, failStreak int) int {
 	if level > GuideAsk {
 		level = GuideAsk
 	}
-	for passStreak >= GuidePassStreak && level < GuideAsk {
+	if passStreak >= GuidePassStreak && level < GuideAsk {
 		level++
-		passStreak -= GuidePassStreak
+		passStreak = 0
 	}
-	for failStreak >= GuideFailStreak && level > GuideSample {
+	if failStreak >= GuideFailStreak && level > GuideSample {
 		level--
-		failStreak -= GuideFailStreak
+		failStreak = 0
 	}
 	return level
 }
