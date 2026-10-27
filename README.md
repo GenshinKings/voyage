@@ -2,32 +2,30 @@
 
 # 🧭 Voyage — 前哨 2.0
 
-**自学是一场有方向的远航**
+**给没人带的孩子一艘船：不知道从哪下手，就跟着做到 10 分钟内第一个能跑的东西。**
 
-一台「学会了，且想继续学」的全托管学习机。
-课程为你拆好 · 练习随你收尾生长 · 地图随你收尾点亮
+不是又一个 AI 聊天框——它知道你上次卡在哪，陪你把东西真做出来，并把每一步变成可验证的证据。
 
 ![Go](https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-0071e3)
-![Tests](https://img.shields.io/badge/tests-38%20passing-34c759)
+![CI](https://github.com/GenshinKings/voyage/actions/workflows/ci.yml/badge.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
-![PRs](https://img.shields.io/badge/PRs-welcome-ff69b4)
 
-<video src="docs/voyage-demo.mp4" controls width="860"></video>
+![首页 → 今天三步 → 做完 → 证据](docs/screenshots/D1b-learn.png)
 
-*45 秒真实使用录制：答检查题 → 混淆矩阵追问 → 收尾推进 → 练习 / 沉淀 / 关联 / 副本*
+*30 秒看懂：首页只有「今天三步」→ 点当前步，助教第一句就是「现在就做这一件」（具体到文件与命令）→ 做完打勾 → 副本通关的作品自动变成一条可点开证据的简历条目。*
 
 </div>
 
 ---
 
-## ✨ 它解决什么
+## ✨ 为什么不用普通 AI 聊天学
 
-| 通用 AI 学习产品的病 | Voyage 的解法 |
+| 普通 AI 聊天 | Voyage |
 |---|---|
-| Streak / 打卡 / 进度条制造焦虑，学不动就卸载 | **收尾 = 唯一里程碑**。没有任务墙，进度由收尾速度决定；方向卡写着「休息也是正当的」 |
-| LLM 直接出题：超纲、编造、难度漂移 | **RL 管决策，LLM 管生成**。bandit 选题 + Elo 难度带 + 只考课上讲过的内容，三重围栏 |
-| 学完就忘，没有复习；一切靠 AI，失去独立思考 | **语境式练习（i+1）** 巩固旧知识 + **副本孵化池**保持一手项目理解力 |
+| 每天回来都得重新自我介绍 | **接续**：首页第一句就是「上次你停在 X（讲到一半）——今天先补这个」，一个按钮从断点继续 |
+| 卡住了只能继续问，越问越迷糊 | **卡点提示**：「我卡住了」第一次只给最小提示（一个动作），两次才给完整解法——永远知道下一步动什么 |
+| 学完什么都拿不出来 | **可验证作品**：副本通关自动生成纪念卡 → 能力条目 → 简历 Markdown，每条挂你自己的仓库/文件证据，点开即可验证 |
 
 ## 🎯 核心理念（宪法速览）
 
@@ -119,6 +117,8 @@ cd voyage
 go build -o outpost2.exe ./cmd/outpost2
 ./outpost2.exe serve        # 自动打开 http://127.0.0.1:7412
 ```
+
+> 仓库 pack 约 46 MiB：历史提交里带着早期演示视频与全套截图资产（刻意保留——它们是产品史的一部分）。轻量克隆可加 `--depth 1`。
 
 配置 LLM（DeepSeek / 任意 OpenAI 兼容接口）→ `outpost2-data/llm.json`：
 
