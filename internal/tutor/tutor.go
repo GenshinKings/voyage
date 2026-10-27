@@ -401,9 +401,11 @@ func (t *Tutor) Send(lesson Lesson, userText string) (Verdict, error) {
 		return Verdict{}, fmt.Errorf("LLM 未配置")
 	}
 	// 第六轮-P0-1：档位语义进 system——随人切换（连过升/连败降在 Send 末尾推进）
-	// 点「我卡住了」=显式退档信号：立即退一档（不等 2 次累计——验收口径「点了卡住→退回一级」），
-	// 再让助教按降档后的档位说话
-	if strings.HasPrefix(strings.TrimSpace(userText), "(我卡住了)") {
+	// 点「我卡住了」=显式退档信号：立即退一档（不等 2 次累计——验收口径「点了卡住→退回一级」）。
+	// stuckRound 传递到判定尾部：卡住轮不做失败累计/误因记录（自查修复 2026-10-28——该轮样例讲解
+	// 可能顺带输出 [CAUSE]，若再走失败分支会双降一档并误记误因分布）。
+	stuckRound := strings.HasPrefix(strings.TrimSpace(userText), "(我卡住了)")
+	if stuckRound {
 		t.GuideLevel = t.guideLevel() - 1
 		if t.GuideLevel < GuideSample {
 			t.GuideLevel = GuideSample
@@ -411,7 +413,7 @@ func (t *Tutor) Send(lesson Lesson, userText string) (Verdict, error) {
 		t.GuideStreak = [2]int{}
 	}
 	sys := teachSystem + guidePrompt(t.guideLevel())
-	if strings.HasPrefix(strings.TrimSpace(userText), "(我卡住了)") {
+	if stuckRound {
 		sys += "\n\n【刚收到「我卡住了」】已退回一档——接下来按完整样例给他一颗定心丸：一个最小可运行的例子+一句可直接执行的动作。"
 	}
 	s.Messages = append(s.Messages, llm.Message{Role: "user", Content: userText})
@@ -438,15 +440,20 @@ func (t *Tutor) Send(lesson Lesson, userText string) (Verdict, error) {
 	if kind != "" {
 		s.Verdict = kind
 	}
+	// stuckSelfCheck 自查修复（2026-10-28）：卡住轮已在 HasPrefix 分支立即退档；
+	// 该轮助教给完整样例时可能顺带输出 [CAUSE] 标签——若再走失败分支会双降一档，
+	// 且卡住不是「答错」，不应记入误因分布。
 	if kind == "pass" {
 		t.guideBump(true)
 	} else if kind == "partial" {
 		// 半过=过了但有洞：清零连败不计升格，也别当失败惩罚
 		t.GuideStreak[0] = 0
 		t.GuideStreak[1] = 0
-	} else if reason, _ := ParseCause(reply); ValidCause(reason) {
-		// 第六轮-P0-2：检查题判定失败（显式 [CAUSE] 标签）= 一次未通过，进入引导降档判据
-		t.guideBump(false)
+	} else if !stuckRound {
+		if reason, _ := ParseCause(reply); ValidCause(reason) {
+			// 第六轮-P0-2：检查题判定失败（显式 [CAUSE] 标签）= 一次未通过，进入引导降档判据
+			t.guideBump(false)
+		}
 	}
 	t.save(s)
 	return Verdict{Kind: kind, Reply: reply, Guide: t.guideLevel()}, nil
