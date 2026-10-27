@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"outpost2/internal/bandit"
+	"voyage/internal/bandit"
 )
 
 // Low 自报硬约束：bandit 无权推翻身体（宪法）。

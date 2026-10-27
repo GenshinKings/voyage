@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"outpost2/internal/llm"
+	"voyage/internal/llm"
 )
 
 type mockClient struct {

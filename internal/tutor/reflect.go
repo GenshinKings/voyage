@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"strings"
 
-	"outpost2/internal/llm"
+	"voyage/internal/llm"
 )
 
 // Observation 一条改进观察（backlog 的原子：助教提 → 低峰自迭代做 → 报告回流）。

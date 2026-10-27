@@ -8,7 +8,7 @@ package tutor
 import (
 	"fmt"
 
-	"outpost2/internal/llm"
+	"voyage/internal/llm"
 )
 
 const curateSystem = `你是前哨的内容进货员，每天从 GitHub 为学习者挑选真正值得学的内容入库。

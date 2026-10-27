@@ -24,8 +24,8 @@ func fakeRepo(t *testing.T) string {
 	must("git", "config", "user.name", "t")
 	os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module fake\n\ngo 1.26\n"), 0o644)
 	os.MkdirAll(filepath.Join(dir, "internal", "x"), 0o755)
-	os.MkdirAll(filepath.Join(dir, "cmd", "outpost2"), 0o755)
-	os.WriteFile(filepath.Join(dir, "cmd", "outpost2", "main.go"), []byte("package main\n\nfunc main() {}\n"), 0o644)
+	os.MkdirAll(filepath.Join(dir, "cmd", "voyage"), 0o755)
+	os.WriteFile(filepath.Join(dir, "cmd", "voyage", "main.go"), []byte("package main\n\nfunc main() {}\n"), 0o644)
 	os.WriteFile(filepath.Join(dir, "internal", "x", "x.go"), []byte("package x\n\nfunc Add(a, b int) int { return a + b }\n"), 0o644)
 	os.WriteFile(filepath.Join(dir, "internal", "x", "x_test.go"), []byte("package x\n\nimport \"testing\"\n\nfunc TestAdd(t *testing.T) { if Add(1, 2) != 3 {\n\tt.Fatal(\"bad\")\n} }\n"), 0o644)
 	must("git", "add", ".")
@@ -41,7 +41,7 @@ func TestSafePathWhitelist(t *testing.T) {
 		t.Fatalf("internal/ 应放行: %v %v", p, err)
 	}
 	// 黑名单：数据目录/cmd/go.mod/越界
-	for _, bad := range []string{"outpost2-data/llm.json", "cmd/outpost2/main.go", "go.mod", "../escape", "README.md", ""} {
+	for _, bad := range []string{"outpost2-data/llm.json", "cmd/voyage/main.go", "go.mod", "../escape", "README.md", ""} {
 		if _, err := SafePath(repo, bad); err == nil {
 			t.Fatalf("%q 应拒收", bad)
 		}

@@ -15,9 +15,9 @@ import (
 	"strings"
 	"time"
 
-	"outpost2/internal/llm"
-	"outpost2/internal/profile"
-	"outpost2/internal/reflib"
+	"voyage/internal/llm"
+	"voyage/internal/profile"
+	"voyage/internal/reflib"
 )
 
 // Lesson 课程里的一个知识点。

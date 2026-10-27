@@ -1,4 +1,4 @@
-// outpost2 CLI — 前哨 2.0 内核的命令行出口（引擎拼装为可执行工具）。
+// voyage CLI — 前哨 2.0 内核的命令行出口（引擎拼装为可执行工具）。
 //
 // 子命令：
 //   plan        -in plan.json           生成今日计划（丢清单）
@@ -20,13 +20,13 @@ import (
 	"os"
 	"path/filepath"
 
-	"outpost2/internal/ability"
-	"outpost2/internal/bandit"
-	"outpost2/internal/evidence"
-	"outpost2/internal/graduation"
-	"outpost2/internal/kb"
-	"outpost2/internal/sandbox"
-	"outpost2/internal/scheduler"
+	"voyage/internal/ability"
+	"voyage/internal/bandit"
+	"voyage/internal/evidence"
+	"voyage/internal/graduation"
+	"voyage/internal/kb"
+	"voyage/internal/sandbox"
+	"voyage/internal/scheduler"
 	"time"
 )
 
@@ -60,8 +60,8 @@ func saveJSON(path string, v any) {
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println(`outpost2 — 全托管学习机内核
-用法: outpost2 <plan|evidence|kb-import1x|kb-export|sandbox|graduate> [flags]`)
+		fmt.Println(`voyage — 全托管学习机内核
+用法: voyage <plan|evidence|kb-import1x|kb-export|sandbox|graduate> [flags]`)
 		os.Exit(1)
 	}
 	switch os.Args[1] {

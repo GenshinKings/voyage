@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"outpost2/internal/llm"
-	"outpost2/internal/profile"
+	"voyage/internal/llm"
+	"voyage/internal/profile"
 )
 
 // DistillProfile 从方向讨论记录中提取学习者画像，与现有画像合并写回 profile.md。

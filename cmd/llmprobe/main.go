@@ -4,7 +4,7 @@ package main
 import (
 	"fmt"
 
-	"outpost2/internal/llm"
+	"voyage/internal/llm"
 )
 
 func main() {

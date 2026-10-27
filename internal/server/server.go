@@ -27,22 +27,22 @@ import (
 	"slices"
 	"sort"
 
-	"outpost2/fsrs"
-	"outpost2/internal/ability"
-	"outpost2/internal/bandit"
-	"outpost2/internal/evidence"
-	"outpost2/internal/exercise"
-	"outpost2/internal/ghfetch"
-	"outpost2/internal/graduation"
-	"outpost2/internal/iterate"
-	"outpost2/internal/llm"
-	"outpost2/internal/notes"
-	"outpost2/internal/profile"
-	"outpost2/internal/reflib"
-	"outpost2/internal/sandbox"
-	"outpost2/internal/scheduler"
-	"outpost2/internal/store"
-	"outpost2/internal/tutor"
+	"voyage/fsrs"
+	"voyage/internal/ability"
+	"voyage/internal/bandit"
+	"voyage/internal/evidence"
+	"voyage/internal/exercise"
+	"voyage/internal/ghfetch"
+	"voyage/internal/graduation"
+	"voyage/internal/iterate"
+	"voyage/internal/llm"
+	"voyage/internal/notes"
+	"voyage/internal/profile"
+	"voyage/internal/reflib"
+	"voyage/internal/sandbox"
+	"voyage/internal/scheduler"
+	"voyage/internal/store"
+	"voyage/internal/tutor"
 )
 
 //go:embed static/index.html
@@ -1198,7 +1198,7 @@ func (s *Server) buildIterateTools() []tutor.Tool {
 		},
 	}
 	buildTool := tutor.Tool{
-		Name: "go_build", Description: "构建到 outpost2-next.exe（不碰运行中的服务）",
+		Name: "go_build", Description: "构建到 voyage-next.exe（不碰运行中的服务）",
 		Schema: map[string]any{"type": "object", "properties": map[string]any{}, "required": []string{}},
 		Fn: func(args json.RawMessage) (string, error) {
 			if _, err := iterate.Build(s.RepoDir); err != nil {

@@ -8,7 +8,7 @@ package scheduler
 //   完成且自报「还想来」→ 1.0；完成但「今天够了」→ 0.6；未完成 → 0.1。
 // 愧疚拉回的会话不得作为正向样本喂入（宪法案例零）。
 
-import "outpost2/internal/bandit"
+import "voyage/internal/bandit"
 
 type PlanShape string
 

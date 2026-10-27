@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"outpost2/internal/llm"
-	"outpost2/internal/profile"
+	"voyage/internal/llm"
+	"voyage/internal/profile"
 )
 
 // Exercise 一道实操练习：助教按实时进度出题，学习者作答，助教批改。

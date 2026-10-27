@@ -8,7 +8,7 @@ package tutor
 import (
 	"fmt"
 
-	"outpost2/internal/llm"
+	"voyage/internal/llm"
 )
 
 const briefSystem = `你是前哨的 AI 助教，任务：深入调研一个 GitHub 项目，为学习者产出一份「项目导读」。

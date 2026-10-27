@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"outpost2/internal/llm"
+	"voyage/internal/llm"
 )
 
 // DirectionSession 方向讨论会话（独立于课程教学会话，持久化 direction.json）。

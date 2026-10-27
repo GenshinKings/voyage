@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"outpost2/internal/llm"
+	"voyage/internal/llm"
 )
 
 // DStage 一关：一个用已学知识能完成的小产出。

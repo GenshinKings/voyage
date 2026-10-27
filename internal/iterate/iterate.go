@@ -4,7 +4,7 @@
 //   - SafePath：读写白名单（internal/ 下 + 根 *.go；outpost2-data/cmd/go.mod 永不可碰）
 //   - RunTests/Build：改动后的确定性闸门（不过即 Restore，绝不带病上岗）
 //   - Commit：只 add internal/（白名单内），只 commit 不 push
-// 运行中的 outpost2.exe 永不被触碰（构建产物是 outpost2-next.exe，重启换版是人的决定）。
+// 运行中的 voyage.exe 永不被触碰（构建产物是 voyage-next.exe，重启换版是人的决定）。
 package iterate
 
 import (
@@ -56,9 +56,9 @@ func RunTests(repo string) (string, error) {
 	return out, nil
 }
 
-// Build 构建到 outpost2-next.exe（闸门二；不碰运行中的 outpost2.exe）。
+// Build 构建到 voyage-next.exe（闸门二；不碰运行中的 voyage.exe）。
 func Build(repo string) (string, error) {
-	out, err := run(repo, 3*time.Minute, "go", "build", "-o", "outpost2-next.exe", "./cmd/outpost2")
+	out, err := run(repo, 3*time.Minute, "go", "build", "-o", "voyage-next.exe", "./cmd/voyage")
 	if err != nil {
 		return out, fmt.Errorf("go build 失败: %s", tail(out, 400))
 	}
@@ -85,7 +85,7 @@ func Commit(repo, msg string) error {
 func Restore(repo string) {
 	_, _ = run(repo, time.Minute, "git", "checkout", "--", "internal/")
 	_, _ = run(repo, time.Minute, "git", "clean", "-fd", "internal/")
-	_ = os.Remove(filepath.Join(repo, "outpost2-next.exe"))
+	_ = os.Remove(filepath.Join(repo, "voyage-next.exe"))
 }
 
 // tail 错误输出截尾（报告用）。

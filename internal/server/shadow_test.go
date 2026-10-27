@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"outpost2/internal/evidence"
-	"outpost2/internal/tutor"
+	"voyage/internal/evidence"
+	"voyage/internal/tutor"
 )
 
 // TierOf：档位由后端按缺失数判定（LLM 不定档）。

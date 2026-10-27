@@ -35,20 +35,22 @@
 go version
 
 # 2. 构建
-go build -o outpost2.exe ./cmd/outpost2
+go build -o voyage.exe ./cmd/voyage
 
 # 3. 配置模型（DeepSeek 或任意 OpenAI 兼容端点）
 #    编辑 outpost2-data/llm.json：
 #    { "baseUrl": "https://api.deepseek.com", "model": "deepseek-chat", "key": "sk-..." }
 
 # 4. 启动
-.\outpost2.exe serve --no-open
+.\voyage.exe serve --no-open
 # 打开 http://127.0.0.1:7412
 ```
 
 也可以直接双击 `启动前哨.cmd`。
 
 > 数据全部落在本地 `outpost2-data/`：不联网同步、不上传、不收集。
+
+> **项目名 = voyage**：module 名、构建入口（`./cmd/voyage`）、可执行 `voyage.exe` 都是它——历史上曾叫 outpost。数据目录 `outpost2-data/` 的名字**特意保留不改**：那是你的真实数据所在位置，改名就要动数据，不值得。
 
 ---
 

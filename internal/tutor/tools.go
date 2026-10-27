@@ -11,7 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"outpost2/internal/llm"
+	"voyage/internal/llm"
 )
 
 // Tool 助教可调用的一个工具。

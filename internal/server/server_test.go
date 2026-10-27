@@ -6,18 +6,18 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
-	"outpost2/fsrs"
+	"voyage/fsrs"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"outpost2/internal/evidence"
-	"outpost2/internal/exercise"
-	"outpost2/internal/llm"
-	"outpost2/internal/profile"
-	"outpost2/internal/reflib"
-	"outpost2/internal/tutor"
+	"voyage/internal/evidence"
+	"voyage/internal/exercise"
+	"voyage/internal/llm"
+	"voyage/internal/profile"
+	"voyage/internal/reflib"
+	"voyage/internal/tutor"
 )
 
 // 履历跨重启不丢：ledger.json 是单一真相源，state.json 怎么变都吞不掉履历（事故 2026-10-20）。
@@ -259,8 +259,8 @@ func TestSelfIterateEndToEnd(t *testing.T) {
 	git("config", "user.email", "t@t")
 	git("config", "user.name", "t")
 	os.WriteFile(filepath.Join(repo, "go.mod"), []byte("module fake\n\ngo 1.26\n"), 0o644)
-	os.MkdirAll(filepath.Join(repo, "cmd", "outpost2"), 0o755)
-	os.WriteFile(filepath.Join(repo, "cmd", "outpost2", "main.go"), []byte("package main\n\nfunc main() {}\n"), 0o644)
+	os.MkdirAll(filepath.Join(repo, "cmd", "voyage"), 0o755)
+	os.WriteFile(filepath.Join(repo, "cmd", "voyage", "main.go"), []byte("package main\n\nfunc main() {}\n"), 0o644)
 	os.MkdirAll(filepath.Join(repo, "internal", "x"), 0o755)
 	os.WriteFile(filepath.Join(repo, "internal", "x", "x.go"), []byte("package x\n\nfunc Hello() string { return \"hi\" }\n"), 0o644)
 	os.WriteFile(filepath.Join(repo, "internal", "x", "x_test.go"), []byte("package x\n\nimport \"testing\"\n\nfunc TestHello(t *testing.T) { if Hello() != \"hi\" {\n\tt.Fatal(\"bad\")\n} }\n"), 0o644)

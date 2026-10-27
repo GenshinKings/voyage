@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"outpost2/internal/llm"
-	"outpost2/internal/notes"
-	"outpost2/internal/reflib"
+	"voyage/internal/llm"
+	"voyage/internal/notes"
+	"voyage/internal/reflib"
 )
 
 // toolMockClient 先回一次工具调用（toolTool），再回最终文本——模拟 function calling 两轮。

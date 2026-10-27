@@ -8,7 +8,7 @@ import (
 	"os/exec"
 	"time"
 
-	"outpost2/internal/server"
+	"voyage/internal/server"
 )
 
 func cmdServe(args []string) {

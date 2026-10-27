@@ -42,7 +42,7 @@ func New(proxy string) *Client {
 		BaseTrending: "https://github.com/trending",
 		BaseAPI:      "https://api.github.com",
 		BaseRaw:      "https://raw.githubusercontent.com",
-		UserAgent:    "voyage-outpost2",
+		UserAgent:    "voyage/1.0",
 	}
 }
 

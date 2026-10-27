@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"outpost2/internal/llm"
-	"outpost2/internal/profile"
-	"outpost2/internal/reflib"
+	"voyage/internal/llm"
+	"voyage/internal/profile"
+	"voyage/internal/reflib"
 )
 
 // mockClient 确定性 LLM：replies[0]=课程分解 JSON（ChatJSON 用），此后按调用次序轮转。

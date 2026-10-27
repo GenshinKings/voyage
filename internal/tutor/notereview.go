@@ -10,8 +10,8 @@ import (
 	"fmt"
 	"strings"
 
-	"outpost2/internal/llm"
-	"outpost2/internal/notes"
+	"voyage/internal/llm"
+	"voyage/internal/notes"
 )
 
 const noteReviewSystem = `你是前哨的 AI 助教，今天的工作之一：巡检学习者的笔记。

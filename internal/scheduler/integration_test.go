@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"outpost2/internal/ability"
-	"outpost2/internal/bandit"
-	"outpost2/internal/evidence"
+	"voyage/internal/ability"
+	"voyage/internal/bandit"
+	"voyage/internal/evidence"
 )
 
 func TestFiveDayStory(t *testing.T) {
