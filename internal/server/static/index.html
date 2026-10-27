@@ -785,7 +785,8 @@ function todaySteps(){
   const cur=steps.findIndex(s=>!s.done);
   steps.forEach((s,i)=>{s.cur=(i===cur)});
   // P0-2 时间预算真减步：10=只做第一个未完成步（其余折叠「今天到此为止，明天继续」）；30=前两步
-  const keep = mood==='10' ? (cur<0 ? steps.length : cur+1)
+  const keep = mood==='2'  ? 1
+             : mood==='10' ? (cur<0 ? steps.length : cur+1)
              : mood==='30' ? 2
              : steps.length;
   steps.forEach((s,i)=>{ if(i+1>keep && !s.done) s.deferred=true });
@@ -828,14 +829,14 @@ function moodPick(m){
   try{localStorage.setItem('voyage.mood',m)}catch(e){}
   api('/api/budget',{budget:m}).catch(()=>{});
   renderTodaySteps();
-  toast(m==='10'?'只有 10 分钟——今天讲透一个点就够':(m==='30'?'半小时——讲一个 + 做一道':'有整块时间——三步全上'));
+  toast(m==='2'?'两分钟版——只做一道最小可验题':(m==='10'?'只有 10 分钟——今天讲透一个点就够':(m==='30'?'半小时——讲一个 + 做一道':'有整块时间——三步全上')));
 }
 function moodRow(){
   if(MOOD_ASKED)return '';
   const b=(v,t)=>'<button class="va" onclick="moodPick('+JSON.stringify(v)+')" style="border:1px solid var(--line);background:var(--card);color:var(--ink);padding:7px 18px;font-size:12.5px;border-radius:9px;cursor:pointer">'+t+'</button>';
   return '<div style="background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 16px;margin-bottom:10px">'
     +'<span style="font-size:13px;font-weight:600;margin-right:10px">今天有多少时间？</span>'
-    +b('10','只有 10 分钟')+b('30','半小时')+b('90','有整块时间')
+    +b('2','两分钟版')+b('10','只有 10 分钟')+b('30','半小时')+b('90','有整块时间')
     +'<span style="font-size:10.5px;color:var(--mut);margin-left:8px">照实说就行——今天的量跟着你走</span></div>';
 }
   /* P0-1 接续：隔天/冷启动 + 那节课还没收尾 → 一句话 + 一个按钮 */

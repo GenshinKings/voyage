@@ -1907,8 +1907,8 @@ func (s *Server) Handlers() http.Handler {
 			Budget string `json:"budget"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&req)
-		if req.Budget != "10" && req.Budget != "30" && req.Budget != "90" && req.Budget != "" {
-			http.Error(w, "预算限 10/30/90/空", 400)
+		if req.Budget != "2" && req.Budget != "10" && req.Budget != "30" && req.Budget != "90" && req.Budget != "" {
+			http.Error(w, "预算限 2/10/30/90/空", 400)
 			return
 		}
 		s.setBudget(req.Budget)
