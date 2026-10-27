@@ -189,9 +189,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Micr
 .dn-stage .dn-done{color:var(--green)}
 .dn-chat{margin-top:4px}
 .dn-clear{background:#fff;border:1.5px solid var(--pink);border-radius:10px;padding:14px 18px;font-size:14px;font-weight:600;margin-bottom:16px;line-height:1.7}
-.reading-body{background:var(--card);border-radius:12px;padding:22px 26px;font-size:14.5px;line-height:1.85;box-shadow:0 1px 2px rgba(0,0,0,.05),0 0 0 1px rgba(0,0,0,.03)}
-.reading-body h3{font-size:17px;letter-spacing:-.01em;margin:18px 0 6px}
-.reading-body h4{font-size:14.5px;margin:14px 0 4px}
 .reading-body pre{background:#f6f8fa;border:1px solid rgba(0,0,0,.07);border-radius:9px;padding:12px 14px;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:12.5px;line-height:1.55;overflow-x:auto;margin:10px 0;white-space:pre}
 .reading-body code{background:#f0f1f3;border-radius:5px;padding:1px 6px;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:12.5px}
 .reading-body pre code{background:none;padding:0}
@@ -515,6 +512,7 @@ kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;paddi
     <div id="chatbox">
       <textarea id="input" placeholder="回答检查题，或问点什么…（Enter 发送）"></textarea>
       <button onclick="stuckHint()">我卡住了</button>
+      <button onclick="openSandbox()" title="打开代码沙箱：修一个真实 bug">🧪</button>
       <button onclick="send()">发送</button>
     </div>
   </div>
@@ -799,7 +797,7 @@ function moodPick(m){
   try{localStorage.setItem('voyage.moodDate',new Date().toISOString().slice(0,10))}catch(e){}
   MOOD_ASKED=true;
   try{localStorage.setItem('voyage.mood',m)}catch(e){}
-  api('/api/mood',{mood:m,completed:false}).catch(()=>{});
+  api('/api/budget',{budget:m}).catch(()=>{});
   renderTodaySteps();
   toast(m==='10'?'只有 10 分钟——今天讲透一个点就够':(m==='30'?'半小时——讲一个 + 做一道':'有整块时间——三步全上'));
 }
@@ -1676,22 +1674,25 @@ function applyProgTab(){
 }
 function switchProgTab(t){PROG_TAB=t;if(curView!=='progress')switchTab('progress');else{applyProgTab();renderProgress();updateChrome('progress')}}
 /* P1 去处：机会页（手工维护 opportunities.json——真实 issue/实习/接单入口） */
-let OPPS=null;
+let OPPS=null,OPPHINT='';
 async function renderOpp(){
   const v=$('oppView');
-  if(OPPS){drawOpp();return}
+  if(OPPS){drawOpp(OPPHINT);return}
   v.innerHTML='<div class="mut" style="padding:20px 0">加载中…</div>';
   try{
     const r=await api('/api/opportunities');
     OPPS=r.list||[];
+    OPPHINT=r.hint||'';
   }catch(e){OPPS=[]}
-  drawOpp();
+  drawOpp(OPPHINT);
 }
-function drawOpp(){
+async function drawOpp(hint){
   const v=$('oppView');if(!v)return;
   const meta={issue:['真实 issue','🪡'],'live-issue':['真实 issue · 按你已学的拉','🟢'],intern:['实习','🎓'],gig:['接单','💼']};
   let h='<div class="grouplabel">去处 —— 学的东西通向真实世界</div>';
-  h+='<div style="font-size:11.5px;color:var(--mut);margin-bottom:12px">每一条都是现在就能点开看的东西。不着急——练到哪一步，哪一步的门口就为你开着。</div>';
+  h+='<div style="font-size:11.5px;color:var(--mut);margin-bottom:10px">每一条都是现在就能点开看的东西。不着急——练到哪一步，哪一步的门口就为你开着。</div>';
+  if(hint)h+='<div style="background:var(--pink-soft,rgba(251,114,153,.12));border-radius:9px;padding:8px 12px;margin-bottom:10px;font-size:12px;display:flex;justify-content:space-between;align-items:center"><span>'+esc(hint)+'</span><button class="btn ghost" style="font-size:11px;padding:5px 12px" onclick="refreshOpps()">换一批真实 issue</button></div>';
+  else h+='<div style="margin-bottom:10px"><button class="btn ghost" style="font-size:11px;padding:5px 12px" onclick="refreshOpps()">换一批真实 issue</button><span style="font-size:10.5px;color:var(--mut);margin-left:8px">按你已学的语言拉 GitHub 上现在 open 的 good first issue</span></div>';
   (OPPS||[]).forEach(o=>{
     const m=meta[o.type]||['机会','•'];
     h+='<div class="dh-item"><div><div class="dh-t">'+m[1]+' '+esc(o.title)+' <span class="chip" style="margin-left:6px">'+m[0]+'</span></div>'
@@ -1700,6 +1701,48 @@ function drawOpp(){
   });
   if(!(OPPS||[]).length)h+='<div class="empty" style="margin-top:30px">机会清单待补——教务会手工维护真实入口。</div>';
   v.innerHTML=h;
+}
+async function refreshOpps(){
+  try{
+    const r=await api('/api/opportunities',{});
+    toast(r.hint||'正在后台拉取——几秒后刷新可见',3200);
+    setTimeout(async()=>{OPPS=null;await renderOpp()},2500);
+  }catch(e){toast('失败：'+e.message)}
+}
+/* 六轮P0-1：沙箱入口（此前孤儿）——练习时点开案例修 bug，回来看验收 */
+let SANDBOXES=null,SANDBOX_DIR=null;
+async function openSandbox(){
+  if(!SANDBOXES){
+    try{SANDBOXES=(await api('/api/sandbox/list')).list||[]}catch(e){toast('失败：'+e.message);return}
+  }
+  const ov=document.createElement('div');ov.className='tdetail';ov.id='svPick';
+  ov.innerHTML='<div class="td-card"><button class="td-close">✕</button>'
+    +'<div class="t-badge">🧪 代码沙箱 · 修真实 bug</div>'
+    +'<div style="font-size:12px;color:var(--mut);margin-top:6px">每个案例是一个故意埋了 bug 的小项目——修完回来点验收，练的就是「看着报错定位问题」。</div>'
+    +'<div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">'
+    +SANDBOXES.map(c=>'<button class="btn ghost sandbox-pick" data-id="'+esc(c.id)+'" style="font-size:12.5px">'+esc(c.id)+'</button>').join('')
+    +'</div><div id="sbStatus" style="font-size:12px;color:var(--mut);margin-top:12px"></div></div>';
+  document.body.appendChild(ov);
+  ov.addEventListener('click',e=>{
+    if(e.target===ov||e.target.classList.contains('td-close'))ov.remove();
+    const pick=e.target.closest('.sandbox-pick');
+    if(pick){
+      pick.disabled=true;
+      api('/api/sandbox/open',{caseId:pick.dataset.id}).then(r=>{
+        SANDBOX_DIR=r.dir;
+        ov.querySelector('#sbStatus').innerHTML='<span style="color:var(--green)">✓ 已在 '+esc(String(r.dir))+' 生成案例——用编辑器打开修它，修完回来点「验收」。</span>'
+          +' <button class="btn primary" style="font-size:12px" id="sbVerify">验收我修好了</button>';
+        document.getElementById('sbVerify').onclick=async ev=>{
+          ev.target.disabled=true;ev.target.textContent='验收中…';
+          try{
+            const vr=await api('/api/sandbox/verify',{caseId:pick.dataset.id,dir:SANDBOX_DIR});
+            if(vr.testsFail===false){toast('✓ 验收通过——这就是「做真东西」的手感',4200);ov.remove()}
+            else{toast('还有失败项：'+JSON.stringify(vr).slice(0,120));ev.target.disabled=false}
+          }catch(err){toast('失败：'+err.message);ev.target.disabled=false}
+        };
+      }).catch(err=>{toast('失败：'+err.message);pick.disabled=false});
+    }
+  });
 }
 function starsHTML(n){let h='';for(let i=1;i<=3;i++)h+=i<=n?'★':'<span class="off">★</span>';return '<span class="stars">'+h+'</span>'}
 function tierHTML(t){const names=['巩固','拉伸','跃迁'];return '<span class="tier t'+t+'">'+(names[t]||'巩固')+'</span>'}
@@ -2036,6 +2079,7 @@ function appendRemindRow(){
   row.style.maxWidth='min(920px,100%)';row.style.margin='0 auto 16px';
   row.innerHTML='<div class="grouplabel">桌面体验</div>'
     +'<label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer"><input type="checkbox" '+(on?'checked':'')+' onchange="window.setDailyRemind&&setDailyRemind(this.checked)">今日步骤提醒（窗口在后台时通知「还差 N 步」，每天最多一次，可随时关）</label>'
+    +'<div style="display:flex;align-items:center;gap:10px;font-size:13px;margin-top:8px"><a class="btn ghost" href="/api/export/all" download="voyage-data.zip" style="font-size:12px;text-decoration:none">📦 导出全部学习数据（zip，不含模型 key）</a></div>'
     +'<div style="display:flex;align-items:center;gap:10px;font-size:13px;margin-top:8px">外观：<select onchange="setTheme(this.value)" style="font:inherit;padding:4px 8px;border-radius:7px;border:1px solid var(--line);background:var(--card);color:var(--ink)">'
     +'<option value=""'+(theme===''?' selected':'')+'>跟随系统</option><option value="light"'+(theme==='light'?' selected':'')+'>浅色</option><option value="dark"'+(theme==='dark'?' selected':'')+'>深色</option></select>'
     +'<label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;margin-top:8px"><input type="checkbox" '+(LAB_OPEN?'checked':'')+' onchange="setLab(this.checked)">显示全部功能（方向 / 实战副本 / 学会的 / 知识地图 / 设置）</label>'

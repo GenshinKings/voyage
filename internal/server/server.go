@@ -6,6 +6,8 @@
 package server
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	_ "embed"
 	"encoding/json"
@@ -888,6 +890,15 @@ func (s *Server) fetchLiveIssues() {
 	s.saveState()
 }
 
+// setBudget 日初时间预算写入（进 tutor prompt + state 持久化）。
+func (s *Server) setBudget(b string) {
+	s.Done.TimeBudget = b
+	s.saveState()
+	if s.Tutor != nil {
+		s.Tutor.TimeBudget = b
+	}
+}
+
 // statsEnsure 埋点结构惰性初始化。
 func (s *Server) statsEnsure() *Stats {
 	if s.Stats == nil {
@@ -1667,8 +1678,56 @@ func (s *Server) Handlers() http.Handler {
 	mux.HandleFunc("/api/refresh", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, s.RefreshPlan())
 	})
-	mux.HandleFunc("/api/opportunities", func(w http.ResponseWriter, _ *http.Request) { // P1 去处：机会页（手工种子 + 真 issue）
-		if time.Since(s.LiveIssuesAt) > 24*time.Hour { // 小穗三轮问题3：24h 缓存，过期后台拉
+	mux.HandleFunc("/api/export/all", func(w http.ResponseWriter, _ *http.Request) { // 六轮P0-5：导出全部数据（zip，排除 llm.json 含 key）
+		buf := new(bytes.Buffer)
+		zw := zip.NewWriter(buf)
+		entries, _ := os.ReadDir(s.Dir)
+		for _, e := range entries {
+			if e.IsDir() {
+				continue
+			}
+			name := e.Name()
+			if name == "llm.json" || strings.HasSuffix(name, ".bak") || strings.HasSuffix(name, ".tmp") {
+				continue // key 与历史备份不入档
+			}
+			b, err := os.ReadFile(filepath.Join(s.Dir, name))
+			if err != nil {
+				continue
+			}
+			f, _ := zw.Create(name)
+			_, _ = f.Write(b)
+		}
+		_ = zw.Close()
+		w.Header().Set("Content-Type", "application/zip")
+		w.Header().Set("Content-Disposition", `attachment; filename="voyage-data-`+time.Now().Format("2006-01-02")+`.zip"`)
+		_, _ = w.Write(buf.Bytes())
+	})
+	mux.HandleFunc("/api/sandbox/list", func(w http.ResponseWriter, _ *http.Request) { // 六轮P0-1：沙箱入口数据（此前孤儿）
+		type caseInfo struct {
+			ID    string `json:"id"`
+			Title string `json:"title"`
+			Note  string `json:"note"`
+		}
+		lib := sandbox.Library()
+		out := []caseInfo{}
+		for _, c := range lib {
+			out = append(out, caseInfo{ID: c.ID, Title: c.Title})
+		}
+		writeJSON(w, map[string]any{"list": out})
+	})
+	mux.HandleFunc("/api/opportunities", func(w http.ResponseWriter, r *http.Request) { // P1 去处：GET 无副作用（六轮P0-4）
+		if r.Method == http.MethodPost { // 显式刷新（前端「换一批」/首访提示点击）
+			s.LiveIssuesAt = time.Time{} // 置零=强制重拉
+			go s.fetchLiveIssues()
+			writeJSON(w, map[string]any{"ok": true, "hint": "正在后台拉取真实 issue——几秒后刷新可见"})
+			return
+		}
+		if s.LiveIssues == nil && s.LiveIssuesAt.IsZero() { // 从未拉过：返回空+提示，不偷偷触发
+			list := append([]Opportunity{}, s.Opportunities...)
+			writeJSON(w, map[string]any{"list": list, "hint": "点「换一批真实 issue」拉取当前可啃的 open issue"})
+			return
+		}
+		if time.Since(s.LiveIssuesAt) > 24*time.Hour { // 已有缓存且过期：返回旧值+后台静默更新
 			s.LiveIssuesAt = time.Now()
 			go s.fetchLiveIssues()
 		}
@@ -1676,13 +1735,13 @@ func (s *Server) Handlers() http.Handler {
 		list = append(list, s.Opportunities...)
 		writeJSON(w, map[string]any{"list": list})
 	})
-	mux.HandleFunc("/api/resume/doc", func(w http.ResponseWriter, _ *http.Request) { // 小穗二轮建议3：纯预览（GET 无副作用）
+	mux.HandleFunc("/api/resume/doc", func(w http.ResponseWriter, _ *http.Request) { // 小穗二轮建议3+六轮P0：200 空态（前端不处理非预期错误）
 		md, err := s.exportResume()
 		if err != nil {
-			http.Error(w, err.Error(), 400)
+			writeJSON(w, map[string]any{"markdown": "", "hint": err.Error()})
 			return
 		}
-		writeJSON(w, map[string]any{"markdown": md})
+		writeJSON(w, map[string]any{"markdown": md, "hint": ""})
 	})
 	mux.HandleFunc("/api/trophy/evidence", func(w http.ResponseWriter, r *http.Request) { // 小穗二轮问题1：证据补填
 		var req struct {
@@ -1794,20 +1853,36 @@ func (s *Server) Handlers() http.Handler {
 			Completed bool   `json:"completed"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&req)
-		// 小穗三轮问题2：语义拆分——数字=日初时间预算（进 tutor prompt）；文字=日终自报（EndMood+bandit）
+		// 小穗三轮问题2+六轮P0-3：接口拆分——数字预算走 /api/budget；本端点只做日终自报（兼容数字继续接受）
 		if req.Mood == "10" || req.Mood == "30" || req.Mood == "90" {
-			s.Done.TimeBudget = req.Mood
-			s.saveState()
-			if s.Tutor != nil {
-				s.Tutor.TimeBudget = req.Mood
-			}
+			s.setBudget(req.Mood)
 			writeJSON(w, map[string]any{"ok": true, "timeBudget": req.Mood})
 			return
 		}
 		s.SettleMood(req.Mood, req.Completed)
 		writeJSON(w, map[string]any{"ok": true})
 	})
-	mux.HandleFunc("/api/subject", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/budget", func(w http.ResponseWriter, r *http.Request) { // 六轮P0-3：日初时间预算（显式端点）
+		var req struct {
+			Budget string `json:"budget"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		if req.Budget != "10" && req.Budget != "30" && req.Budget != "90" && req.Budget != "" {
+			http.Error(w, "预算限 10/30/90/空", 400)
+			return
+		}
+		s.setBudget(req.Budget)
+		writeJSON(w, map[string]any{"ok": true, "timeBudget": req.Budget})
+	})
+	mux.HandleFunc("/api/subject", func(w http.ResponseWriter, r *http.Request) { // GET=科目列表（200 语义）；POST=开课
+		if r.Method == http.MethodGet {
+			subs := []string{}
+			if s.Tutor != nil {
+				subs = s.Tutor.Curriculum().Subjects
+			}
+			writeJSON(w, map[string]any{"subjects": subs})
+			return
+		}
 		var req struct {
 			Name string `json:"name"`
 		}
@@ -2304,59 +2379,6 @@ func (s *Server) Handlers() http.Handler {
 			return
 		}
 		http.Error(w, "阅读条目不存在", 404)
-	})
-	mux.HandleFunc("/api/reading/done", func(w http.ResponseWriter, r *http.Request) {
-		var req struct {
-			ID string `json:"id"`
-		}
-		_ = json.NewDecoder(r.Body).Decode(&req)
-		for i := range s.Readings {
-			if s.Readings[i].ID != req.ID || s.Readings[i].Done {
-				continue
-			}
-			s.Readings[i].Done = true
-			s.Readings[i].ReadAt = time.Now().Format(time.RFC3339)
-			s.Ledger.Record(s.Readings[i].ID, s.Readings[i].Title, evidence.Known, time.Now(), "reading", s.Readings[i].URL)
-			s.save("ledger.json", s.Ledger)
-			s.saveState()
-			writeJSON(w, map[string]any{"ok": true})
-			return
-		}
-		http.Error(w, "阅读材料不存在或已读完", 404)
-	})
-	mux.HandleFunc("/api/reading/translate", func(w http.ResponseWriter, r *http.Request) {
-		var req struct {
-			ID string `json:"id"`
-		}
-		_ = json.NewDecoder(r.Body).Decode(&req)
-		for i := range s.Readings {
-			rd := &s.Readings[i]
-			if rd.ID != req.ID {
-				continue
-			}
-			if rd.Original == "" {
-				http.Error(w, "该材料没有英文原文可翻译", 400)
-				return
-			}
-			if rd.Translation == "" {
-				if s.Exer == nil || s.Exer.Client == nil {
-					http.Error(w, "LLM 未配置（outpost2-data/llm.json）", 400)
-					return
-				}
-				tr, err := s.Exer.Client.Chat(
-					`你是技术文档翻译。把英文技术文档翻译成中文：保留 Markdown 结构与代码块（代码与代码注释不翻译），术语首次出现时括注英文原词。直接输出译文 Markdown，不要解释。`,
-					[]llm.Message{{Role: "user", Content: rd.Original}})
-				if err != nil {
-					http.Error(w, err.Error(), 500)
-					return
-				}
-				rd.Translation = strings.TrimSpace(tr)
-				s.saveState()
-			}
-			writeJSON(w, map[string]any{"translation": rd.Translation})
-			return
-		}
-		http.Error(w, "阅读材料不存在", 404)
 	})
 	mux.HandleFunc("/api/direction/open", func(w http.ResponseWriter, r *http.Request) {
 		sess := s.Tutor.LoadDirection()
