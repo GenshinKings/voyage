@@ -779,12 +779,14 @@ function todaySteps(){
   // 当前步：第 0 步未完成优先，否则第一个未完成
   const steps=[];
   if(s0)steps.push({k:'复习',fn:'todayGoReview()',...s0});
-  steps.push({k:'讲',fn:'todayGoLearn()',...s1});
-  steps.push({k:'练',fn:'todayGoPractice()',...s2});
-  steps.push({k:'副本',fn:'todayGoDungeon()',...s3});
+  steps.push({k:'讲',fn:'todayGoLearn()',min:'约 8 分钟',...s1});
+  steps.push({k:'练',fn:'todayGoPractice()',min:'约 5 分钟',...s2});
+  steps.push({k:'副本',fn:'todayGoDungeon()',min:'约 20 分钟',...s3});
   const cur=steps.findIndex(s=>!s.done);
   steps.forEach((s,i)=>{s.cur=(i===cur)});
-  // P0-2 时间预算真减步：10=只做第一个未完成步（其余折叠「今天到此为止，明天继续」）；30=前两步
+  // P0-2 时间预算真减步：2=只做第 1 步；10=只做第一个未完成步（其余折叠「今天到此为止，明天继续」）；30=前两步
+  // 注意：mood 局部读取——同名全局函数 mood(wantMore) 在此作用域会遮蔽字符串值，必须显式从 localStorage 取
+  const mood=(function(){try{return localStorage.getItem('voyage.mood')}catch(e){return null}})();
   const keep = mood==='2'  ? 1
              : mood==='10' ? (cur<0 ? steps.length : cur+1)
              : mood==='30' ? 2
@@ -820,7 +822,10 @@ function renderTodaySteps(){
       +'<button class="va primary" onclick="resumeNow()" style="border:1px solid var(--pink);background:var(--pink);color:#fff;padding:7px 18px;font-size:12.5px;border-radius:8px;cursor:pointer;font-weight:600">我回来了，从断点继续 →</button></div>';
     return;
   }
-/* 小穗闭环P0-2 看见人：今天有多少时间？三选 → /api/mood 持久化 → 三步量随状态调整 */
+  renderPlanBody();
+}
+
+/* 小穗闭环P0-2 看见人：今天有多少时间？三选 → /api/budget 持久化 → 三步量随状态调整（顶层定义——曾被嵌进 renderTodaySteps 作用域，内联 onclick 引用不到导致按钮失灵） */
 let MOOD_ASKED=null;
 try{MOOD_ASKED=localStorage.getItem('voyage.moodDate')===new Date().toISOString().slice(0,10)}catch(e){}
 function moodPick(m){
@@ -839,6 +844,9 @@ function moodRow(){
     +b('2','两分钟版')+b('10','只有 10 分钟')+b('30','半小时')+b('90','有整块时间')
     +'<span style="font-size:10.5px;color:var(--mut);margin-left:8px">照实说就行——今天的量跟着你走</span></div>';
 }
+
+function renderPlanBody(){
+  const el=document.getElementById('planCard');if(!el)return;
   /* P0-1 接续：隔天/冷启动 + 那节课还没收尾 → 一句话 + 一个按钮 */
   const ls=STATE.lastStop;
   const today=new Date().toISOString().slice(0,10);
@@ -854,14 +862,14 @@ function moodRow(){
   }
   const steps=todaySteps();
   const mood=(function(){try{return localStorage.getItem('voyage.mood')}catch(e){return null}})();
-  let h='<div class="pc" style="padding:14px 20px">'+resumeHTML+moodRow()+'<div class="grouplabel" style="margin:0 0 10px">今天三步'+(mood?'<span style="letter-spacing:0;font-weight:500;text-transform:none;color:var(--mut);margin-left:8px">'+(mood==='10'?'· 只有 10 分钟：做第 1 步就够':(mood==='30'?'· 半小时：第 1+2 步':'· 整块时间：三步全上'))+'</span>':'')+'</div>';
+  let h='<div class="pc" style="padding:14px 20px">'+resumeHTML+moodRow()+'<div class="grouplabel" style="margin:0 0 10px">今天三步'+(mood?'<span style="letter-spacing:0;font-weight:500;text-transform:none;color:var(--mut);margin-left:8px">'+(mood==='2'?'· 两分钟版：只做这一步就好':(mood==='10'?'· 只有 10 分钟：做第 1 步就够':(mood==='30'?'· 半小时：第 1+2 步':'· 整块时间：三步全上')))+'</span>':'')+'</div>';
   steps.forEach((s,i)=>{
     const primary=s.cur;
     const dim=s.deferred;
     h+='<div style="display:flex;align-items:center;gap:12px;padding:7px 0;opacity:'+(dim?'.5':'1')+';'+(i<steps.length-1?'border-bottom:1px dashed var(--line);':'')+'">'
       +'<span style="width:22px;height:22px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;'
       +(s.done?'background:var(--green);color:#fff':(primary?'background:var(--pink);color:#fff':'background:var(--chip);color:var(--mut)'))+'">'+(s.done?'✓':(dim?'-':i+1))+'</span>'
-      +'<span style="flex:1;min-width:0;font-size:13.5px;font-weight:'+(primary?'600':'500')+'">'+esc(s.k)+' · '+esc(s.title)+(dim?' <span style="font-size:10.5px;color:var(--mut)">（今天到此为止，明天继续）</span>':'')+'</span>'
+      +'<span style="flex:1;min-width:0;font-size:13.5px;font-weight:'+(primary?'600':'500')+'">'+esc(s.k)+' · '+esc(s.title)+(s.min&&!s.done?' <span style="font-size:10.5px;color:var(--mut);font-weight:400">· '+esc(s.min)+'</span>':'')+(dim?' <span style="font-size:10.5px;color:var(--mut)">（今天到此为止，明天继续）</span>':'')+'</span>'
       +(dim
         ?'<span class="va" style="border:1px dashed var(--line);background:transparent;color:var(--mut);padding:6px 16px;font-size:12px;border-radius:8px">留给明天</span>'
         :'<button class="'+(primary?'va primary':'va')+'" onclick="'+s.fn+'" style="border:1px solid var(--line);background:'+(primary?'var(--pink)':'var(--card)')+';color:'+(primary?'#fff':'var(--ink)')+';padding:6px 16px;font-size:12px;border-radius:8px;cursor:pointer;'+(primary?'border-color:var(--pink);font-weight:600;':'')+'">'+esc(s.act)+'</button>')
