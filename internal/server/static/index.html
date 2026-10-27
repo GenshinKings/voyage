@@ -1767,7 +1767,7 @@ async function drawOpp(hint){
       +'<div class="dh-sub">'+esc(o.note||'')+'</div></div>'
       +'<a class="btn ghost" href="'+esc(o.link)+'" target="_blank">去看看 →</a></div>';
   });
-  if(!(OPPS||[]).length)h+='<div class="empty" style="margin-top:30px">机会清单待补——教务会手工维护真实入口。</div>';
+  if(!(OPPS||[]).length)h+='<div class="empty" style="margin-top:30px">暂时没有匹配的 issue，明天再看。</div>';
   v.innerHTML=h;
 }
 async function refreshOpps(){
@@ -1991,7 +1991,12 @@ function renderDunHall(){
         +'<span class="sh-hint">'+(act?'先打完当前的影子':'通关揭晓它是什么')+'</span></div></div>';
     });
   } else if(!unhatched.length&&!act){
-    h+='<div class="silo-slot" style="min-height:76px"><small>没有待开的影子——去收尾几个新知识点，孵化器会带来新的</small></div>';
+    h+='<div style="text-align:center;padding:30px 10px 14px;color:var(--mut)">'
+      +'<div style="font-size:30px">⚔</div>'
+      +'<div style="font-size:15px;font-weight:600;color:var(--ink);margin-top:12px">还没有可开的影子副本</div>'
+      +'<div style="max-width:410px;margin:8px auto 0;font-size:12.5px;line-height:1.8">每收尾一个知识点，孵化器就会备好一个新影子——通关才知道它是什么。</div>'
+      +'<button class="va primary" onclick="todayGoLearn()" style="margin-top:16px;border:1px solid var(--pink);background:var(--pink);color:#fff;padding:7px 18px;font-size:12.5px;border-radius:8px;cursor:pointer;font-weight:600">去完成今天的第一步 →</button>'
+      +'</div>';
   }
   if(unhatched.length){
     unhatched.forEach(r=>{
