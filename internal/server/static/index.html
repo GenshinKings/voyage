@@ -771,11 +771,24 @@ function todaySteps(){
     ?{done:false,title:'影子副本',act:'继续 '+(act.cur||0)+'/'+((act.stages||[]).length)+' 关'}
     :{done:(st.trophies||[]).some(t=>(t.date||'').slice(0,10)===new Date().toISOString().slice(0,10)),
       title:'影子副本',act:'去开一个影子'};
-  // 当前步：第一个未完成
-  const steps=[{k:'讲',fn:'todayGoLearn()',...s1},{k:'练',fn:'todayGoPractice()',...s2},{k:'副本',fn:'todayGoDungeon()',...s3}];
+  // 步0 复习（P0-1）：有到期 FSRS 卡时插到最前——做完才算今天完成
+  const due=(FSDUE||[]).filter(c=>c.previews||c.due);
+  const s0=due.length
+    ?{done:false,title:'到期卡片 '+due.length+' 张（约 '+Math.min(10,due.length*2)+' 分钟）',act:'开始复习'}
+    :null;
+  // 当前步：第 0 步未完成优先，否则第一个未完成
+  const steps=[];
+  if(s0)steps.push({k:'复习',fn:'todayGoReview()',...s0});
+  steps.push({k:'讲',fn:'todayGoLearn()',...s1});
+  steps.push({k:'练',fn:'todayGoPractice()',...s2});
+  steps.push({k:'副本',fn:'todayGoDungeon()',...s3});
   const cur=steps.findIndex(s=>!s.done);
   steps.forEach((s,i)=>{s.cur=(i===cur)});
-  if((mood==='10'||mood==='30')&&steps[2]&&!steps[2].done){steps[2].light=true}
+  // P0-2 时间预算真减步：10=只做第一个未完成步（其余折叠「今天到此为止，明天继续」）；30=前两步
+  const keep = mood==='10' ? (cur<0 ? steps.length : cur+1)
+             : mood==='30' ? 2
+             : steps.length;
+  steps.forEach((s,i)=>{ if(i+1>keep && !s.done) s.deferred=true });
   return steps;
 }
 function isPaused(){
@@ -843,15 +856,23 @@ function moodRow(){
   let h='<div class="pc" style="padding:14px 20px">'+resumeHTML+moodRow()+'<div class="grouplabel" style="margin:0 0 10px">今天三步'+(mood?'<span style="letter-spacing:0;font-weight:500;text-transform:none;color:var(--mut);margin-left:8px">'+(mood==='10'?'· 只有 10 分钟：做第 1 步就够':(mood==='30'?'· 半小时：第 1+2 步':'· 整块时间：三步全上'))+'</span>':'')+'</div>';
   steps.forEach((s,i)=>{
     const primary=s.cur;
-    h+='<div style="display:flex;align-items:center;gap:12px;padding:7px 0;'+(i<steps.length-1?'border-bottom:1px dashed var(--line);':'')+'">'
+    const dim=s.deferred;
+    h+='<div style="display:flex;align-items:center;gap:12px;padding:7px 0;opacity:'+(dim?'.5':'1')+';'+(i<steps.length-1?'border-bottom:1px dashed var(--line);':'')+'">'
       +'<span style="width:22px;height:22px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;'
-      +(s.done?'background:var(--green);color:#fff':(primary?'background:var(--pink);color:#fff':'background:var(--chip);color:var(--mut)'))+'">'+(s.done?'✓':i+1)+'</span>'
-      +'<span style="flex:1;min-width:0;font-size:13.5px;font-weight:'+(primary?'600':'500')+'">'+esc(s.k)+' · '+esc(s.title)+(s.light?' <span style="font-size:10.5px;color:var(--mut)">（时间紧可跳过）</span>':'')+'</span>'
-      +'<button class="'+(primary?'va primary':'va')+'" onclick="'+s.fn+'" style="border:1px solid var(--line);background:'+(primary?'var(--pink)':'var(--card)')+';color:'+(primary?'#fff':'var(--ink)')+';padding:6px 16px;font-size:12px;border-radius:8px;cursor:pointer;'+(primary?'border-color:var(--pink);font-weight:600;':'')+'">'+esc(s.act)+'</button>'
+      +(s.done?'background:var(--green);color:#fff':(primary?'background:var(--pink);color:#fff':'background:var(--chip);color:var(--mut)'))+'">'+(s.done?'✓':(dim?'-':i+1))+'</span>'
+      +'<span style="flex:1;min-width:0;font-size:13.5px;font-weight:'+(primary?'600':'500')+'">'+esc(s.k)+' · '+esc(s.title)+(dim?' <span style="font-size:10.5px;color:var(--mut)">（今天到此为止，明天继续）</span>':'')+'</span>'
+      +(dim
+        ?'<span class="va" style="border:1px dashed var(--line);background:transparent;color:var(--mut);padding:6px 16px;font-size:12px;border-radius:8px">留给明天</span>'
+        :'<button class="'+(primary?'va primary':'va')+'" onclick="'+s.fn+'" style="border:1px solid var(--line);background:'+(primary?'var(--pink)':'var(--card)')+';color:'+(primary?'#fff':'var(--ink)')+';padding:6px 16px;font-size:12px;border-radius:8px;cursor:pointer;'+(primary?'border-color:var(--pink);font-weight:600;':'')+'">'+esc(s.act)+'</button>')
       +'</div>';
   });
   h+='<div style="margin-top:9px;font-size:10.5px;color:var(--mut)">做完打勾 · 当前三步会自动跟着你的进度走 · <span style="cursor:pointer;text-decoration:underline dotted" onclick="setPaused(14)">我先停两周</span></div></div>';
   el.innerHTML=h;
+}
+function todayGoReview(){
+  const due=(FSDUE||[]).filter(c=>c.previews||c.due);
+  if(due.length){openReview(due[0].id);toast('复习 '+due.length+' 张到期卡——做完它们今天才算完整')}
+  else{toast('当前没有到期卡片——间隔重复正在保护你')}
 }
 function todayGoLearn(){
   if(STATE.today){openLesson(STATE.today.id)}
@@ -927,7 +948,7 @@ async function loadState(){
   STATE=await api('/api/state');
   renderSidebar();
   renderToday();
-  api('/api/review/due').then(d=>{FSDUE=d.cards||[];renderSidebar();}).catch(()=>{});
+  api('/api/review/due').then(d=>{FSDUE=d.cards||[];renderSidebar();renderTodaySteps();}).catch(()=>{});
   api('/api/dungeon/list').then(d=>{STATE.dungeons=d.dungeons||[];renderSidebar();if(DN){const dd=(STATE.dungeons||[]).find(x=>x.id===DN);if(dd)renderDungeon(dd);}}).catch(()=>{});
   renderTodaySteps();
   if(!CURRENT&&!HIST&&!EXER&&STATE.today){if(!openCached(STATE.today.id))openLesson(STATE.today.id)}

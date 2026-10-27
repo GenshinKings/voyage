@@ -1691,9 +1691,23 @@ func (s *Server) Handlers() http.Handler {
 				}
 				shadowOut = append(shadowOut, so)
 			}
+			// P0-2 时间预算真减步：10 分钟档 = 不下发 exercises/dungeons——首页固只有一步
+			budgetLight := s.Done.TimeBudget == "10"
 			return map[string]any{
 				"plan": s.Plan, "done": s.Done, "goals": s.Goals,
-				"exercises": s.Exercises, "readings": shadowOut, "trophies": s.Trophies, "contextEdges": s.ContextEdges,
+				"exercises": func() any {
+					if budgetLight {
+						return []any{}
+					}
+					return s.Exercises
+				}(),
+				"dungeons": func() any {
+					if budgetLight {
+						return []any{}
+					}
+					return s.Duns
+				}(),
+				"readings": shadowOut, "trophies": s.Trophies, "contextEdges": s.ContextEdges,
 				"wrongHits": s.WrongHits,
 				"ledger":    s.Ledger.List(), "counts": map[string]int{"known": k, "used": u, "done": d},
 				"graduation": map[string]any{"state": string(g), "reason": gReason},
