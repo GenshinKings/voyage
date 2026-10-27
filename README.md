@@ -94,6 +94,9 @@ flowchart LR
 | 知识库层 | 原文锚定 / 指纹闸门 / 批判批注 + CC-BY-SA 导出 | `internal/kb` |
 | 毕业层 | Learning→Maintaining→Graduated，毕业=调度权交还 | `internal/graduation` |
 | 孵化池层 | 候选项目管理（进货落点：助教导读 → 开门进副本；json 字段名保留 readings） | server + `content/readings` |
+| 自迭代层 | 低峰自主实现观察（默认凌晨 3 点）：白名单只开 `internal/`，测试+构建双闸门不过即还原 | `internal/server`(RunIterate) + `internal/tutor`(SelfIterate) |
+
+**自迭代隔离纪律（2026-10-27 起）**：自迭代一律在 `git worktree`（或独立 clone）里跑，产物以 patch 形式交付、人工确认后才合并；凡涉及 `outpost2-data/`（真实学习者数据，listen-only）或数据 schema 变更的改动，**一律不自动提交**。
 
 </details>
 
@@ -140,6 +143,7 @@ go build -o outpost2.exe ./cmd/outpost2
 - [ ] 教学参考库 v2：锚定引用（原文段落 ↔ 知识点）→ 检索式注入 → 练习出题基于原文（**最优先**）
 - [x] 副本 v2 悬念化一期（影子副本）：候选只露知识点+难度档位（巩固/拉伸/跃迁），项目身份数据层遮蔽（ADR 0001：state 影子化下发）；通关一锤揭晓影响力叙事 → 纪念卡进收藏墙（未解锁显剪影）→ 沉淀连锚图（知识点共同连向卡片）；孵化器（导读即孵化+每日惰性补存量）；demo 效果=验收基准（demo/shadow-dungeon）。二期：影子随画像实时演化/拉伸档补课关/导出分享图
 - [x] FSRS 复习闭环接入 2.0（对抗遗忘）：收尾建卡→到期复习→四键评分回写调度
+- [x] AI 助教低峰自迭代（2026-10-25）：每日例行收教学观察（缺漏进 backlog），低峰独立时刻助教用开发工具自主实现——隔离纪律见架构段（worktree+patch 人工合并；outpost2-data 与 schema 变更不自动提交）
 - [ ] 跨科目知识网络（连线连出单一科目）
 - [ ] 多用户数据池化后的 SAKT 知识追踪评估
 
