@@ -8,6 +8,8 @@
 :root{
   --ink:#101b29;--paper:#f7f7f5;--side:rgba(255,255,255,.72);--line:#e3e6ea;--mut:#8a92a0;
   --pink:#FB7299;--gold:#D9A441;--usr:#101b29;--green:#34c759;--card:#fff;--chip:rgba(16,27,41,.045);
+  --graph-node:#98a1ab;--graph-node-hi:#3b82c4;--graph-accent:#0071e3;
+  --graph-edge:rgba(0,0,0,.16);--graph-seq:rgba(0,0,0,.07);--graph-label:#6f7883;--graph-label-dim:rgba(0,0,0,.3);
   --num-font:"Bahnschrift","Segoe UI",sans-serif;
   --shadow-contact:0 1px 2px rgba(16,27,41,.06),0 0 0 1px rgba(16,27,41,.03);
   --r-lg:12px;--r-md:9px;--r-sm:7px;
@@ -423,6 +425,8 @@ kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;paddi
     --ink:#E4E6EB;--usr:#E4E6EB;--paper:#17191E;--card:#1F2229;--side:rgba(24,26,32,.86);
     --line:#2E323B;--mut:#8B919C;--chip:rgba(228,230,235,.06);--sel:rgba(228,230,235,.08);
     --shadow-contact:0 1px 2px rgba(0,0,0,.5),0 0 0 1px rgba(228,230,235,.04);
+    --graph-node:#7B8493;--graph-node-hi:#5E9BD4;--graph-accent:#4DA3FF;
+    --graph-edge:rgba(228,230,235,.22);--graph-seq:rgba(228,230,235,.10);--graph-label:#8B919C;--graph-label-dim:rgba(228,230,235,.28);
   }
 [data-theme=dark] body{background:var(--paper);color:var(--ink)}
 [data-theme=dark] .msg .bubble{background:var(--card);color:var(--ink)}
@@ -482,7 +486,7 @@ kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;paddi
     <div id="progStats" style="max-width:min(920px,100%);margin:0 auto 10px;padding:0 24px;font-size:12.5px;font-weight:600"></div>
     <div id="dunHallView" class="hidden"></div>
     <div id="sediment" class="hidden"></div>
-    <div id="graphWrap" class="hidden"><div class="gLegend">圆=收尾的知识点 · <span style="color:#0071e3;font-weight:600">━</span> 练习中真实调用的连接（×N=次数；来源：语境式练习每做一题记一次，非手动标注） · <span style="color:#b8c0c8">━</span> 课程先后 · 点圆回到对话</div><canvas id="graphCanvas"></canvas></div>
+    <div id="graphWrap" class="hidden"><div class="gLegend">圆=收尾的知识点 · <span style="color:var(--graph-accent);font-weight:600">━</span> 练习中真实调用的连接（×N=次数；来源：语境式练习每做一题记一次，非手动标注） · <span style="color:var(--graph-label)">━</span> 课程先后 · 点圆回到对话</div><canvas id="graphCanvas"></canvas></div>
     <div id="oppView" class="hidden" style="max-width:min(920px,100%);margin:0 auto;padding:8px 24px 130px"></div>
     </div>
     <div id="setView" class="hidden"></div>
@@ -1505,6 +1509,14 @@ async function renderGraph(){
       });
     }
     // ---- 绘制（可被 hover 状态重复调用）----
+    // 追加④：画布颜色全部读 CSS 变量——切主题时 postThemeChange 触发 renderGraph 重绘
+    const CS=getComputedStyle(document.documentElement);
+    const GV=k=>String(CS.getPropertyValue(k)).trim();
+    const PAL={
+      accent:GV('--graph-accent')||'#0071e3',node:GV('--graph-node')||'#98a1ab',nodeHi:GV('--graph-node-hi')||'#3b82c4',
+      edge:GV('--graph-edge')||'rgba(0,0,0,.16)',seq:GV('--graph-seq')||'rgba(0,0,0,.07)',
+      label:GV('--graph-label')||'#6f7883',labelDim:GV('--graph-label-dim')||'rgba(0,0,0,.3)',ink:GV('--ink')||'#101b29'
+    };
     const draw=()=>{
       ctx.clearRect(0,0,W,H);
       const focus=GRAPH_MOUSE;
@@ -1514,13 +1526,13 @@ async function renderGraph(){
         const a=byId[e.from],b=byId[e.to];if(!a||!b)return;
         const on=focus&&(e.from===focus||e.to===focus);
         ctx.globalAlpha=focus?(on?1:0.06):1;
-        ctx.strokeStyle=on?'#0071e3':color;
+        ctx.strokeStyle=on?PAL.accent:color;
         ctx.lineWidth=on?1.6:width;
         ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
         ctx.globalAlpha=1;
       };
-      seqEdges.forEach(e=>edge(e,'rgba(0,0,0,.07)',1));
-      ctxEdges.forEach(e=>edge(e,'rgba(0,0,0,.16)',1));
+      seqEdges.forEach(e=>edge(e,PAL.seq,1));
+      ctxEdges.forEach(e=>edge(e,PAL.edge,1));
       // 节点：小圆点 + 下方细字标签（未 hover 时安静灰）
       GNODES=[];
       nodes.forEach(n=>{
@@ -1529,12 +1541,12 @@ async function renderGraph(){
         const dim=focus&&!on;
         ctx.globalAlpha=focus?(on?1:0.1):0.85;
         ctx.beginPath();ctx.arc(n.x,n.y,r,0,7);
-        ctx.fillStyle=focus&&n.id===focus?'#0071e3':(on?'#3b82c4':'#98a1ab');
+        ctx.fillStyle=focus&&n.id===focus?PAL.accent:(on?PAL.nodeHi:PAL.node);
         ctx.fill();
         const t=String(n.title||'');
         const label=t.length>16?t.slice(0,16)+'…':t;
         ctx.font=(focus&&n.id===focus)?'600 12.5px system-ui':'12px system-ui';
-        ctx.fillStyle=focus?(n.id===focus?'#1d1d1f':(adj(n.id)?'#0071e3':'rgba(0,0,0,.3)')):'#6f7883';
+        ctx.fillStyle=focus?(n.id===focus?PAL.ink:(adj(n.id)?PAL.accent:PAL.labelDim)):PAL.label;
         ctx.textAlign='center';
         ctx.fillText(label,n.x,n.y+r+14);
         ctx.globalAlpha=1;
@@ -2161,6 +2173,13 @@ function setTheme(v){
   try{window.postThemeChange&&window.postThemeChange()}catch(e){}
 }
 try{const _t=localStorage.getItem('voyage.theme');if(_t==='dark')document.documentElement.setAttribute('data-theme','dark')}catch(e){}
+/* 追加④：切主题立即重绘关联图（画布颜色全部来自 CSS 变量；画布不可见时不触发避免「画布无尺寸」报错） */
+window.postThemeChange=function(){
+  try{
+    const w=document.getElementById('graphWrap');
+    if(document.getElementById('graphCanvas')&&w&&!w.classList.contains('hidden'))renderGraph();
+  }catch(e){}
+}
 /* 小穗评审验收演示钩子：?demo=verdict 拍判定出口 / ?demo=narrow 拍侧栏图标模式（真实函数真实渲染） */
 try{
   const _dp=new URLSearchParams(location.search).get('demo');
