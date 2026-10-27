@@ -19,8 +19,8 @@ func TestLicenseClassification(t *testing.T) {
 		{"CC-BY-SA-4.0", "https://en.wikipedia.org/wiki/Map", Whitelist},
 		{"arXiv", "https://arxiv.org/abs/2410.03017", Whitelist},
 		{"Public Domain", "https://gutenberg.org/ebooks/1", Whitelist},
-		{"", "https://go.dev/ref/mem", Graylist},        // 官方文档灰名单
-		{"", "https://mdn.example/x", Graylist},          // 未知授权保守
+		{"", "https://go.dev/ref/mem", Graylist}, // 官方文档灰名单
+		{"", "https://mdn.example/x", Graylist},  // 未知授权保守
 		{"All Rights Reserved", "https://books.example/x", Excluded},
 		{"proprietary 教材", "https://x.example", Excluded},
 	}

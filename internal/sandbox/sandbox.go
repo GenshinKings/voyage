@@ -21,9 +21,9 @@ import (
 type BugKind string
 
 const (
-	BugTypo       BugKind = "typo"       // 拼写/标识符错（知道级）
-	BugBoundary   BugKind = "boundary"   // 边界条件（off-by-one 等）
-	BugLogic      BugKind = "logic"      // 逻辑反转/条件错
+	BugTypo        BugKind = "typo"        // 拼写/标识符错（知道级）
+	BugBoundary    BugKind = "boundary"    // 边界条件（off-by-one 等）
+	BugLogic       BugKind = "logic"       // 逻辑反转/条件错
 	BugConcurrency BugKind = "concurrency" // 并发/时序（高阶）
 )
 
@@ -39,15 +39,15 @@ type Checker func(files map[string]string) CheckResult
 
 // BreakCase 一个预埋教学 bug 的迷你项目。
 type BreakCase struct {
-	ID      string            `json:"id"`
-	Title   string            `json:"title"`
-	Domain  string            `json:"domain"`  // 薄弱域（联动 ability 精准喂坑）
-	Kind    BugKind           `json:"kind"`
-	Brief   string            `json:"brief"`   // 任务描述（不泄露 bug 位置）
-	Files   map[string]string `json:"files"`   // 预埋 bug 的项目文件
-	Check   Checker           `json:"-"`       // 确定性验收（不序列化——防用户从数据里读出答案）
-	KnowledgePoint string     `json:"knowledgePoint"` // 修完点亮的知识点（履历联动）
-	SourceIssue string        `json:"sourceIssue,omitempty"` // 真实 issue 改造时的出处（白名单来源）
+	ID             string            `json:"id"`
+	Title          string            `json:"title"`
+	Domain         string            `json:"domain"` // 薄弱域（联动 ability 精准喂坑）
+	Kind           BugKind           `json:"kind"`
+	Brief          string            `json:"brief"`                 // 任务描述（不泄露 bug 位置）
+	Files          map[string]string `json:"files"`                 // 预埋 bug 的项目文件
+	Check          Checker           `json:"-"`                     // 确定性验收（不序列化——防用户从数据里读出答案）
+	KnowledgePoint string            `json:"knowledgePoint"`        // 修完点亮的知识点（履历联动）
+	SourceIssue    string            `json:"sourceIssue,omitempty"` // 真实 issue 改造时的出处（白名单来源）
 }
 
 // Session 一次沙盒会话。

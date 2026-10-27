@@ -1,9 +1,10 @@
 // Package evidence — 履历层（宪法 §3.4）：知识点 × 深度 × 时间 × 来源，纯事实陈列。
 //
 // 深度三层（单向升级，不降级——履历不撤回已达成的事实）：
-//   known: 知道（概念通过检索练习/口试）
-//   used : 用过（练习/沙盒中实际使用）
-//   done : 做过（真实产出物/部署品中作为组件存在）
+//
+//	known: 知道（概念通过检索练习/口试）
+//	used : 用过（练习/沙盒中实际使用）
+//	done : 做过（真实产出物/部署品中作为组件存在）
 //
 // 履历只陈列事实，不打分不排名（宪法 1.4 负清单：不搞百分比掌握度表演）。
 // 导出：JSON（机器）+ HTML（对外证据页雏形，P33 完整版在此迭代）。
@@ -41,11 +42,11 @@ func (d Depth) String() string {
 type Point struct {
 	ID       string    `json:"id"`
 	Title    string    `json:"title"`
-	Depth    Depth     `json:"depth"`               // 当前最高深度
-	FirstAt  time.Time `json:"firstAt"`             // 首次学习
-	LastAt   time.Time `json:"lastAt"`              // 最近一次深化
-	Source   string    `json:"source"`              // 在哪学的（课节/沙盒/产出物 id 或 URL）
-	Evidence string    `json:"evidence,omitempty"`  // 证据链接（验收记录/commit/口试录像）
+	Depth    Depth     `json:"depth"`              // 当前最高深度
+	FirstAt  time.Time `json:"firstAt"`            // 首次学习
+	LastAt   time.Time `json:"lastAt"`             // 最近一次深化
+	Source   string    `json:"source"`             // 在哪学的（课节/沙盒/产出物 id 或 URL）
+	Evidence string    `json:"evidence,omitempty"` // 证据链接（验收记录/commit/口试录像）
 }
 
 // Ledger 履历账本。

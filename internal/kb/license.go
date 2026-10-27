@@ -30,7 +30,7 @@ const (
 
 // LicenseRule 一条授权规则。
 type LicenseRule struct {
-	Match  []string     // 许可标识或域名片段（小写包含匹配）
+	Match  []string // 许可标识或域名片段（小写包含匹配）
 	Class  LicenseClass
 	Reason string
 }
@@ -62,16 +62,16 @@ func Classify(license, url string, rules []LicenseRule) (LicenseClass, string) {
 
 // Source ①原文锚定层的一个片段。
 type Source struct {
-	ID          string    `json:"id"`
-	NodeID      string    `json:"nodeId"`
-	URL         string    `json:"url"`
-	Title       string    `json:"title"`
-	Excerpt     string    `json:"excerpt"` // 原文片段（白名单/灰名单来源）
-	License     string    `json:"license"`
+	ID          string       `json:"id"`
+	NodeID      string       `json:"nodeId"`
+	URL         string       `json:"url"`
+	Title       string       `json:"title"`
+	Excerpt     string       `json:"excerpt"` // 原文片段（白名单/灰名单来源）
+	License     string       `json:"license"`
 	Class       LicenseClass `json:"class"`
-	PublishedAt time.Time `json:"publishedAt"` // 来源自身时间（时效加权）
-	FetchedAt   time.Time `json:"fetchedAt"`
-	Weight      float64   `json:"weight"` // 可信度×时效，入账时计算
+	PublishedAt time.Time    `json:"publishedAt"` // 来源自身时间（时效加权）
+	FetchedAt   time.Time    `json:"fetchedAt"`
+	Weight      float64      `json:"weight"` // 可信度×时效，入账时计算
 }
 
 // TrustBase 来源类型基础可信度（可被 license 微调）。

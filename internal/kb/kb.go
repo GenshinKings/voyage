@@ -23,13 +23,13 @@ const (
 
 // MentorView ②助教理解层：原创综合讲法（无原书指纹，闸门校验）。
 type MentorView struct {
-	ID        string     `json:"id"`
-	Text      string     `json:"text"`
-	Anchors   []string   `json:"anchors"`      // 锚定的 Source.ID（原文可回溯）
-	Gate      *GateResult `json:"gate,omitempty"` // 相似度闸门结果
+	ID      string      `json:"id"`
+	Text    string      `json:"text"`
+	Anchors []string    `json:"anchors"`        // 锚定的 Source.ID（原文可回溯）
+	Gate    *GateResult `json:"gate,omitempty"` // 相似度闸门结果
 	// 品味进化（宪法 3.5）：讲后效果统计——由应用层回流
-	Taught    int        `json:"taught"`              // 讲过几次
-	PassFirst int        `json:"passFirst"`           // 讲后一次通过次数
+	Taught    int `json:"taught"`    // 讲过几次
+	PassFirst int `json:"passFirst"` // 讲后一次通过次数
 }
 
 // Mean 效果均值（一次通过率）——品味进化的权重信号。
@@ -52,24 +52,24 @@ const (
 
 // Critique ③批判批注层。
 type Critique struct {
-	ID          string       `json:"id"`
-	Kind        CritiqueKind `json:"kind"`
-	Claim       string       `json:"claim"`       // 被批注的原始声明（或其来源片段 id）
-	Correction  string       `json:"correction"`  // 修正/当前共识
-	SourceID    string       `json:"sourceId"`    // 修正依据（①层片段）
-	Confidence  float64      `json:"confidence"`  // 0-1（多源一致度；全自动判定不可得，呈现争议+分级）
-	At          time.Time    `json:"at"`
+	ID         string       `json:"id"`
+	Kind       CritiqueKind `json:"kind"`
+	Claim      string       `json:"claim"`      // 被批注的原始声明（或其来源片段 id）
+	Correction string       `json:"correction"` // 修正/当前共识
+	SourceID   string       `json:"sourceId"`   // 修正依据（①层片段）
+	Confidence float64      `json:"confidence"` // 0-1（多源一致度；全自动判定不可得，呈现争议+分级）
+	At         time.Time    `json:"at"`
 }
 
 // KNode 知识点节点：多源片段 + 助教理解 + 批判批注 + 前后置。
 type KNode struct {
-	ID       string     `json:"id"`
-	Title    string     `json:"title"`
-	Sources  []Source   `json:"sources"`
-	Views    []MentorView `json:"views"`
-	Critiques []Critique `json:"critiques"`
-	Prereqs  []string   `json:"prereqs,omitempty"` // 前置知识点
-	Nexts    []string   `json:"nexts,omitempty"`   // 后续知识点
+	ID        string       `json:"id"`
+	Title     string       `json:"title"`
+	Sources   []Source     `json:"sources"`
+	Views     []MentorView `json:"views"`
+	Critiques []Critique   `json:"critiques"`
+	Prereqs   []string     `json:"prereqs,omitempty"` // 前置知识点
+	Nexts     []string     `json:"nexts,omitempty"`   // 后续知识点
 }
 
 // Status 派生状态：refuted > disputed > sparse > consensus。
@@ -205,8 +205,8 @@ func (kb *KB) Attribution() Attribution {
 // ExportJSON CC-BY-SA 导出（知识库全量 + 署名清单 + 授权头）。
 func (kb *KB) ExportJSON(w io.Writer) error {
 	header := map[string]any{
-		"license":    "CC-BY-SA-4.0",
-		"notice":     "本知识库基于 CC-BY-SA-4.0 共享：使用、修改、分发须同样以 CC-BY-SA 开放（share-alike）。",
+		"license":     "CC-BY-SA-4.0",
+		"notice":      "本知识库基于 CC-BY-SA-4.0 共享：使用、修改、分发须同样以 CC-BY-SA 开放（share-alike）。",
 		"attribution": kb.Attribution(),
 	}
 	enc := json.NewEncoder(w)

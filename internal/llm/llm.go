@@ -3,12 +3,12 @@
 package llm
 
 import (
-	"log"
 	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strconv"

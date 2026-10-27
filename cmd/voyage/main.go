@@ -1,14 +1,15 @@
 // voyage CLI — 前哨 2.0 内核的命令行出口（引擎拼装为可执行工具）。
 //
 // 子命令：
-//   plan        -in plan.json           生成今日计划（丢清单）
-//   evidence    -in events.json         记录学习事件 → 履历（record 模式）
-//   evidence    -export -owner 名        导出证据页 HTML
-//   kb-import1x -in readingdocs.json    1.x 阅读书架迁入知识库①层
-//   kb-export                           导出知识库（CC-BY-SA + 署名）
-//   sandbox     -case id -dir ws        开沙盒（写案例文件）
-//   sandbox     -case id -dir ws -check 验收修复
-//   graduate    -in stats.json          毕业状态检查
+//
+//	plan        -in plan.json           生成今日计划（丢清单）
+//	evidence    -in events.json         记录学习事件 → 履历（record 模式）
+//	evidence    -export -owner 名        导出证据页 HTML
+//	kb-import1x -in readingdocs.json    1.x 阅读书架迁入知识库①层
+//	kb-export                           导出知识库（CC-BY-SA + 署名）
+//	sandbox     -case id -dir ws        开沙盒（写案例文件）
+//	sandbox     -case id -dir ws -check 验收修复
+//	graduate    -in stats.json          毕业状态检查
 //
 // 数据持久化：-data 目录（默认 ./outpost2-data）。
 package main
@@ -20,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"time"
 	"voyage/internal/ability"
 	"voyage/internal/bandit"
 	"voyage/internal/evidence"
@@ -27,7 +29,6 @@ import (
 	"voyage/internal/kb"
 	"voyage/internal/sandbox"
 	"voyage/internal/scheduler"
-	"time"
 )
 
 const dataDir = "outpost2-data"

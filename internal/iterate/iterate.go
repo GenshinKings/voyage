@@ -4,6 +4,7 @@
 //   - SafePath：读写白名单（internal/ 下 + 根 *.go；outpost2-data/cmd/go.mod 永不可碰）
 //   - RunTests/Build：改动后的确定性闸门（不过即 Restore，绝不带病上岗）
 //   - Commit：只 add internal/（白名单内），只 commit 不 push
+//
 // 运行中的 voyage.exe 永不被触碰（构建产物是 voyage-next.exe，重启换版是人的决定）。
 package iterate
 

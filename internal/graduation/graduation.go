@@ -21,10 +21,10 @@ const (
 // DomainStats 一个领域的毕业输入（由应用层从 FSRS/沙盒/履历汇出）。
 type DomainStats struct {
 	Domain        string `json:"domain"`
-	DueCount      int    `json:"dueCount"`      // FSRS 到期未清数
-	OpenBreaks    int    `json:"openBreaks"`    // 未修复的坑数
-	DoneCount     int    `json:"doneCount"`     // 履历「做过」数
-	MaintainDays  int    `json:"maintainDays"`  // 连续保养天数（队列空且已复习）
+	DueCount      int    `json:"dueCount"`                // FSRS 到期未清数
+	OpenBreaks    int    `json:"openBreaks"`              // 未修复的坑数
+	DoneCount     int    `json:"doneCount"`               // 履历「做过」数
+	MaintainDays  int    `json:"maintainDays"`            // 连续保养天数（队列空且已复习）
 	LastGraduated string `json:"lastGraduated,omitempty"` // 已毕业则锁定（防反复）
 }
 

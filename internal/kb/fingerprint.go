@@ -68,10 +68,10 @@ func Similarity(a, b string) float64 {
 
 // GateResult 相似度闸门结果。
 type GateResult struct {
-	Passed     bool          `json:"passed"`
-	MaxJaccard float64       `json:"maxJaccard"`
-	WorstURL   string        `json:"worstUrl"` // 最贴近的原文（重写时的对照对象）
-	Threshold  float64       `json:"threshold"`
+	Passed     bool    `json:"passed"`
+	MaxJaccard float64 `json:"maxJaccard"`
+	WorstURL   string  `json:"worstUrl"` // 最贴近的原文（重写时的对照对象）
+	Threshold  float64 `json:"threshold"`
 }
 
 // GateMentorView ②层闸门：助教综合讲法 vs 其锚定的全部原文。

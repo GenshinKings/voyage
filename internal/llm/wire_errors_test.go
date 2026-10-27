@@ -391,4 +391,3 @@ func TestNewClientDefaults(t *testing.T) {
 		t.Fatal("Profile→Config 换算失败")
 	}
 }
-

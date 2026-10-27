@@ -21,7 +21,7 @@ type Domain struct {
 
 type Tracker struct {
 	Domains map[string]*Domain `json:"domains"`
-	K       int                 // 每事件最大变动（v0 固定 64：快收敛期；games>10 后降 24）
+	K       int                // 每事件最大变动（v0 固定 64：快收敛期；games>10 后降 24）
 }
 
 func New() *Tracker { return &Tracker{Domains: map[string]*Domain{}, K: 64} }

@@ -21,7 +21,7 @@ type Deliverable struct {
 	ID       string
 	Title    string
 	Deadline time.Time
-	Progress float64 // 0-1，验收清单完成比例
+	Progress float64  // 0-1，验收清单完成比例
 	Actions  []string // 下一步最小动作池（每个≤25 分钟；由产出物的验收清单分解而来）
 }
 
@@ -52,11 +52,11 @@ type TaskSlice struct {
 }
 
 type TodayPlan struct {
-	Date      time.Time
-	Main      []TaskSlice // 推进任务 0-3 片
-	Reviews   []ReviewCard
-	Extras    []Extra // 可选加餐 0-2 个
-	Note      string  // 调度理由（人话，可解释）
+	Date    time.Time
+	Main    []TaskSlice // 推进任务 0-3 片
+	Reviews []ReviewCard
+	Extras  []Extra // 可选加餐 0-2 个
+	Note    string  // 调度理由（人话，可解释）
 }
 
 const (
