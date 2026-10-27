@@ -393,7 +393,12 @@ func NewServer(dir string) *Server {
 	return s
 }
 
-func (s *Server) saveState() { s.save("state.json", s) }
+func (s *Server) saveState() { // 小穗四轮·性能1+3：默认入口=置脏+300ms 合并落盘（见 statecache.go）
+	s.saveStateSoon()
+}
+
+// saveStateNow 关键路径（verdict/trophy/pause/budget/export）立即落盘并刷缓存。
+func (s *Server) saveStateNow() { s.flushState() }
 
 // WrongHit 一条错题记录：练习首次作答失败时记入；之后任一题通过该知识点即转已巩固。
 type WrongHit struct {
@@ -1624,55 +1629,57 @@ func (s *Server) Handlers() http.Handler {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write(indexHTML)
 	})
-	mux.HandleFunc("/api/state", func(w http.ResponseWriter, _ *http.Request) {
-		if s.Plan == nil {
-			s.RefreshPlan()
-		}
-		k, u, d := s.Ledger.Counts()
-		g, gReason := graduation.Evaluate(graduation.DomainStats{DoneCount: d, MaintainDays: 0}, graduation.DefaultConfig(), time.Now())
-		today := (*tutor.Lesson)(nil)
-		curriculum := map[string]any{}
-		sessions := map[string]*tutor.Session{}
-		if s.Tutor != nil {
-			cur := s.Tutor.Curriculum()
-			today = s.Tutor.TodayLesson()
-			curriculum = map[string]any{"subjects": cur.Subjects, "lessons": cur.Lessons}
-			// 全部已有会话打包进 state——前端打开已学知识点=纯本地渲染（用户要求 ≤2ms 级响应）
-			for _, l := range cur.Lessons {
-				if sess := s.Tutor.Load(l.ID); sess != nil {
-					sessions[l.ID] = sess
-				}
+	mux.HandleFunc("/api/state", func(w http.ResponseWriter, r *http.Request) { // 性能1+3：缓存+ETag/304（statecache.go）
+		s.serveStateCache(w, r, func() (any, error) {
+			if s.Plan == nil {
+				s.RefreshPlan()
 			}
-			// 换科目后被移出课程表的历史会话：履历里出现过的 id 也打包，沉淀仍可回看
-			for _, p := range s.Ledger.List() {
-				if _, ok := sessions[p.ID]; !ok {
-					if sess := s.Tutor.Load(p.ID); sess != nil {
-						sessions[p.ID] = sess
+			k, u, d := s.Ledger.Counts()
+			g, gReason := graduation.Evaluate(graduation.DomainStats{DoneCount: d, MaintainDays: 0}, graduation.DefaultConfig(), time.Now())
+			today := (*tutor.Lesson)(nil)
+			curriculum := map[string]any{}
+			sessions := map[string]*tutor.Session{}
+			if s.Tutor != nil {
+				cur := s.Tutor.Curriculum()
+				today = s.Tutor.TodayLesson()
+				curriculum = map[string]any{"subjects": cur.Subjects, "lessons": cur.Lessons}
+				// 全部已有会话打包进 state——前端打开已学知识点=纯本地渲染（用户要求 ≤2ms 级响应）
+				for _, l := range cur.Lessons {
+					if sess := s.Tutor.Load(l.ID); sess != nil {
+						sessions[l.ID] = sess
+					}
+				}
+				// 换科目后被移出课程表的历史会话：履历里出现过的 id 也打包，沉淀仍可回看
+				for _, p := range s.Ledger.List() {
+					if _, ok := sessions[p.ID]; !ok {
+						if sess := s.Tutor.Load(p.ID); sess != nil {
+							sessions[p.ID] = sess
+						}
 					}
 				}
 			}
-		}
-		// 孵化池影子化下发（ADR 0001）：title/repo/impact 不出服务端——前端只见影子画像
-		shadowOut := []map[string]any{}
-		for _, rd := range s.Readings {
-			so := map[string]any{"id": rd.ID, "done": rd.Done, "brief": rd.Brief != ""}
-			if githubRepoFromURL(rd.URL) != "" {
-				so["project"] = true
+			// 孵化池影子化下发（ADR 0001）：title/repo/impact 不出服务端——前端只见影子画像
+			shadowOut := []map[string]any{}
+			for _, rd := range s.Readings {
+				so := map[string]any{"id": rd.ID, "done": rd.Done, "brief": rd.Brief != ""}
+				if githubRepoFromURL(rd.URL) != "" {
+					so["project"] = true
+				}
+				if rd.Shadow != nil {
+					so["tier"] = rd.Shadow.Tier
+					so["stars"] = rd.Shadow.Stars
+					so["req"] = rd.Shadow.Req
+				}
+				shadowOut = append(shadowOut, so)
 			}
-			if rd.Shadow != nil {
-				so["tier"] = rd.Shadow.Tier
-				so["stars"] = rd.Shadow.Stars
-				so["req"] = rd.Shadow.Req
-			}
-			shadowOut = append(shadowOut, so)
-		}
-		writeJSON(w, map[string]any{
-			"plan": s.Plan, "done": s.Done, "goals": s.Goals,
-			"exercises": s.Exercises, "readings": shadowOut, "trophies": s.Trophies, "contextEdges": s.ContextEdges,
-			"wrongHits": s.WrongHits,
-			"ledger":    s.Ledger.List(), "counts": map[string]int{"known": k, "used": u, "done": d},
-			"graduation": map[string]any{"state": string(g), "reason": gReason},
-			"curriculum": curriculum, "today": today, "sessions": sessions,
+			return map[string]any{
+				"plan": s.Plan, "done": s.Done, "goals": s.Goals,
+				"exercises": s.Exercises, "readings": shadowOut, "trophies": s.Trophies, "contextEdges": s.ContextEdges,
+				"wrongHits": s.WrongHits,
+				"ledger":    s.Ledger.List(), "counts": map[string]int{"known": k, "used": u, "done": d},
+				"graduation": map[string]any{"state": string(g), "reason": gReason},
+				"curriculum": curriculum, "today": today, "sessions": sessions,
+			}, nil
 		})
 	})
 	mux.HandleFunc("/api/refresh", func(w http.ResponseWriter, _ *http.Request) {
