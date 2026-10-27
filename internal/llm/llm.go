@@ -6,10 +6,12 @@ import (
 	"log"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -204,14 +206,36 @@ type chatResponse struct {
 	} `json:"error"`
 }
 
+// backoffSleep 退避睡眠（包级变量：测试注入假钟，不真睡）。
+var backoffSleep = time.Sleep
+
+// upstreamError 上游 429/5xx：携带状态码与服务端要求的重试间隔（Item-Retry-After）。
+type upstreamError struct {
+	code       int
+	retryAfter time.Duration // >0 = 服务端显式指定（429 Item-Retry-After）
+	body       string
+}
+
+func (e *upstreamError) Error() string {
+	if e.retryAfter > 0 {
+		return fmt.Sprintf("上游 HTTP %d（可重试，服务端要求等待 %s）: %s", e.code, e.retryAfter, truncateLog(e.body))
+	}
+	return fmt.Sprintf("上游 HTTP %d（可重试）: %s", e.code, truncateLog(e.body))
+}
+
 func (c *Client) post(body []byte) (wireMessage, error) {
 	// 小穗五轮二：网络抖动/429/5xx/超时 重试 2 次指数退避（1s/3s）；每次调用写 server.log（时间+耗时+结果）
+	// 第六轮研究落地（docs/research/Agent可靠性与记忆.md 规则5）：服务端显式要求等待（Item-Retry-After）时按其秒数退避，覆盖指数退避。
 	var msg wireMessage
 	var lastErr error
 	for attempt := 0; attempt < 3; attempt++ {
 		if attempt > 0 {
 			backoff := time.Duration(1<<(attempt-1)) * time.Second // 1s, 2s（近似 1s/3s 语义的指数退避）
-			time.Sleep(backoff)
+			var ue *upstreamError
+			if errors.As(lastErr, &ue) && ue.retryAfter > 0 {
+				backoff = ue.retryAfter
+			}
+			backoffSleep(backoff)
 		}
 		start := time.Now()
 		msg, lastErr = c.postOnce(body)
@@ -269,7 +293,13 @@ func (c *Client) postOnce(body []byte) (wireMessage, error) {
 	defer resp.Body.Close()
 	b, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode == 429 || resp.StatusCode >= 500 {
-		return wireMessage{}, fmt.Errorf("上游 HTTP %d（可重试）: %s", resp.StatusCode, truncateLog(string(b)))
+		e := &upstreamError{code: resp.StatusCode, body: string(b)}
+		if ra := strings.TrimSpace(resp.Header.Get("Item-Retry-After")); ra != "" {
+			if sec, err := strconv.Atoi(ra); err == nil && sec > 0 {
+				e.retryAfter = time.Duration(sec) * time.Second
+			}
+		}
+		return wireMessage{}, e
 	}
 	var lr chatResponse
 	if err := json.Unmarshal(b, &lr); err != nil {
