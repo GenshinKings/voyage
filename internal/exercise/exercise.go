@@ -34,6 +34,8 @@ type Engine struct {
 	Client      llm.ChatClient
 	AgentsPath  string
 	ProfilePath string
+	// 第六轮-P1-2 取材注入：学习者真实仓库摘要（文件名+函数名+片段），server 每次生成前最新写
+	GenerationMaterial string
 }
 
 func (e *Engine) withAgents(system string) string {
@@ -59,6 +61,8 @@ type rawEx struct {
 }
 
 // Generate 按当前在学的知识点出 3 道语境式实操题。difficultyNote 为空串则不加难度约束。
+// 第六轮-P1-2：GenerationMaterial（学习者的真实仓库摘要）非空时优先取材于它——
+// 题面引用真实文件名与函数名；材料不足时由 LLM 退回通用例子，不硬凑。
 func (e *Engine) Generate(topics []string, difficultyNote string) ([]Exercise, error) {
 	if e.Client == nil {
 		return nil, fmt.Errorf("LLM 未配置（outpost2-data/llm.json）")
@@ -69,8 +73,14 @@ func (e *Engine) Generate(topics []string, difficultyNote string) ([]Exercise, e
 	system := `你是实操练习出题助教。给出的每道题都有「核心知识点」（题面主线考察它）与「语境知识点」（解题路径必须自然经过它）。
 语境式出题原则：像一篇 90% 词汇都认识的英语文章——旧概念在新语境中被自然调用就能巩固，不要在题面里重新讲解语境概念。
 只出课上讲过的内容——对话里没教到的概念一律不碰。出实操题：动手算、动手写一小段代码或命令、或真实场景决策——不要背诵默写题。
+【真实仓库取材（若下方提供学习者代码摘要）】：优先其中 1-2 道题直接取材他的真实代码——形式如「main.go 里的 thisFunc 在什么输入下会返回错的值？」「这行能不能删？为什么？」，题面必须出现真实文件名与真实函数名；取材要与核心知识点真正相关，不相关就不硬凑，退回通用例子。
 输出 JSON：{"exercises":[{"title":"不超过12个字","topic":"核心知识点","context":"用到的语境知识点","problem":"完整题面：任务+已知条件+要求产出，不要包含答案"}]}`
-	raw, err := e.Client.ChatJSON(e.withAgents(system), []llm.Message{{Role: "user", Content: "正在学的知识点与课上讲过的内容：\n" + strings.Join(topics, "\n\n") + difficultyNote}})
+	payload := "正在学的知识点与课上讲过的内容：\n" + strings.Join(topics, "\n\n") + difficultyNote
+	if m := strings.TrimSpace(e.GenerationMaterial); m != "" {
+		payload += "\n\n【学习者的真实仓库摘要（出题优先取材）】\n" + m
+		e.GenerationMaterial = "" // 用后即清——下一轮材料要重取（代码可能变了）
+	}
+	raw, err := e.Client.ChatJSON(e.withAgents(system), []llm.Message{{Role: "user", Content: payload}})
 	if err != nil {
 		return nil, err
 	}

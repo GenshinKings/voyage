@@ -172,6 +172,8 @@ type Server struct {
 	// 第六轮-P0-2 误因分类：lessonID → 误因分布；WrongNotes 记最近一条证据（开场引用用）
 	WrongReasons map[string]map[string]int `json:"wrongReasons"`
 	WrongNotes   map[string]string         `json:"wrongNotes"`
+	// 第六轮-P1-2 取材：学习者最近一次沙箱给的本机代码目录（出题读真实函数名；前端只给路径输入时也存）
+	SandboxDir string `json:"sandboxDir,omitempty"`
 	// 副本学习（用户 2026-10-26 设计）：用已收尾知识复现真实项目，通关揭晓恍然大悟
 	Duns []*tutor.Dungeon `json:"dungeons"`
 	// 纪念卡（副本 v2 悬念化）：通关揭晓时生成，收藏墙 + 沉淀连锚的数据源
@@ -2162,6 +2164,8 @@ func (s *Server) Handlers() http.Handler {
 		if len(wrongList) > 0 {
 			diffNote += "\n\n【错题回归】以下知识点学习者曾做错——优先以其中 1-2 个为核心知识点出变式题：换一个新场景、考同一个点，难度不升：\n- " + strings.Join(wrongList, "\n- ")
 		}
+		// 第六轮-P1-2 取材：优先学习者的真实仓库（沙箱记忆目录）——读不到退回通用例子
+		s.Exer.GenerationMaterial = learnerMaterial(s.SandboxDir)
 		list, err := s.Exer.Generate(ordered, diffNote)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
@@ -2755,6 +2759,11 @@ func (s *Server) Handlers() http.Handler {
 		if _, err := sandbox.Create(req.Dir, c); err != nil {
 			http.Error(w, err.Error(), 400)
 			return
+		}
+		// 第六轮-P1-2：记住这个真实代码目录——练习出题时优先取材他的文件与函数名
+		if d := strings.TrimSpace(req.Dir); d != "" {
+			s.SandboxDir = d
+			s.saveState()
 		}
 		writeJSON(w, map[string]any{"ok": true, "dir": req.Dir, "hint": "用编辑器修 " + firstFile(c) + "，修完回来点验收"})
 	})
