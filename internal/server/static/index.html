@@ -1406,7 +1406,12 @@ function renderSediment(){
       html+='<div class="item d'+k.depth+(clickable?' clickable':'')+'"'+(clickable?' onclick=\'jumpLesson("'+k.id+'")\' title="看这段对话的完整历史"':'')+'><div class="t">'+esc(k.title)+'</div><div class="m">'+(k.depth===3?'做过':k.depth===2?'用过':'知道')+' · 首学 '+esc((k.firstAt||'').slice(0,10))+(clickable?' · 点击看完整对话':'')+'</div></div>';
     });
   });
-  if(!(st.ledger||[]).length)html+='<div class="mut">履历还是空的。完成第一节的检查题，这里就长出第一条。</div>';
+  if(!(st.ledger||[]).length)html+='<div style="text-align:center;padding:30px 10px 14px;color:var(--mut)">'
+    +'<div style="font-size:30px">✓</div>'
+    +'<div style="font-size:15px;font-weight:600;color:var(--ink);margin-top:12px">还没有已学会的知识点</div>'
+    +'<div style="max-width:410px;margin:8px auto 0;font-size:12.5px;line-height:1.8">助教判定「收尾」后，这里会按「知道 / 用过 / 做过」三个深度记录下来。</div>'
+    +'<button class="va primary" onclick="todayGoLearn()" style="margin-top:16px;border:1px solid var(--pink);background:var(--pink);color:#fff;padding:7px 18px;font-size:12.5px;border-radius:8px;cursor:pointer;font-weight:600">继续今天的学习 →</button>'
+    +'</div>';
   /* 连锚：纪念卡与铸成它的知识点（副本 v2） */
   if((st.trophies||[]).length){
     html+='<div class="grouplabel" style="margin:26px 0 10px">连锚 —— 这些知识点共同铸成了你的作品</div>';
