@@ -2,14 +2,16 @@
 
 # 🧭 Voyage · 前哨 2.0
 
-**一个 Windows 桌面学习机：不知道从哪下手，就跟着它把第一个能跑的东西做出来。**
+**AI 当老师，不是当搜索引擎。它先问、再陪做、会记住你错在哪——从第一个能跑的东西走到你自己的作品。**
 
 给没人带的孩子一艘船 —— 不是又一个 AI 聊天框。
+
+*An AI that teaches instead of answering. It asks first, builds alongside you, and remembers where you got stuck — from your first working thing to your own work.*
 
 ![Go](https://img.shields.io/badge/Go-1.26.4-00ADD8?logo=go&logoColor=white)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey)
 ![License](https://img.shields.io/badge/License-MIT-0071e3)
-![Tests](https://img.shields.io/badge/tests-101%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-105%20passing-brightgreen)
 ![CI](https://github.com/GenshinKings/voyage/actions/workflows/ci.yml/badge.svg)
 
 ![首页](docs/screenshots/D1b-learn.png)
@@ -99,6 +101,34 @@ flowchart LR
 
 ---
 
+## 它现在能做什么
+
+- **拆课**：说一句「我想学 Go」——拆成 4–8 节，每节都标着为什么排在这里
+- **陪做**：三档引导随你切换（给样例 → 半提示 → 只提问）；卡住时只给一个动作，不丢给你一屏代码
+- **攒证据**：每节收尾记入履历；副本通关的产出直接变成一条可点开验证的简历条目
+
+---
+
+## 助教会跟着你变
+
+- 连续 **3 次**通过 → 引导升级（样例 → 半提示 → 只提问）——你熟了它就闭嘴，只问不答
+- 连续 **2 次**未过，或点「我卡住了」→ 自动退回一档，给一个完整样例让你踩回实地
+- 答错会记原因（概念没懂 / 看漏条件 / 环境问题 / 手滑），下次开场先讲你上次卡住的那个点，不重头再来
+
+---
+
+## 现在有什么 / 还没有什么
+
+**已经能用**：对话式教学、练习、副本、简历与证据、去处页（真实 good first issue）、暂停、导出全部数据、深色模式、快捷键、接续。
+
+**还没有**（诚实清单）：
+- 多用户 / 多档案 —— 目前一份 `state.json`
+- 云端同步 —— 有意不做
+- macOS / Linux —— 只做 Windows，其它端等这端做到 100 分
+- 内容库 —— 助教就是内容源，不做课程市场
+
+---
+
 ## 架构
 
 ```mermaid
@@ -139,16 +169,6 @@ flowchart TB
 </details>
 
 ---
-
-## 现在有什么 / 还没有什么
-
-**已经能用**：对话式教学、练习、副本、简历与证据、去处页（真实 good first issue）、暂停、导出全部数据、深色模式、快捷键、接续。
-
-**还没有**（诚实清单）：
-- 多用户 / 多档案 —— 目前一份 `state.json`
-- 云端同步 —— 有意不做
-- macOS / Linux —— 只做 Windows，其它端等这端做到 100 分
-- 内容库 —— 助教就是内容源，不做课程市场
 
 ## 测试
 
