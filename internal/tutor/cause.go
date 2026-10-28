@@ -4,10 +4,11 @@ import "strings"
 
 // 误因类别（第六轮-P0-2）：学习者模型的第一块积木。
 const (
-	CauseConcept   = "concept"   // 概念没懂
-	CauseCondition = "condition" // 看漏条件
-	CauseEnv       = "env"       // 环境/报错相关
-	CauseSlip      = "slip"      // 手滑/拼写
+	CauseConcept    = "concept"    // 概念没懂
+	CauseCondition  = "condition"  // 看漏条件
+	CauseEnv        = "env"        // 环境/报错相关
+	CauseSlip       = "slip"       // 拼写/命令打错（仅限字面错误——漏做步骤归 unfinished）
+	CauseUnfinished = "unfinished" // 没做完要求的步骤（学生模拟实测 2026-10-28：四分类盖不住「漏做改名验证」这类缺口）
 )
 
 // CauseUnknown 收不到合法标签时的兜底——宁可记 unknown 也不静默丢信号。
@@ -36,7 +37,7 @@ func ParseCause(reply string) (reason, evidence string) {
 // ValidCause 类别合法性（白名单只有四种，防 LLM 口嗨新标签污染分布）。
 func ValidCause(r string) bool {
 	switch r {
-	case CauseConcept, CauseCondition, CauseEnv, CauseSlip:
+	case CauseConcept, CauseCondition, CauseEnv, CauseSlip, CauseUnfinished:
 		return true
 	}
 	return false

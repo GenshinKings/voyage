@@ -13,6 +13,7 @@ func TestParseCause(t *testing.T) {
 		{"无证据", "差在哪一步说清了就行。[CAUSE:env]", "env", ""},
 		{"缺右括号", "[CAUSE:slip|拼写错了", "", ""},
 		{"类别空格", "……[CAUSE: slip | 多打了分号 ]", "slip", "多打了分号"},
+		{"漏做步骤", "差在漏了改名验证那一步。[CAUSE:unfinished|只改了 conf.py 没验证 run.py]", "unfinished", "只改了 conf.py 没验证 run.py"},
 	}
 	for _, c := range cases {
 		r, e := ParseCause(c.reply)
@@ -26,5 +27,8 @@ func TestParseCause(t *testing.T) {
 	}
 	if ValidCause("cheating") {
 		t.Error("白名单外类别不应通过")
+	}
+	if !ValidCause(CauseUnfinished) {
+		t.Error("unfinished 应为合法类别")
 	}
 }
