@@ -148,6 +148,7 @@ type Reading struct {
 
 // Server 应用壳。
 type Server struct {
+	sc        stateCacheT          // 序列化缓存 + 去抖落盘（statecache.go），每实例一份
 	Dir       string               `json:"dir"`
 	Goals     []Goal               `json:"goals"`
 	Plan      *scheduler.TodayPlan `json:"plan,omitempty"`
