@@ -52,6 +52,8 @@ type Session struct {
 	GuideStreak [2]int `json:"guideStreak,omitempty"` // 遗留字段，不再使用
 	// 第六轮-P1-1 追问判真会：首次通过后挂起「你为什么会这么写」，答上才收尾（履历延迟入账，不违反「履历不撤回」）
 	AskWhy bool `json:"askWhy,omitempty"`
+	// 第八轮-P0-1 判定诊断：每次判定事件一条（通道/耗时/是否二次校验）——判定不再是无据可查的黑箱
+	Diagnostics []Diag `json:"diagnostics,omitempty"`
 }
 
 // OpeningMeta 开场元信息：开场指令消息是给 LLM 的（前端不渲染为气泡），
@@ -412,9 +414,13 @@ func (t *Tutor) StartOrResume(lesson Lesson) (*Session, bool, error) {
 
 // Verdict 判定结果。
 type Verdict struct {
-	Kind  string `json:"kind"` // ""=继续对话 | pass | partial
+	Kind  string `json:"kind"` // ""=继续对话 | pass | partial | fu-pass | fu-fuzzy
 	Reply string `json:"reply"`
 	Guide int    `json:"guide"` // 第六轮-P0-1：本轮后的引导档位（前端「讲」卡小字与 state.guideLevels 用）
+	// 第八轮-P0-1 双通道：本轮判定来自哪个通道；结构化判定不通过时的误因（server 记入错因分布）
+	Channel  string `json:"channel,omitempty"` // marker | structured | ""
+	Cause    string `json:"cause,omitempty"`
+	Evidence string `json:"evidence,omitempty"`
 }
 
 // Send 学习者发言 → 助教回复；解析 [PASS] 判定并落履历标记。
@@ -462,11 +468,32 @@ func (t *Tutor) Send(lesson Lesson, userText string) (Verdict, error) {
 		return Verdict{}, err
 	}
 	s.Messages = conv // 含工具帧的完整对话（教学上下文不丢）
-	kind := ""
-	if strings.Contains(reply, "[PASS:partial]") {
-		kind = "partial"
-	} else if strings.Contains(reply, "[PASS]") {
-		kind = "pass"
+	// 第八轮-P0-1 判定双通道：先解析标记（容错），缺失时走结构化判定
+	kind, markWarn := ParsePassMark(reply)
+	channel := "marker"
+	var vCause, vReason string
+	switch {
+	case kind != "":
+		s.addDiag(Diag{At: t.now(), Channel: "marker", Verdict: kind, Note: markWarn})
+	case !stuckRound && judgeWarranted(s, userText):
+		// 结构化通道：把学生回答+验收标准丢给一次独立小调用——闭环不依赖模型记得吐标记
+		start := t.now()
+		pass, reason, cause, retried, jerr := t.judgeStructured(lesson, s)
+		d := Diag{At: t.now(), Channel: "structured", DurationMs: t.now().Sub(start).Milliseconds(),
+			Retried: retried, Note: markWarn}
+		if jerr != nil {
+			d.Verdict = "error"
+			d.Note += " " + jerr.Error()
+		} else if pass {
+			kind, d.Verdict = "pass", "pass"
+		} else {
+			d.Verdict = "fail"
+			vCause, vReason = cause, reason
+		}
+		channel = "structured"
+		s.addDiag(d)
+	case markWarn != "":
+		s.addDiag(Diag{At: t.now(), Channel: "marker", Verdict: "", Note: markWarn})
 	}
 	if kind != "" {
 		s.Verdict = kind
@@ -481,13 +508,15 @@ func (t *Tutor) Send(lesson Lesson, userText string) (Verdict, error) {
 		t.GuideStreak[0] = 0
 		t.GuideStreak[1] = 0
 	} else if !stuckRound {
-		if reason, _ := ParseCause(reply); ValidCause(reason) {
-			// 第六轮-P0-2：检查题判定失败（显式 [CAUSE] 标签）= 一次未通过，进入引导降档判据
+		_, ev := ParseCause(reply)
+		structuredFail := channel == "structured" && vCause != ""
+		if ValidCause(strings.TrimSpace(ev)) || structuredFail {
+			// 第六轮-P0-2：检查题判定失败（显式 [CAUSE] 标签或结构化通道 fail）= 一次未通过，进入引导降档判据
 			t.guideBump(false)
 		}
 	}
 	t.save(s)
-	return Verdict{Kind: kind, Reply: reply, Guide: t.guideLevel()}, nil
+	return Verdict{Kind: kind, Reply: reply, Guide: t.guideLevel(), Channel: channel, Cause: vCause, Evidence: vReason}, nil
 }
 
 // followup 收尾后的陪聊：学习者可能在回答收尾前的加深追问，或继续追问。
@@ -510,7 +539,6 @@ func (t *Tutor) followup(s *Session, userText string) (Verdict, error) {
 			return Verdict{}, err
 		}
 		s.Messages = append(s.Messages, llm.Message{Role: "assistant", Content: reply})
-		s.AskWhy = false
 		kind := ""
 		if strings.Contains(reply, "[FU-FUZZY]") {
 			kind = "fu-fuzzy"
@@ -521,8 +549,14 @@ func (t *Tutor) followup(s *Session, userText string) (Verdict, error) {
 			// 语义唯一（追问轮没有别的通过标记），按 fu-pass 收尾；否则静默吞掉、AskWhy 清了却不收尾，卡死收节
 			kind = "fu-pass"
 		}
+		if kind != "" {
+			// 第八轮-P0-1：只有出了 FU 判定才摘下追问挂起并留诊断——模型忘吐标记时
+			// 下一条继续判，追问不会静默丢失（此前 AskWhy 一律清空，闭环会无声卡死）
+			s.AskWhy = false
+			s.addDiag(Diag{At: t.now(), Channel: "marker", Verdict: kind})
+		}
 		t.save(s)
-		return Verdict{Kind: kind, Reply: reply, Guide: t.guideLevel()}, nil
+		return Verdict{Kind: kind, Reply: reply, Guide: t.guideLevel(), Channel: "marker"}, nil
 	}
 	sys := `这个知识点已经学习收尾。学习者还在继续输入——可能是在回答你收尾前的加深追问，也可能是新问题。
 正常回应：如果他在回答你的追问，判断对错并点评；如果是新问题，直接解答。≤250 字，保持助教口吻。

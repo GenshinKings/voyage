@@ -2073,7 +2073,12 @@ func (s *Server) Handlers() http.Handler {
 			verdict = "partial"
 		default:
 			// 第六轮-P0-2：检查题判定失败——误因分布入学习者模型（开场引用用）
-			if reason, evid := tutor.ParseCause(v.Reply); tutor.ValidCause(reason) {
+			// 第八轮-P0-1：结构化通道的误因同样落库（cause/evidence 来自判定 JSON）
+			reason, evid := tutor.ParseCause(v.Reply)
+			if v.Channel == "structured" && v.Cause != "" {
+				reason, evid = v.Cause, v.Evidence
+			}
+			if tutor.ValidCause(reason) {
 				if s.WrongReasons == nil {
 					s.WrongReasons = map[string]map[string]int{}
 				}
