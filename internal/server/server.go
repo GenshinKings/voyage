@@ -36,6 +36,7 @@ import (
 	"voyage/internal/graduation"
 	"voyage/internal/iterate"
 	"voyage/internal/llm"
+	"voyage/internal/memory"
 	"voyage/internal/notes"
 	"voyage/internal/profile"
 	"voyage/internal/reflib"
@@ -217,6 +218,9 @@ type Server struct {
 	RepoDir   string              `json:"-"` // 仓库根（迭代工作区；dataDir 的上一级）
 	iterMu    sync.Mutex          `json:"-"`
 	iterating bool                `json:"-"`
+
+	// 第七轮：长期记忆（海马快写）——独立文件 memory/memories.json，不碰 state.json
+	Memory *memory.Store `json:"-"`
 }
 
 // Backlog backlog.json：助教的改进观察清单。
@@ -241,6 +245,9 @@ type FetchConfig struct {
 	IterHour    int    `json:"iterHour,omitempty"`    // 迭代时刻 0-23（默认 3）
 	IterRun     string `json:"iterRun,omitempty"`     // 上次迭代日期
 	IterReport  string `json:"iterReport,omitempty"`  // 上次迭代报告
+	// 第七轮：记忆巩固（随每日例行跑，当天只一次）
+	MemRun    string `json:"memRun,omitempty"`    // 上次巩固日期
+	MemReport string `json:"memReport,omitempty"` // 上次巩固报告
 }
 
 func (s *Server) loadFetchConf() {
@@ -311,6 +318,8 @@ func NewServer(dir string) *Server {
 	_ = s.load("backlog.json", &s.Obs)
 	_ = s.load("dungeons.json", &s.Duns)
 	_ = s.load("trophies.json", &s.Trophies)
+	// 第七轮：长期记忆（独立文件，损坏/缺失=空库不阻塞启动）
+	s.Memory = memory.Load(dir)
 	if abs, err := filepath.Abs(dir); err == nil {
 		s.RepoDir = filepath.Dir(abs)
 	}
@@ -772,6 +781,12 @@ func (s *Server) RunDailyRoutine() {
 		}
 		if err := s.reflectCore(); err != nil {
 			log.Printf("例行·反思: %v", err)
+		}
+		// 第七轮：巩固放最后（前面步骤的对话今天也能被巩固进去；失败只记日志）
+		if s.Tutor != nil {
+			if err := s.consolidateCore(); err != nil {
+				log.Printf("例行·记忆巩固: %v", err)
+			}
 		}
 		s.fetchMu.Lock()
 		s.routineRunning = false
@@ -1410,8 +1425,8 @@ func (s *Server) StartFetchLoop() {
 			}
 			now := time.Now()
 			today := now.Format("2006-01-02")
-			// 每日例行流水（进货→巡检→反思串行）：任一步当天没做且已到/过时刻 → 整条流水跑一遍（核内幂等）
-			stepsDone := s.FetchConf.LastRun == today && s.FetchConf.NoteRun == today && s.FetchConf.ReflectRun == today
+			// 每日例行流水（进货→巡检→反思→巩固串行）：任一步当天没做且已到/过时刻 → 整条流水跑一遍（核内幂等）
+			stepsDone := s.FetchConf.LastRun == today && s.FetchConf.NoteRun == today && s.FetchConf.ReflectRun == today && s.FetchConf.MemRun == today
 			if !stepsDone && now.Hour() >= s.FetchConf.Hour {
 				s.RunDailyRoutine()
 			}
@@ -2652,6 +2667,8 @@ func (s *Server) Handlers() http.Handler {
 		}
 		resp["todayItems"], resp["todayTitles"] = len(titles), titles
 		resp["failed"] = s.FetchConf != nil && strings.HasPrefix(s.FetchConf.LastReport, "进货失败")
+		// 第七轮：记忆巩固状态随进货面板可见
+		resp["memRun"], resp["memReport"] = s.FetchConf.MemRun, s.FetchConf.MemReport
 		writeJSON(w, resp)
 	})
 	mux.HandleFunc("/api/fetch/config", func(w http.ResponseWriter, r *http.Request) {
@@ -2728,6 +2745,13 @@ func (s *Server) Handlers() http.Handler {
 			return
 		}
 		writeJSON(w, map[string]any{"ok": true, "note": "进货已开始——助教正在抓取，报告稍后出现在这里"})
+	})
+	mux.HandleFunc("/api/memory/consolidate", func(w http.ResponseWriter, _ *http.Request) { // 第七轮：手动巩固入口
+		if err := s.RunConsolidate(); err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true, "note": "记忆巩固已开始——报告稍后出现在这里"})
 	})
 	mux.HandleFunc("/api/graph", func(w http.ResponseWriter, _ *http.Request) {
 		nodes := []map[string]any{}

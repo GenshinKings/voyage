@@ -244,3 +244,14 @@ func (s *Store) Supersede(id string) bool {
 	e.Status = StatusSuperseded
 	return true
 }
+
+// Delete 物理删除一条（巩固 DELETE 操作：彻底过时/错误的条目，不留半条）。
+func (s *Store) Delete(id string) bool {
+	for i := range s.Entries {
+		if s.Entries[i].ID == id {
+			s.Entries = append(s.Entries[:i], s.Entries[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
