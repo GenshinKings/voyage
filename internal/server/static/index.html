@@ -468,7 +468,7 @@ kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;paddi
     <div class="sbtn lab-extra" data-v="set">⚙ <span class="sbtn-t">设置</span></div>
     <div class="sbtn" id="labToggle" onclick="toggleLab()" title="实验室：展开全部功能">⚗ <span class="sbtn-t">实验室</span></div>
   </div>
-  <div id="subjectBox"><input id="subjectInput" placeholder="想学什么？一句话开课" onkeydown="if(event.key==='Enter')addSubject()"><button onclick="addSubject()">开课</button><button class="sb-plus" onclick="switchTab('dir')" title="去方向页开新课">＋</button></div>
+  <div id="subjectBox"><input id="subjectInput" aria-label="想学什么，一句话开课" placeholder="想学什么？一句话开课" onkeydown="if(event.key==='Enter')addSubject()"><button onclick="addSubject()" aria-label="开课">开课</button><button class="sb-plus" onclick="switchTab('dir')" aria-label="去方向页开新课" title="去方向页开新课">＋</button></div>
   <div id="lessonList"><div class="empty" style="margin-top:24px;padding:0 10px">加载中…</div></div>
   <div id="subjFoot"></div>
 </div>
@@ -496,12 +496,12 @@ kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;paddi
   </div>
   <div class="inputbar">
     <div id="chatbox">
-      <textarea id="input" placeholder="回答检查题，或问点什么…（Enter 发送）"></textarea>
-      <button onclick="skipChallenge()" title="这个我会——出一道验收题，过了就跳过">我会</button>
-      <button onclick="deepen()" title="太浅了：加深一档">再深一点</button>
-      <button onclick="stuckHint()">我卡住了</button>
-      <button onclick="openSandbox()" title="打开代码沙箱：修一个真实 bug">🧪 沙箱</button>
-      <button onclick="send()">发送</button>
+      <textarea id="input" aria-label="回答输入框" tabindex="1" placeholder="回答检查题，或问点什么…（Enter 发送）"></textarea>
+      <button onclick="skipChallenge()" aria-label="这个我会——出验收题跳过" title="这个我会——出一道验收题，过了就跳过">我会</button>
+      <button onclick="deepen()" aria-label="太浅了，加深一档" title="太浅了：加深一档">再深一点</button>
+      <button onclick="stuckHint()" aria-label="我卡住了，要更简单的提示">我卡住了</button>
+      <button onclick="openSandbox()" aria-label="打开代码沙箱" title="打开代码沙箱：修一个真实 bug">🧪 沙箱</button>
+      <button onclick="send()" aria-label="发送回答" tabindex="2">发送</button>
     </div>
   </div>
 </div>
@@ -884,7 +884,7 @@ function renderPlanBody(){
       +'<span style="flex:1;min-width:0;font-size:13.5px;font-weight:'+(primary?'600':'500')+'">'+esc(s.k)+' · '+esc(s.title)+(s.min&&!s.done?' <span style="font-size:10.5px;color:var(--mut);font-weight:400">· '+esc(s.min)+'</span>':'')+(s.gn&&!s.done?' <span style="font-size:10.5px;color:var(--mut);font-weight:400">· '+esc(s.gn)+'</span>':'')+(dim?' <span style="font-size:10.5px;color:var(--mut)">（今天到此为止，明天继续）</span>':'')+'</span>'
       +(dim
         ?'<span class="va" style="border:1px dashed var(--line);background:transparent;color:var(--mut);padding:6px 16px;font-size:12px;border-radius:8px">留给明天</span>'
-        :'<button class="'+(primary?'va primary':'va')+'" onclick="'+s.fn+'" style="border:1px solid var(--line);background:'+(primary?'var(--pink)':'var(--card)')+';color:'+(primary?'#fff':'var(--ink)')+';padding:6px 16px;font-size:12px;border-radius:8px;cursor:pointer;'+(primary?'border-color:var(--pink);font-weight:600;':'')+'">'+esc(s.act)+'</button>')
+        :'<button class="'+(primary?'va primary':'va')+'" tabindex="3" onclick="'+s.fn+'" style="border:1px solid var(--line);background:'+(primary?'var(--pink)':'var(--card)')+';color:'+(primary?'#fff':'var(--ink)')+';padding:6px 16px;font-size:12px;border-radius:8px;cursor:pointer;'+(primary?'border-color:var(--pink);font-weight:600;':'')+'">'+esc(s.act)+'</button>')
       +'</div>';
   });
   h+='<div style="margin-top:9px;font-size:10.5px;color:var(--mut)">做完打勾 · 当前三步会自动跟着你的进度走 · <span style="cursor:pointer;text-decoration:underline dotted" onclick="setPaused(14)">我先停两周</span></div></div>';
@@ -925,9 +925,9 @@ function renderVerdictActions(verdict){
   const nid=nextLessonId();
   const nl=((STATE.curriculum||{}).lessons||[]).find(l=>l.id===nid);
   const d=document.createElement('div');d.className='verdict-actions';
-  d.innerHTML='<button class="va" onclick="retryVerdict()">↻ 再试一次</button>'
-    +'<button class="va" onclick="explainVerdict()">📖 看解析</button>'
-    +(nid?'<button class="va primary" onclick="gotoNext()">下一节：'+esc(nl?nl.title:'')+' →</button>':'')
+  d.innerHTML='<button class="va" aria-label="再试一次" onclick="retryVerdict()">↻ 再试一次</button>'
+    +'<button class="va" aria-label="看解析" onclick="explainVerdict()">📖 看解析</button>'
+    +(nid?'<button class="va primary" aria-label="去下一节" onclick="gotoNext()">下一节：'+esc(nl?nl.title:'')+' →</button>':'')
     +'<span class="va-hint">'+(verdict==='partial'?'半懂已记录——再答一次可转全过':'Enter 直接继续')+'</span>';
   c.appendChild(d);
   $('view').scrollTop=$('view').scrollHeight;
@@ -983,7 +983,7 @@ function openReview(id){
   $('lessonTitle').textContent=c.title||c.id;
   $('kicker').textContent='REVIEW · 到期复习';
   const pv=c.previews||{};
-  const btn=(r,label)=>"<button class=\"backbtn\" onclick=\"reviewRate('"+c.id+"',"+r+")\" style=\"margin:0 6px 8px 0\">"+label+(pv[String(r)]?"<div style=\"font-size:10.5px;color:var(--mut)\">下次 "+esc(pv[String(r)])+"</div>":"")+"</button>";
+  const btn=(r,label)=>"<button class=\"backbtn\" aria-label=\"自评："+label+"\" onclick=\"reviewRate('"+c.id+"',"+r+")\" style=\"margin:0 6px 8px 0\">"+label+(pv[String(r)]?"<div style=\"font-size:10.5px;color:var(--mut)\">下次 "+esc(pv[String(r)])+"</div>":"")+"</button>";
   $('chat').innerHTML='<div class="msg a"><div class="bubble"><b>《'+esc(c.title||c.id)+'》到期了。</b><br>先凭记忆想一想它讲了什么、能怎么用——然后诚实自评（自评准，安排才准）：<div style="margin-top:12px">'
     +btn(1,'忘了')+btn(2,'想不起来')+btn(3,'想起来')+btn(4,'轻松')+'</div>'
     +'<div class="mut" style="font-size:11.5px;margin-top:6px">想不起来的话，点左上回历史重看这节课的对话再评。</div></div></div>';
@@ -1636,7 +1636,17 @@ async function renderGraph(){
 
 /* 启动 */
 $('input').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}});
-document.querySelectorAll('.sbtn[data-v]').forEach(t=>t.onclick=()=>switchTab(t.dataset.v));
+document.querySelectorAll('.sbtn[data-v]').forEach(t=>{
+  t.onclick=()=>switchTab(t.dataset.v);
+  /* 第九轮-P1-2：侧栏导航原本是 div——键盘摸不到；补 role/tabindex/aria + Enter/Space 触发 */
+  t.tabIndex=0;t.setAttribute('role','button');
+  const lb=t.querySelector('.sbtn-t');t.setAttribute('aria-label',lb?lb.textContent.trim():t.dataset.v);
+  t.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();t.click()}};
+});
+(function(){const lt=document.getElementById('labToggle');if(!lt)return;
+  lt.tabIndex=0;lt.setAttribute('role','button');lt.setAttribute('aria-label','实验室：展开全部功能');
+  lt.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();toggleLab()}};
+})();
 applyLab();
 /* ---------- 副本学习（用已学知识复现真实项目，通关揭晓恍然大悟） ---------- */
 let DN=null; // 当前打开的副本 id

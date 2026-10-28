@@ -78,3 +78,27 @@ func TestRound9P02EmptyStatesActionable(t *testing.T) {
 		}
 	}
 }
+
+// 第九轮-P1-2 验收（静态面）：aria ≥10 处、Tab 链（输入框1→发送2→三步3）、
+// Esc 关弹层的 keydown 处理在场、侧栏 div 导航已按钮化（role=button + Enter/Space）。
+// 键盘全流程（Tab→输入→Enter 发送→Esc 关卡片）另有 Playwright 实测，记录在 P1-3 同一浏览会话。
+func TestRound9P12KeyboardAccess(t *testing.T) {
+	s := NewServer(t.TempDir())
+	h := s.Handlers()
+	html := doReq(h, "GET", "/", "").Body.String()
+	if n := strings.Count(html, "aria-label="); n < 10 {
+		t.Fatalf("aria-label 应 ≥10 处: %d", n)
+	}
+	for _, want := range []string{
+		`aria-label="回答输入框" tabindex="1"`,
+		`aria-label="发送回答" tabindex="2"`,
+		`tabindex="3" onclick="`,         // 今天三步主按钮（Tab 链第 3 环）
+		"e.key==='Escape'",               // Esc 关弹层（palette/纪念卡详情）
+		`.setAttribute('role','button')`, // 侧栏 div 导航按钮化
+		"e.key==='Enter'||e.key===' '",
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("键盘可用性要素缺失: %q", want)
+		}
+	}
+}
