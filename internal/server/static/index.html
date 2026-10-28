@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh">
 <head>
 <meta charset="utf-8">
@@ -139,6 +139,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Micr
 #guideCard .gc-fetch{font-size:11.5px;color:var(--mut);margin-top:4px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #guideCard .gc-fetch:hover{color:var(--ink)}
 .rtag{display:inline-block;font-size:10px;color:var(--pink);border:1px solid rgba(251,114,153,.35);border-radius:6px;padding:0 5px;margin-right:5px;vertical-align:1.5px;font-weight:600}
+.msg .bubble pre.code{margin:8px 0;padding:10px 12px;background:#f6f8fa;border:1px solid rgba(0,0,0,.07);border-radius:10px;overflow-x:auto;white-space:pre;font-size:12.5px;line-height:1.55}.msg .bubble pre.code code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;background:none;padding:0}.msg .bubble code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;background:rgba(0,0,0,.05);padding:1px 5px;border-radius:5px;font-size:12.8px}.msg .bubble b.h{display:block;margin:6px 0 2px}
 .msg .bubble{max-width:78%;padding:11px 15px;border-radius:18px;font-size:14.5px;line-height:1.7;white-space:pre-wrap;word-break:break-word}
 .msg.a .bubble{background:var(--card);box-shadow:0 1px 2px rgba(0,0,0,.05),0 0 0 1px rgba(0,0,0,.03);border-bottom-left-radius:6px}
 .msg.u{justify-content:flex-end}
@@ -429,7 +430,8 @@ kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;paddi
     --graph-edge:rgba(228,230,235,.22);--graph-seq:rgba(228,230,235,.10);--graph-label:#8B919C;--graph-label-dim:rgba(228,230,235,.28);
   }
 [data-theme=dark] body{background:var(--paper);color:var(--ink)}
-[data-theme=dark] .msg .bubble{background:var(--card);color:var(--ink)}
+[data-theme=dark] .msg .bubble pre.code{margin:8px 0;padding:10px 12px;background:#f6f8fa;border:1px solid rgba(0,0,0,.07);border-radius:10px;overflow-x:auto;white-space:pre;font-size:12.5px;line-height:1.55}.msg .bubble pre.code code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;background:none;padding:0}.msg .bubble code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;background:rgba(0,0,0,.05);padding:1px 5px;border-radius:5px;font-size:12.8px}.msg .bubble b.h{display:block;margin:6px 0 2px}
+.msg .bubble{background:var(--card);color:var(--ink)}
 [data-theme=dark] .msg.u .bubble{background:#2A2E37;color:#E4E6EB}
 [data-theme=dark] .tcard,[data-theme=dark] .td-card,[data-theme=dark] .rv-card{background:linear-gradient(155deg,#241F23,#2B2229)}
 [data-theme=dark] .t-impact,[data-theme=dark] .td-impact{color:#D8D3CE}
@@ -522,8 +524,24 @@ function looksGarbled(t){
 }
 function garbleWarn(t){if(looksGarbled(t))toast('检测到疑似乱码输入（常见于剪贴板编码不一致）——已发送，但建议重新输入',4200)}
 
+// 小穗：极简 Markdown 渲染（先摘代码围栏，再转义，最后结构化成标签）
+function mdToHtml(raw){
+  const blocks=[];
+  let s=String(raw||'');
+  s=s.replace(/```([A-Za-z0-9_+-]*)\r?\n([\s\S]*?)```/g,(m,lang,code)=>{
+    blocks.push('<pre class="code"><code>'+esc(code.replace(/\n$/,''))+'</code></pre>');
+    return '\u0000'+(blocks.length-1)+'\u0000';
+  });
+  s=esc(s);
+  s=s.replace(/`([^`\n]+)`/g,'<code>$1</code>');
+  s=s.replace(/\*\*([^*\n]+)\*\*/g,'<b>$1</b>');
+  s=s.replace(/^#{1,4}\s+(.+)$/gm,'<b class="h">$1</b>');
+  s=s.replace(/\u0000(\d+)\u0000/g,(m,i)=>blocks[+i]||'');
+  return s;
+}
+
 function fmtContent(raw){
-  raw=raw||'';
+  raw=String(raw||'').replace(/^\s*\n+/,'');
   let hints='';
   // [PROPOSE-VOID]：旧提案作废（用户转向新方向）——收起提示
   if(raw.indexOf('[PROPOSE-VOID]')>=0){
@@ -547,7 +565,7 @@ function fmtContent(raw){
     raw=(before&&(before+'\n\n'))+after;
     hint='<span class="mark propose">📋 课程提案已生成'+(curView==='dir'?'——见下方卡片':'')+'</span>';
   }
-  let html=esc(raw);
+  let html=mdToHtml(raw);
   html=html.replace(/\[PASS:partial\]/g,'<span class="mark partial">◐ 本节收尾（半懂也记录在案，继续往下走）</span>');
   html=html.replace(/\[PASS\]/g,'<span class="mark">✓ 本节收尾通过</span>');
   const body=hint+(html?'<br>'+html:'');
