@@ -580,7 +580,7 @@ func (s *Server) Handlers() http.Handler {
 
 // Serve 启动本地服务并返回实际地址。
 func Serve(addr string) (*Server, error) {
-	s := NewServer(filepath.Join(".", "outpost2-data"))
+	s := NewServer(DataDirName)
 	s.StartFetchLoop() // 内容进货定时器（命中 fetch.json.hour 且当日未跑则触发）
 	go func() { _ = http.ListenAndServe(addr, s.Handlers()) }()
 	time.Sleep(200 * time.Millisecond)

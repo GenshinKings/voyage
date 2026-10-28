@@ -19,3 +19,7 @@ jobs:
         run: test -z "$(gofmt -l ./cmd ./internal ./fsrs)"
       - name: test
         run: go test ./...
+      - name: naming (第八轮-P1-3：旧名字面量只许出现在 outpost2-data 与 docs/)
+        run: |
+          hits=$(grep -rn "outpost2" --include=*.go --include=*.md --include=*.cmd . | grep -v "outpost2-data" | grep -v "^./docs/" || true)
+          if [ -n "$hits" ]; then echo "$hits"; exit 1; fi

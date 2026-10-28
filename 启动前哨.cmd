@@ -7,7 +7,11 @@ cd /d "%~dp0"
 netstat -ano | findstr /C:"127.0.0.1:7412" | findstr /C:"LISTENING" >nul 2>&1
 if not errorlevel 1 goto reuse
 set "BIN=voyage.exe"
-if not exist "%BIN%" set "BIN=outpost2.exe"
+if not exist "%BIN%" (
+  echo [启动前哨] 找不到 voyage.exe——先在仓库根执行: go build -o voyage.exe ./cmd/voyage
+  pause
+  exit /b 1
+)
 start "voyage" /min %BIN% serve --no-open
 setlocal enabledelayedexpansion
 set /a tries=0
