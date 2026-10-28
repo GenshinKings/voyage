@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>前哨 2.0 · 全托管学习机</title>
+<title>Voyage · 前哨</title>
 <style>
 :root{
   --ink:#101b29;--paper:#f7f7f5;--side:rgba(255,255,255,.72);--line:#e3e6ea;--mut:#8a92a0;
@@ -2244,7 +2244,7 @@ try{
       const doneN=(st.done&&st.done.main?st.done.main:[]).length;
       const left=total-doneN;
       if(left>0){
-        new Notification('前哨 · 今天还差 '+left+' 步', {body:'上次你停在「'+((st.today||{}).title||'今天的课')+'」——点开继续。'});
+        new Notification('Voyage · 今天还差 '+left+' 步', {body:'上次你停在「'+((st.today||{}).title||'今天的课')+'」——点开继续。'});
         localStorage.setItem('voyage.remindAt',today+':sent');
       }
     }catch(e){}
