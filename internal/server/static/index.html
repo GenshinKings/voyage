@@ -406,6 +406,31 @@ a:hover{text-decoration:underline}
   .side-foot{display:none}
   .logo{padding-bottom:14px;border-bottom:1px solid var(--line)}
 }
+/* 第九轮-P1-3：抽屉开关基础态（display:none，<900 的 media 块再放开——顺序必须在 media 之前） */
+#sideToggle{display:none;align-items:center;justify-content:center;width:32px;height:32px;flex:none;
+  border:1px solid var(--line);background:var(--card);border-radius:8px;cursor:pointer;font-size:15px;color:var(--ink)}
+/* 第九轮-P1-3：1100px 档——双列卡改单列，容器更紧凑 */
+@media (max-width:1100px){
+  #setView{padding:8px 16px 60px}
+  #setView .set-grid{grid-template-columns:1fr}
+  .inputbar{padding:12px 16px 14px}
+  #topbar{padding:10px 16px}
+  .silo-row{grid-template-columns:repeat(auto-fill,minmax(170px,1fr))}
+}
+/* 第九轮-P1-3：900px 档——侧栏收成可折叠抽屉（默认藏，#sideToggle 唤出；≥900 该按钮不显示） */
+@media (max-width:900px){
+  #side{position:fixed;left:0;top:0;bottom:0;z-index:60;width:256px;padding:16px 14px;
+    transform:translateX(-100%);transition:transform 240ms cubic-bezier(.22,.9,.32,1);
+    box-shadow:8px 0 32px rgba(0,0,0,.14)}
+  body.side-open #side{transform:translateX(0)}
+  /* 900 档抽屉里恢复完整侧栏（覆盖 <1200 的图标模式隐藏） */
+  #side .logo .kicker,#side .logo b,#lessonList,#subjFoot{display:''}
+  #subjectBox input,#subjectBox button:first-of-type{display:''}
+  #sideToggle{display:flex}
+  #main{width:100%}
+  .inputbar{padding:10px 12px 12px}
+}
+
 
 /* ===== 深色模式（小穗五轮追加）：不再跟随系统——只有显式 [data-theme=dark] 生效；默认浅色。
    统一集合见消息样式区后的 [data-theme=dark] 段（含各页覆盖与对比度修补），此处不再重复 ===== */
@@ -474,7 +499,7 @@ kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;paddi
 </div>
 
 <div id="main">
-  <div id="topbar"><div><div class="kicker" id="kicker">LEARNING · 对话式教学</div><h1 id="lessonTitle">今天丢来的</h1></div><div style="display:flex;gap:8px;flex-shrink:0"><button id="todayClass" class="backbtn hidden" style="border-color:var(--line);color:var(--mut)" onclick="openTodayClass()">今天的课</button><button id="backToday" class="backbtn hidden" onclick="backToday()">← 跳回今日知识点</button></div></div>
+  <div id="topbar"><div style="display:flex;align-items:center;gap:10px"><button id="sideToggle" aria-label="打开或收起侧栏" onclick="toggleSideDrawer()">☰</button><div><div class="kicker" id="kicker">LEARNING · 对话式教学</div><h1 id="lessonTitle">今天丢来的</h1></div></div><div style="display:flex;gap:8px;flex-shrink:0"><button id="todayClass" class="backbtn hidden" style="border-color:var(--line);color:var(--mut)" onclick="openTodayClass()">今天的课</button><button id="backToday" class="backbtn hidden" onclick="backToday()">← 跳回今日知识点</button></div></div>
   <div id="view">
     <div id="chatOuter"><div id="guideCard"></div><div id="planCard"></div><div id="chat"></div></div>
     <div id="dirView" class="hidden"></div>
@@ -2136,9 +2161,17 @@ function openPalette(){
   setTimeout(()=>inp.focus(),30);
 }
 function closePalette(){const ov=document.getElementById('palette');if(ov)ov.remove()}
+
+/* 第九轮-P1-3：窄屏侧栏抽屉开关（<900 生效；Esc 也会收起） */
+function toggleSideDrawer(){
+  const open=document.body.classList.toggle('side-open');
+  const b=document.getElementById('sideToggle');
+  if(b)b.setAttribute('aria-label',open?'收起侧栏':'打开侧栏');
+}
 /* Esc 关弹层（面板/纪念卡详情/揭晓——揭晓不关，是仪式） */
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){
+    document.body.classList.remove('side-open'); // 第九轮-P1-3：抽屉也是弹层
     closePalette();
     const td=document.querySelector('.tdetail');if(td)td.remove();
   }else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){
