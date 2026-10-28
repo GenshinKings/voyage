@@ -74,10 +74,10 @@ func (c *Client) get(rawURL string, accept string) ([]byte, int, http.Header, er
 		return nil, resp.StatusCode, resp.Header, err
 	}
 	if resp.StatusCode == 403 && resp.Header.Get("X-RateLimit-Remaining") == "0" {
-		return b, resp.StatusCode, resp.Header, fmt.Errorf("GitHub 匿名限额用尽（60 次/小时）——稍后再试")
+		return b, resp.StatusCode, resp.Header, fmt.Errorf("今天抓得有点多，被 GitHub 限了一小时，晚点再来")
 	}
 	if resp.StatusCode >= 400 && len(strings.TrimSpace(string(b))) == 0 {
-		return b, resp.StatusCode, resp.Header, fmt.Errorf("GitHub 返回 HTTP %d", resp.StatusCode)
+		return b, resp.StatusCode, resp.Header, fmt.Errorf("GitHub 这次没回应，稍后再试")
 	}
 	return b, resp.StatusCode, resp.Header, nil
 }

@@ -3,6 +3,7 @@ package exercise
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"time"
@@ -65,10 +66,11 @@ type rawEx struct {
 // 题面引用真实文件名与函数名；材料不足时由 LLM 退回通用例子，不硬凑。
 func (e *Engine) Generate(topics []string, difficultyNote string) ([]Exercise, error) {
 	if e.Client == nil {
-		return nil, fmt.Errorf("LLM 未配置（outpost2-data/llm.json）")
+		log.Printf("[exercise] 出题失败：模型未配置（outpost2-data/llm.json）")
+		return nil, fmt.Errorf("今天的出题还没接上模型，去设置里贴一个就能用")
 	}
 	if len(topics) == 0 {
-		return nil, fmt.Errorf("还没有可出题的知识点——先开课")
+		return nil, fmt.Errorf("今天还没有能出题的知识点，先上完一节再来")
 	}
 	system := `你是实操练习出题助教。给出的每道题都有「核心知识点」（题面主线考察它）与「语境知识点」（解题路径必须自然经过它）。
 语境式出题原则：像一篇 90% 词汇都认识的英语文章——旧概念在新语境中被自然调用就能巩固，不要在题面里重新讲解语境概念。
@@ -117,7 +119,8 @@ func (e *Engine) Generate(topics []string, difficultyNote string) ([]Exercise, e
 // 作答文本若是一个存在的本地文件路径（写代码的题），读文件内容作为提交物进批改上下文。
 func (e *Engine) Answer(ex *Exercise, text string) (string, bool, error) {
 	if e.Client == nil {
-		return "", false, fmt.Errorf("LLM 未配置（outpost2-data/llm.json）")
+		log.Printf("[exercise] 评卷失败：模型未配置（outpost2-data/llm.json）")
+		return "", false, fmt.Errorf("评卷要用模型，先去设置里接上")
 	}
 	content := text
 	if p := strings.TrimSpace(text); isSubmissionFile(p) {
