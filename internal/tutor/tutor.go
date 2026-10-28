@@ -509,7 +509,9 @@ func (t *Tutor) followup(s *Session, userText string) (Verdict, error) {
 			kind = "fu-fuzzy"
 			// 真会度未过：会话判定降为半懂（履历本就未记账，无「撤回」冲突）
 			s.Verdict = "partial"
-		} else if strings.Contains(reply, "[FU-PASS]") {
+		} else if strings.Contains(reply, "[FU-PASS]") || strings.Contains(reply, "[PASS]") {
+			// 自查修复（学生实测复测 2026-10-28）：FU 语境下模型受历史惯性输出裸 [PASS]——
+			// 语义唯一（追问轮没有别的通过标记），按 fu-pass 收尾；否则静默吞掉、AskWhy 清了却不收尾，卡死收节
 			kind = "fu-pass"
 		}
 		t.save(s)
