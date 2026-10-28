@@ -1139,8 +1139,19 @@ function renderSidebar(){
   list.innerHTML+='<div class="grouplabel" style="padding:8px 12px 0">今天的练习</div>';
   const ex=STATE.exercises||[];
   if(!ex.length){
-    list.innerHTML+='<div class="empty" style="margin-top:16px;padding:0 10px">'+(GEN?'助教正在出题…':(GENFAIL?'上完今天的课，练习就绪':'等助教出题…'))+'</div>';
-    if(!GEN&&!GENFAIL)genExercises();
+    // 第九轮-P0-2：空态要能继续走——为什么空 + 一个主按钮。
+    // 进视图先自动出一次题（成功=「出题中」一闪而过）；失败（多半是课还没收尾）落在这里不再瞎转。
+    if(GEN){
+      list.innerHTML+='<div class="empty" style="margin-top:16px;padding:0 10px">助教正在出题…</div>';
+    }else if(GENFAIL){
+      list.innerHTML+='<div class="empty" style="margin-top:16px;padding:0 10px;max-width:430px;margin-left:auto;margin-right:auto">'
+        +'<div style="font-size:15px;font-weight:600;color:var(--ink)">练习要等今天这节收尾后生成</div>'
+        +'<div style="margin-top:8px;line-height:1.8">只考课上讲过的东西——先把今天的课收尾，题目立刻就来。</div>'
+        +'<button class="va primary" onclick="todayGoLearn()" aria-label="回到今天的课" style="margin-top:14px;border:1px solid var(--pink);background:var(--pink);color:#fff;padding:7px 18px;font-size:12.5px;border-radius:8px;cursor:pointer;font-weight:600">回到今天的课 →</button></div>';
+    }else{
+      genExercises();
+      list.innerHTML+='<div class="empty" style="margin-top:16px;padding:0 10px">助教正在出题…</div>';
+    }
     return;
   }
   ex.forEach(e=>{
@@ -1421,9 +1432,9 @@ function renderSediment(){
   });
   if(!(st.ledger||[]).length)html+='<div style="text-align:center;padding:30px 10px 14px;color:var(--mut)">'
     +'<div style="font-size:30px">✓</div>'
-    +'<div style="font-size:15px;font-weight:600;color:var(--ink);margin-top:12px">还没有已学会的知识点</div>'
-    +'<div style="max-width:410px;margin:8px auto 0;font-size:12.5px;line-height:1.8">'+copyText('closing.record','助教说你过关后，这里会按「知道 / 用过 / 做过」三个深度记录下来。')+'</div>'
-    +'<button class="va primary" onclick="todayGoLearn()" style="margin-top:16px;border:1px solid var(--pink);background:var(--pink);color:#fff;padding:7px 18px;font-size:12.5px;border-radius:8px;cursor:pointer;font-weight:600">继续今天的学习 →</button>'
+    +'<div style="font-size:15px;font-weight:600;color:var(--ink);margin-top:12px">还没有点亮的知识点</div>'
+    +'<div style="max-width:410px;margin:8px auto 0;font-size:12.5px;line-height:1.8">答对并通过点亮的才会出现在这里——半懂不算，骗不了自己。</div>'
+    +'<button class="va primary" onclick="todayGoPractice()" aria-label="去答一题" style="margin-top:16px;border:1px solid var(--pink);background:var(--pink);color:#fff;padding:7px 18px;font-size:12.5px;border-radius:8px;cursor:pointer;font-weight:600">去答一题 →</button>'
     +'</div>';
   /* 连锚：纪念卡与铸成它的知识点（副本 v2） */
   if((st.trophies||[]).length){
@@ -1480,8 +1491,8 @@ async function renderGraph(){
     }
     if(empty)empty.innerHTML='<div style="font-size:34px">🕸</div>'
       +'<div style="font-size:15px;font-weight:600;color:var(--ink);margin-top:12px">还没有点亮的知识点</div>'
-      +'<div style="max-width:430px;font-size:12.5px;margin-top:8px;line-height:1.8">学完并收尾一节课，这里会亮起第一个点；练习里真实用到的知识点之间会自动连成边。</div>'
-      +'<button class="va primary" onclick="todayGoLearn()" style="margin-top:16px;border:1px solid var(--pink);background:var(--pink);color:#fff;padding:7px 18px;font-size:12.5px;border-radius:8px;cursor:pointer;font-weight:600">去完成今天的第一步 →</button>';
+      +'<div style="max-width:430px;font-size:12.5px;margin-top:8px;line-height:1.8">关联图只画你真实调用过的知识点——收尾一节点亮一个点，练习里的真实调用会连成边。</div>'
+      +'<button class="va primary" onclick="todayGoPractice()" aria-label="去练习一次" style="margin-top:16px;border:1px solid var(--pink);background:var(--pink);color:#fff;padding:7px 18px;font-size:12.5px;border-radius:8px;cursor:pointer;font-weight:600">去练习一次 →</button>';
     return;
   }
   try{
