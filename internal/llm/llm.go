@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"voyage/internal/usererr"
 )
 
 type Config struct {
@@ -270,7 +272,7 @@ func truncateLog(s string) string {
 
 // isRetryable 用户可读语义的可重试判定：网络错误（超时/连接失败）与 429/5xx 在 postOnce 里包成可识别错误。
 func isRetryable(err error) bool {
-	s := err.Error()
+	s, _ := usererr.DetailOf(err) // 第九轮-P0-1 分层后：技术现场在 Detail，从它判定
 	if strings.Contains(s, "LLM API 错误") || strings.Contains(s, "响应解析失败") {
 		// 明确 API 拒绝/畸形输出不重试（重试大概率同样失败）
 		return false
@@ -335,7 +337,7 @@ func lr2seq(body []byte) []string {
 // Chat 多轮对话（system + 历史 + 本题）。
 func (c *Client) Chat(system string, msgs []Message) (string, error) {
 	if c.Config.Key == "" {
-		return "", fmt.Errorf("LLM 未配置（outpost2-data/llm.json）")
+		return "", usererr.New("模型还没接上——去设置页配置一个就能用", "LLM 未配置（outpost2-data/llm.json）")
 	}
 	all := []wireMessage{{Role: "system", Content: &system}}
 	for _, m := range msgs {
@@ -344,7 +346,7 @@ func (c *Client) Chat(system string, msgs []Message) (string, error) {
 	body, _ := json.Marshal(chatRequest{Model: c.Config.Model, Messages: all})
 	wm, err := c.post(body)
 	if err != nil {
-		return "", err
+		return "", wrapUpstream(err)
 	}
 	if wm.Content == nil {
 		return "", nil
@@ -352,11 +354,21 @@ func (c *Client) Chat(system string, msgs []Message) (string, error) {
 	return *wm.Content, nil
 }
 
+// wrapUpstream 第九轮-P0-1：post 的上游/网络/协议错误出界前分两层——
+// 用户看到人话（网络或额度问题，去设置页能解决），技术细节（HTTP 码、响应片段、
+// 消息序列指纹）留在 Detail 里给日志与 /api/diagnostics。
+func wrapUpstream(err error) error {
+	if err == nil {
+		return nil
+	}
+	return usererr.New("模型暂时没回应（网络或额度问题），稍后再试；老是这样就去设置页换个模型", err.Error())
+}
+
 // ChatTools 带 function calling 的对话：返回模型的文本内容（可为空）与工具调用清单。
 // tools 为空时退化为普通 Chat（不发 tools 字段——部分服务端拒绝空数组）。
 func (c *Client) ChatTools(system string, msgs []Message, tools []Tool) (string, []ToolCall, error) {
 	if c.Config.Key == "" {
-		return "", nil, fmt.Errorf("LLM 未配置（outpost2-data/llm.json）")
+		return "", nil, usererr.New("模型还没接上——去设置页配置一个就能用", "LLM 未配置（outpost2-data/llm.json）")
 	}
 	all := []wireMessage{{Role: "system", Content: &system}}
 	for _, m := range msgs {
@@ -378,7 +390,7 @@ func (c *Client) ChatTools(system string, msgs []Message, tools []Tool) (string,
 	body, _ := json.Marshal(req)
 	wm, err := c.post(body)
 	if err != nil {
-		return "", nil, err
+		return "", nil, wrapUpstream(err)
 	}
 	m := fromWire(wm)
 	return m.Content, m.ToolCalls, nil

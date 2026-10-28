@@ -12,6 +12,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"voyage/internal/usererr"
 )
 
 // ---------- 基建：假服务器 + 假退避钟（不真连网、不真睡） ----------
@@ -89,6 +91,23 @@ func Test429HonorsItemRetryAfter(t *testing.T) {
 	}
 }
 
+// assertLayered 第九轮-P0-1：断言错误是两层的——用户文案无技术细节，Detail 含技术现场。
+func assertLayered(t *testing.T, err error, wantDetail string) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("应有错误")
+	}
+	for _, leak := range []string{"HTTP", ".json", "C:\\", "/home/"} {
+		if strings.Contains(err.Error(), leak) {
+			t.Fatalf("用户文案不应含 %q: %q", leak, err.Error())
+		}
+	}
+	d, ok := usererr.DetailOf(err)
+	if !ok || !strings.Contains(d, wantDetail) {
+		t.Fatalf("Detail 应含 %q，got %q（分层=%v）", wantDetail, d, ok)
+	}
+}
+
 // ---------- 500：重试耗尽 ----------
 
 func Test500RetriesThenGivesUp(t *testing.T) {
@@ -97,9 +116,7 @@ func Test500RetriesThenGivesUp(t *testing.T) {
 	srv, n := seqServer(t, fakeResp{code: 500, body: `boom`})
 	c := testClient(srv, 0)
 	_, err := c.Chat("SYS", []Message{{Role: "user", Content: "hi"}})
-	if err == nil || !strings.Contains(err.Error(), "连续 3 次失败") {
-		t.Fatalf("耗尽应返回连续失败错误，got %v", err)
-	}
+	assertLayered(t, err, "连续 3 次失败")
 	if cnt := atomic.LoadInt64(n); cnt != 3 {
 		t.Fatalf("请求数=%d want 3", cnt)
 	}
@@ -122,9 +139,7 @@ func TestTimeoutIsRetryable(t *testing.T) {
 	t.Cleanup(srv.Close)
 	c := testClient(srv, 5*time.Millisecond)
 	_, err := c.Chat("SYS", []Message{{Role: "user", Content: "hi"}})
-	if err == nil || !strings.Contains(err.Error(), "连续 3 次失败") {
-		t.Fatalf("超时应重试后耗尽，got %v", err)
-	}
+	assertLayered(t, err, "连续 3 次失败")
 	if cnt := atomic.LoadInt64(&n); cnt != 3 {
 		t.Fatalf("请求数=%d want 3", cnt)
 	}
@@ -138,9 +153,7 @@ func TestBadJSONNotRetried(t *testing.T) {
 	srv, n := seqServer(t, fakeResp{code: 200, body: `<html>not json</html>`})
 	c := testClient(srv, 0)
 	_, err := c.Chat("SYS", []Message{{Role: "user", Content: "hi"}})
-	if err == nil || !strings.Contains(err.Error(), "响应解析失败") {
-		t.Fatalf("应报响应解析失败，got %v", err)
-	}
+	assertLayered(t, err, "响应解析失败")
 	if cnt := atomic.LoadInt64(n); cnt != 1 {
 		t.Fatalf("坏 JSON 不可重试，请求数=%d want 1", cnt)
 	}
@@ -160,9 +173,7 @@ func TestEmptyChoices(t *testing.T) {
 	srv, n := seqServer(t, fakeResp{code: 200, body: `{"choices":[]}`})
 	c := testClient(srv, 0)
 	_, err := c.Chat("SYS", []Message{{Role: "user", Content: "hi"}})
-	if err == nil || !strings.Contains(err.Error(), "LLM 返回为空") {
-		t.Fatalf("应报返回为空，got %v", err)
-	}
+	assertLayered(t, err, "LLM 返回为空")
 	// 空 choices 视为偶发（如内容过滤截断）——可重试，耗尽后报连续失败
 	if cnt := atomic.LoadInt64(n); cnt != 3 {
 		t.Fatalf("请求数=%d want 3", cnt)
@@ -178,8 +189,9 @@ func TestAPIErrorMessageWithSequence(t *testing.T) {
 	srv, n := seqServer(t, fakeResp{code: 400, body: `{"error":{"message":"消息序列不合法"}}`})
 	c := testClient(srv, 0)
 	_, err := c.Chat("SYS", []Message{{Role: "user", Content: "hi"}})
-	if err == nil || !strings.Contains(err.Error(), "LLM API 错误") || !strings.Contains(err.Error(), "消息序列: system,user") {
-		t.Fatalf("应含错误消息与序列指纹，got %v", err)
+	assertLayered(t, err, "LLM API 错误")
+	if d, _ := usererr.DetailOf(err); !strings.Contains(d, "消息序列: system,user") {
+		t.Fatalf("Detail 应含消息序列指纹")
 	}
 	if cnt := atomic.LoadInt64(n); cnt != 1 {
 		t.Fatalf("API 明确拒绝不可重试，请求数=%d want 1", cnt)
@@ -265,9 +277,10 @@ func TestChatNullContent(t *testing.T) {
 
 func TestUnconfiguredClient(t *testing.T) {
 	c := &Client{Config: Config{BaseURL: "http://127.0.0.1:1"}}
-	if _, err := c.Chat("S", nil); err == nil || !strings.Contains(err.Error(), "未配置") {
-		t.Fatalf("无 key 应报未配置，got %v", err)
+	if _, err := c.Chat("S", nil); err == nil || !strings.Contains(err.Error(), "去设置页") {
+		t.Fatalf("无 key 用户文案应指向设置页，got %v", err)
 	}
+	assertLayered(t, func() error { _, e := c.Chat("S", nil); return e }(), "未配置")
 	if _, _, err := c.ChatTools("S", nil, nil); err == nil {
 		t.Fatal("ChatTools 无 key 也应报错")
 	}

@@ -3,13 +3,14 @@ package exercise
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"time"
 
 	"voyage/internal/llm"
 	"voyage/internal/profile"
+
+	"voyage/internal/usererr"
 )
 
 // Exercise 一道实操练习：助教按实时进度出题，学习者作答，助教批改。
@@ -66,8 +67,8 @@ type rawEx struct {
 // 题面引用真实文件名与函数名；材料不足时由 LLM 退回通用例子，不硬凑。
 func (e *Engine) Generate(topics []string, difficultyNote string) ([]Exercise, error) {
 	if e.Client == nil {
-		log.Printf("[exercise] 出题失败：模型未配置（outpost2-data/llm.json）")
-		return nil, fmt.Errorf("今天的出题还没接上模型，去设置里贴一个就能用")
+		return nil, usererr.New("今天的出题还没接上模型，去设置里贴一个就能用",
+			"[exercise] 出题失败：模型未配置（outpost2-data/llm.json）")
 	}
 	if len(topics) == 0 {
 		return nil, fmt.Errorf("今天还没有能出题的知识点，先上完一节再来")
@@ -88,7 +89,8 @@ func (e *Engine) Generate(topics []string, difficultyNote string) ([]Exercise, e
 	}
 	list := parseList(raw)
 	if len(list) == 0 {
-		return nil, fmt.Errorf("出题解析失败：%s", truncate(raw))
+		return nil, usererr.New("出题没解析出来，再点一次「去做题」；老失败就反映给作者",
+			"出题解析失败："+truncate(raw))
 	}
 	now := time.Now()
 	out := make([]Exercise, 0, len(list))
@@ -119,8 +121,8 @@ func (e *Engine) Generate(topics []string, difficultyNote string) ([]Exercise, e
 // 作答文本若是一个存在的本地文件路径（写代码的题），读文件内容作为提交物进批改上下文。
 func (e *Engine) Answer(ex *Exercise, text string) (string, bool, error) {
 	if e.Client == nil {
-		log.Printf("[exercise] 评卷失败：模型未配置（outpost2-data/llm.json）")
-		return "", false, fmt.Errorf("评卷要用模型，先去设置里接上")
+		return "", false, usererr.New("评卷要用模型，先去设置里接上",
+			"[exercise] 评卷失败：模型未配置（outpost2-data/llm.json）")
 	}
 	content := text
 	if p := strings.TrimSpace(text); isSubmissionFile(p) {

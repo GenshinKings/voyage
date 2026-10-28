@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"voyage/internal/llm"
+
+	"voyage/internal/usererr"
 )
 
 // DirectionSession 方向讨论会话（独立于课程教学会话，持久化 direction.json）。
@@ -67,7 +69,7 @@ func (t *Tutor) ResetDirection() {
 // DirectionSend 方向讨论一轮：追加用户输入 → 顾问回应 → 解析 [PROPOSE] 提案。
 func (t *Tutor) DirectionSend(userText string) (reply string, proposal *Proposal, err error) {
 	if t.Client == nil {
-		return "", nil, fmt.Errorf("LLM 未配置（outpost2-data/llm.json）")
+		return "", nil, usererr.New("模型还没接上——去设置页配置一个就能用", "LLM 未配置（outpost2-data/llm.json）")
 	}
 	s := t.LoadDirection()
 	if s == nil {

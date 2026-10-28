@@ -275,15 +275,20 @@ func TestSelfIterateEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	// 等异步完成（轮询 ≤30s：go test 全量要跑一会儿）
+	// 竞态修复（-race 抓的）：状态读取持 iterMu——RunIterate 的 goroutine 在锁内回写
 	deadline := time.Now().Add(60 * time.Second)
+	status := "open"
 	for time.Now().Before(deadline) {
-		if s.Obs[0].Status != "open" {
+		s.iterMu.Lock()
+		status = s.Obs[0].Status
+		s.iterMu.Unlock()
+		if status != "open" {
 			break
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
-	if s.Obs[0].Status != "done" {
-		t.Fatalf("应 done: %+v 报告=%s", s.Obs[0].Status, s.Obs[0].Report)
+	if status != "done" {
+		t.Fatalf("应 done: %+v 报告=%s", status, s.Obs[0].Report)
 	}
 	out, _ := exec.Command("git", "-C", repo, "log", "--oneline", "-1").CombinedOutput()
 	if !strings.Contains(string(out), "iter(low)") {

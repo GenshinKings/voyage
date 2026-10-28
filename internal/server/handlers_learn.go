@@ -23,7 +23,7 @@ import (
 
 // registerLearnHandlers 装配本域路由（Handlers 调用一次）。
 func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
-	mux.HandleFunc("/api/sandbox/list", func(w http.ResponseWriter, _ *http.Request) { // 六轮P0-1：沙箱入口数据（此前孤儿）
+	mux.HandleFunc("/api/sandbox/list", func(w http.ResponseWriter, r *http.Request) { // 六轮P0-1：沙箱入口数据（此前孤儿）
 		type caseInfo struct {
 			ID    string `json:"id"`
 			Title string `json:"title"`
@@ -59,7 +59,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 		writeJSON(w, map[string]any{"ok": true, "nextDue": next.Due.Format("2006-01-02 15:04")})
 	})
 
-	mux.HandleFunc("/api/review/due", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/api/review/due", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"cards": s.reviewDueAll()})
 	})
 
@@ -81,12 +81,12 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 			return
 		}
 		if s.Tutor == nil {
-			http.Error(w, "LLM 未配置（outpost2-data/llm.json）", 400)
+			s.httpErr(w, r, llmMissingErr(), 400)
 			return
 		}
 		cur, err := s.Tutor.StartSubject(req.Name)
 		if err != nil {
-			http.Error(w, err.Error(), 500)
+			s.httpErr(w, r, err, 500)
 			return
 		}
 		// 换/开科目=今日练习作废重出（题目永远跟着当下在学的东西走）
@@ -117,7 +117,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 		s.Tutor.MemoryNote = s.memoryNote(lesson)
 		sess, isNew, err := s.Tutor.StartOrResume(*lesson)
 		if err != nil {
-			http.Error(w, err.Error(), 500)
+			s.httpErr(w, r, err, 500)
 			return
 		}
 		if isNew { // ⑧埋点：步开始（耗时统计起点）
@@ -147,7 +147,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 		firstPass := pre == nil || pre.Verdict == ""
 		v, err := s.Tutor.Send(*lesson, req.Text)
 		if err != nil {
-			http.Error(w, err.Error(), 500)
+			s.httpErr(w, r, err, 500)
 			return
 		}
 		verdict := ""
@@ -239,7 +239,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 		writeJSON(w, resp)
 	})
 
-	mux.HandleFunc("/api/exercise/generate", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/api/exercise/generate", func(w http.ResponseWriter, r *http.Request) {
 		today := time.Now().Format("2006-01-02")
 		if len(s.Exercises) > 0 && s.ExerDate == today { // 幂等：今天的题已出过
 			writeJSON(w, map[string]any{"exercises": s.Exercises})
@@ -249,7 +249,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 			s.Exercises = nil
 		}
 		if s.Exer == nil {
-			http.Error(w, "LLM 未配置（outpost2-data/llm.json）", 400)
+			s.httpErr(w, r, llmMissingErr(), 400)
 			return
 		}
 		arms := []string{}
@@ -342,7 +342,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 		s.Exer.GenerationMaterial = learnerMaterial(s.SandboxDir)
 		list, err := s.Exer.Generate(ordered, diffNote)
 		if err != nil {
-			http.Error(w, err.Error(), 500)
+			s.httpErr(w, r, err, 500)
 			return
 		}
 		for i := range list { // 回填臂归属与语境：批改结果将作为该知识点的奖励回写
@@ -380,7 +380,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 		}
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		if s.Exer == nil {
-			http.Error(w, "LLM 未配置（outpost2-data/llm.json）", 400)
+			s.httpErr(w, r, llmMissingErr(), 400)
 			return
 		}
 		for i := range s.Exercises {
@@ -389,7 +389,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 			}
 			reply, done, err := s.Exer.Answer(&s.Exercises[i], req.Text)
 			if err != nil {
-				http.Error(w, err.Error(), 500)
+				s.httpErr(w, r, err, 500)
 				return
 			}
 			// 能力模型更新（RL 分层第一层）：每题首次作答=一次能力观测，Elo 随对错浮动
@@ -504,7 +504,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 			}
 			d, missing, err := s.Tutor.DungeonStart(briefContext(s, rd), repo, rd.Brief)
 			if err != nil {
-				http.Error(w, err.Error(), 500)
+				s.httpErr(w, r, err, 500)
 				return
 			}
 			if d == nil {
@@ -540,7 +540,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 		}
 		reply, err := s.Tutor.DungeonSend(d, req.Text, s.buildFetchTools())
 		if err != nil {
-			http.Error(w, err.Error(), 500)
+			s.httpErr(w, r, err, 500)
 			return
 		}
 		var reveal map[string]any
@@ -556,7 +556,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 		writeJSON(w, map[string]any{"reply": reply, "dungeon": d, "reveal": reveal})
 	})
 
-	mux.HandleFunc("/api/dungeon/list", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/api/dungeon/list", func(w http.ResponseWriter, r *http.Request) {
 		// 列表脱敏：active 副本不回传 project 名（Sealed 机制）
 		// ADR 0001：Sealed 副本只下发影子画像（repo/project/impact 全部不出现）
 		s.hatchOnce.Do(func() { // 存量补齐：当日一次、后台跑（LLM 慢不阻塞列表）
@@ -648,7 +648,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 			}
 			brief, err := s.Tutor.ProjectBrief(briefContext(s, rd), repo, s.buildReadTools())
 			if err != nil {
-				http.Error(w, err.Error(), 500)
+				s.httpErr(w, r, err, 500)
 				return
 			}
 			rd.Brief = brief
@@ -676,7 +676,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		reply, proposal, err := s.Tutor.DirectionSend(req.Text)
 		if err != nil {
-			http.Error(w, err.Error(), 500)
+			s.httpErr(w, r, err, 500)
 			return
 		}
 		writeJSON(w, map[string]any{"reply": reply, "proposal": proposal})
@@ -722,7 +722,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 			return
 		}
 		if _, err := sandbox.Create(req.Dir, c); err != nil {
-			http.Error(w, err.Error(), 400)
+			s.httpErr(w, r, err, 400)
 			return
 		}
 		// 第六轮-P1-2：记住这个真实代码目录——练习出题时优先取材他的文件与函数名
@@ -748,7 +748,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 		sess := &sandbox.Session{Case: c, Root: req.Dir}
 		res, err := sess.Verify()
 		if err != nil {
-			http.Error(w, err.Error(), 400)
+			s.httpErr(w, r, err, 400)
 			return
 		}
 		if res.Passed {

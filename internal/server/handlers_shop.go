@@ -42,7 +42,7 @@ func (s *Server) registerShopHandlers(mux *http.ServeMux) {
 		writeJSON(w, map[string]any{"list": list})
 	})
 
-	mux.HandleFunc("/api/fetch", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/api/fetch", func(w http.ResponseWriter, r *http.Request) {
 		s.fetchMu.Lock()
 		running := s.fetchRunning
 		s.fetchMu.Unlock()
@@ -95,7 +95,7 @@ func (s *Server) registerShopHandlers(mux *http.ServeMux) {
 		writeJSON(w, map[string]any{"ok": true})
 	})
 
-	mux.HandleFunc("/api/backlog", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/api/backlog", func(w http.ResponseWriter, r *http.Request) {
 		s.iterMu.Lock()
 		obs := s.Obs
 		iterating := s.iterating
@@ -108,33 +108,33 @@ func (s *Server) registerShopHandlers(mux *http.ServeMux) {
 		writeJSON(w, map[string]any{"observations": obs, "iterating": iterating, "iter": iterConf})
 	})
 
-	mux.HandleFunc("/api/iterate/run", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/api/iterate/run", func(w http.ResponseWriter, r *http.Request) {
 		if err := s.RunIterate(); err != nil {
-			http.Error(w, err.Error(), 400)
+			s.httpErr(w, r, err, 400)
 			return
 		}
 		writeJSON(w, map[string]any{"ok": true, "note": "助教开始自主迭代：实现→测试→构建→提交，报告稍后出现在这里"})
 	})
 
-	mux.HandleFunc("/api/reflect/run", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/api/reflect/run", func(w http.ResponseWriter, r *http.Request) {
 		if err := s.RunReflect(); err != nil {
-			http.Error(w, err.Error(), 400)
+			s.httpErr(w, r, err, 400)
 			return
 		}
 		writeJSON(w, map[string]any{"ok": true, "note": "助教开始今日反思"})
 	})
 
-	mux.HandleFunc("/api/fetch/run", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/api/fetch/run", func(w http.ResponseWriter, r *http.Request) {
 		if err := s.RunCurate(); err != nil {
-			http.Error(w, err.Error(), 400)
+			s.httpErr(w, r, err, 400)
 			return
 		}
 		writeJSON(w, map[string]any{"ok": true, "note": "进货已开始——助教正在抓取，报告稍后出现在这里"})
 	})
 
-	mux.HandleFunc("/api/memory/consolidate", func(w http.ResponseWriter, _ *http.Request) { // 第七轮：手动巩固入口
+	mux.HandleFunc("/api/memory/consolidate", func(w http.ResponseWriter, r *http.Request) { // 第七轮：手动巩固入口
 		if err := s.RunConsolidate(); err != nil {
-			http.Error(w, err.Error(), 400)
+			s.httpErr(w, r, err, 400)
 			return
 		}
 		writeJSON(w, map[string]any{"ok": true, "note": "记忆巩固已开始——报告稍后出现在这里"})

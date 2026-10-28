@@ -18,6 +18,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"voyage/internal/usererr"
 )
 
 // Client GitHub 抓取客户端。Base* 字段可注入测试桩（默认真实端点）。
@@ -118,8 +120,23 @@ func (c *Client) Trending(lang string) ([]Repo, error) {
 		return nil, err
 	}
 	if code >= 400 {
-		return nil, fmt.Errorf("trending 页 HTTP %d", code)
+		return nil, errTrendingHTTP(code)
 	}
+	return parseTrending(b, code)
+}
+
+// errTrendingHTTP / errParseTrending —— 第九轮-P0-1：用户文案与技术细节分层。
+func errTrendingHTTP(code int) error {
+	return usererr.New("GitHub 热门榜暂时没拿到，稍后再试", fmt.Sprintf("trending 页 HTTP %d", code))
+}
+
+func errParseTrending(code int, b []byte) error {
+	return usererr.New("GitHub 的页面格式变了，抓取功能暂时不可用——已记录，等修复",
+		fmt.Sprintf("trending 解析为 0 条——页面结构可能变了（HTTP %d，前 200 字节：%s）", code, preview(b, 200)))
+}
+
+// parseTrending 解析 Trending 页 HTML（独立成函数：页面结构变化可无网络单测）。
+func parseTrending(b []byte, code int) ([]Repo, error) {
 	var out []Repo
 	for _, m := range artRe.FindAllStringSubmatch(string(b), -1) {
 		chunk := m[1]
@@ -149,7 +166,7 @@ func (c *Client) Trending(lang string) ([]Repo, error) {
 		out = append(out, r)
 	}
 	if len(out) == 0 {
-		return nil, fmt.Errorf("trending 解析为 0 条——页面结构可能变了（HTTP %d，前 200 字节：%s）", code, preview(b, 200))
+		return nil, errParseTrending(code, b)
 	}
 	return out, nil
 }
@@ -175,7 +192,7 @@ func (c *Client) Search(query string, n int) ([]Repo, error) {
 		return nil, err
 	}
 	if code >= 400 {
-		return nil, fmt.Errorf("search HTTP %d: %s", code, preview(b, 160))
+		return nil, usererr.New("GitHub 搜索暂时没结果，稍后再试", fmt.Sprintf("search HTTP %d: %s", code, preview(b, 160)))
 	}
 	var sr struct {
 		Items []struct {
@@ -221,7 +238,7 @@ func (c *Client) SearchIssues(language string, n int) ([]Issue, error) {
 		return nil, err
 	}
 	if code >= 400 {
-		return nil, fmt.Errorf("search issues HTTP %d: %s", code, preview(b, 160))
+		return nil, usererr.New("真实 issue 列表暂时拉不到，稍后再试", fmt.Sprintf("search issues HTTP %d: %s", code, preview(b, 160)))
 	}
 	var sr struct {
 		Items []struct {
@@ -251,7 +268,7 @@ func (c *Client) Detail(repo string) (*Detail, error) {
 		return nil, err
 	}
 	if code >= 400 {
-		return nil, fmt.Errorf("仓库 %s HTTP %d（不存在或限额）", repo, code)
+		return nil, usererr.New("这个仓库暂时打不开——可能不存在或被限流了", fmt.Sprintf("仓库 %s HTTP %d（不存在或限额）", repo, code))
 	}
 	var jr struct {
 		DefaultBranch string `json:"default_branch"`
@@ -275,7 +292,7 @@ func (c *Client) Tree(repo string) ([]string, error) {
 		return nil, err
 	}
 	if code >= 400 {
-		return nil, fmt.Errorf("文件树 HTTP %d", code)
+		return nil, usererr.New("仓库文件树暂时拉不到，导读稍后再试", fmt.Sprintf("文件树 HTTP %d", code))
 	}
 	var jt struct {
 		Tree []struct {
@@ -340,10 +357,10 @@ func (c *Client) Raw(repo, branch, path string) (string, error) {
 					return "", err
 				}
 			} else {
-				return "", fmt.Errorf("文件 %s HTTP %d", path, code)
+				return "", usererr.New("这个文件暂时抓不到，稍后再试", fmt.Sprintf("文件 %s HTTP %d", path, code))
 			}
 		} else {
-			return "", fmt.Errorf("文件 %s HTTP %d（raw 与 API 均不可达）", path, code)
+			return "", usererr.New("这个文件暂时抓不到，稍后再试", fmt.Sprintf("文件 %s HTTP %d（raw 与 API 均不可达）", path, code))
 		}
 	}
 	if isBinary(b) {
@@ -363,7 +380,7 @@ func (c *Client) Readme(repo string) (string, error) {
 		return "", err
 	}
 	if code >= 400 {
-		return "", fmt.Errorf("README HTTP %d", code)
+		return "", usererr.New("README 暂时抓不到，稍后再试", fmt.Sprintf("README HTTP %d", code))
 	}
 	var jr struct {
 		DownloadURL string `json:"download_url"`

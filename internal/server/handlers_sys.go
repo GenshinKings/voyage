@@ -28,7 +28,7 @@ func (s *Server) registerSysHandlers(mux *http.ServeMux) {
 	noCache := func(w http.ResponseWriter) {
 		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	}
-	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if s.Plan == nil {
 			s.RefreshPlan()
 		}
@@ -127,11 +127,11 @@ func (s *Server) registerSysHandlers(mux *http.ServeMux) {
 		})
 	})
 
-	mux.HandleFunc("/api/refresh", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/api/refresh", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, s.RefreshPlan())
 	})
 
-	mux.HandleFunc("/api/export/all", func(w http.ResponseWriter, _ *http.Request) { // 六轮P0-5：导出全部数据（zip，排除 llm.json 含 key）
+	mux.HandleFunc("/api/export/all", func(w http.ResponseWriter, r *http.Request) { // 六轮P0-5：导出全部数据（zip，排除 llm.json 含 key）
 		buf := new(bytes.Buffer)
 		zw := zip.NewWriter(buf)
 		entries, _ := os.ReadDir(s.Dir)
@@ -156,7 +156,7 @@ func (s *Server) registerSysHandlers(mux *http.ServeMux) {
 		_, _ = w.Write(buf.Bytes())
 	})
 
-	mux.HandleFunc("/api/resume/doc", func(w http.ResponseWriter, _ *http.Request) { // 小穗二轮建议3+六轮P0：200 空态（前端不处理非预期错误）
+	mux.HandleFunc("/api/resume/doc", func(w http.ResponseWriter, r *http.Request) { // 小穗二轮建议3+六轮P0：200 空态（前端不处理非预期错误）
 		md, err := s.exportResume()
 		if err != nil {
 			writeJSON(w, map[string]any{"markdown": "", "hint": err.Error()})
@@ -189,7 +189,7 @@ func (s *Server) registerSysHandlers(mux *http.ServeMux) {
 		}
 		path, err := s.exportResume()
 		if err != nil {
-			http.Error(w, err.Error(), 400)
+			s.httpErr(w, r, err, 400)
 			return
 		}
 		if c := exec.Command("explorer", "/select,"+path); c.Run() != nil {
@@ -280,7 +280,7 @@ func (s *Server) registerSysHandlers(mux *http.ServeMux) {
 		writeJSON(w, map[string]any{"ok": true, "timeBudget": req.Budget})
 	})
 
-	mux.HandleFunc("/api/llm/profiles", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/api/llm/profiles", func(w http.ResponseWriter, r *http.Request) {
 		profiles := []map[string]any{}
 		active := ""
 		if s.LLMStore != nil {
@@ -324,7 +324,7 @@ func (s *Server) registerSysHandlers(mux *http.ServeMux) {
 		s.LLMStore.Profiles[req.Name] = llm.Profile{Name: req.Name, BaseURL: req.BaseURL, Key: key, Model: req.Model}
 		s.LLMStore.Active = req.Name
 		if err := s.LLMStore.Save(filepath.Join(s.Dir, "llm.json")); err != nil {
-			http.Error(w, err.Error(), 500)
+			s.httpErr(w, r, err, 500)
 			return
 		}
 		s.rebuildLLM()
@@ -333,11 +333,15 @@ func (s *Server) registerSysHandlers(mux *http.ServeMux) {
 
 	// 版本自检：前端定期比对，服务重启（=发版）后自动 reload——桌面驻留窗口永不过期
 	startedAt := time.Now()
-	mux.HandleFunc("/api/version", func(w http.ResponseWriter, _ *http.Request) {
+	// 第九轮-P0-1：接口错误的技术现场（前端文案分层的另一半——细节只在这里与日志）
+	mux.HandleFunc("/api/diagnostics", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, map[string]any{"diagnostics": diagSnapshot()})
+	})
+	mux.HandleFunc("/api/version", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"started": startedAt.Unix()})
 	})
 
-	mux.HandleFunc("/api/graph", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/api/graph", func(w http.ResponseWriter, r *http.Request) {
 		nodes := []map[string]any{}
 		edges := []map[string]any{}
 		if s.Tutor != nil {
@@ -374,7 +378,7 @@ func (s *Server) registerSysHandlers(mux *http.ServeMux) {
 		writeJSON(w, map[string]any{"nodes": nodes, "edges": edges})
 	})
 
-	mux.HandleFunc("/evidence.html", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/evidence.html", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		s.Ledger.WriteHTML(w, "学习者", time.Now())
 	})

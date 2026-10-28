@@ -17,7 +17,7 @@ import (
 
 // registerKBHandlers 装配本域路由（Handlers 调用一次）。
 func (s *Server) registerKBHandlers(mux *http.ServeMux) {
-	mux.HandleFunc("/api/notes", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/api/notes", func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]any{"list": notes.List(s.NotesDir)}
 		if s.FetchConf != nil {
 			resp["noteRun"], resp["noteReport"] = s.FetchConf.NoteRun, s.FetchConf.NoteReport
@@ -25,9 +25,9 @@ func (s *Server) registerKBHandlers(mux *http.ServeMux) {
 		writeJSON(w, resp)
 	})
 
-	mux.HandleFunc("/api/notes/review", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/api/notes/review", func(w http.ResponseWriter, r *http.Request) {
 		if err := s.RunNoteReview(); err != nil {
-			http.Error(w, err.Error(), 400)
+			s.httpErr(w, r, err, 400)
 			return
 		}
 		writeJSON(w, map[string]any{"ok": true, "note": "助教正在巡检笔记，报告稍后出现在这里"})
@@ -40,7 +40,7 @@ func (s *Server) registerKBHandlers(mux *http.ServeMux) {
 			}
 			_ = json.NewDecoder(r.Body).Decode(&req)
 			if err := os.WriteFile(s.AgentsPath, []byte(req.Content), 0o644); err != nil {
-				http.Error(w, err.Error(), 500)
+				s.httpErr(w, r, err, 500)
 				return
 			}
 			writeJSON(w, map[string]any{"ok": true})
@@ -56,7 +56,7 @@ func (s *Server) registerKBHandlers(mux *http.ServeMux) {
 			}
 			_ = json.NewDecoder(r.Body).Decode(&req)
 			if err := profile.Save(s.ProfilePath, req.Content); err != nil {
-				http.Error(w, err.Error(), 500)
+				s.httpErr(w, r, err, 500)
 				return
 			}
 			writeJSON(w, map[string]any{"ok": true})
@@ -65,7 +65,7 @@ func (s *Server) registerKBHandlers(mux *http.ServeMux) {
 		writeJSON(w, map[string]any{"content": profile.Load(s.ProfilePath)})
 	})
 
-	mux.HandleFunc("/api/reflib", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/api/reflib", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, reflib.LoadIndex(s.RefDir))
 	})
 
