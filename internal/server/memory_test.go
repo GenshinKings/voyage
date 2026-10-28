@@ -4,6 +4,7 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"math"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -208,5 +209,94 @@ func TestConsolidateManualEndpoint(t *testing.T) {
 	s2.Handlers().ServeHTTP(r2, httptest.NewRequest("POST", "/api/memory/consolidate", nil))
 	if r2.Code != 400 {
 		t.Fatalf("无 LLM 应 400: %d", r2.Code)
+	}
+}
+
+// echoLLM 开场回声：把收到的最后一条 user 原文当回复——便于断言注入了什么。
+type echoLLM struct{}
+
+func (echoLLM) Chat(system string, msgs []llm.Message) (string, error) {
+	return msgs[len(msgs)-1].Content, nil
+}
+func (echoLLM) ChatJSON(system string, msgs []llm.Message) (string, error) {
+	return `{"ops":[]}`, nil
+}
+
+// seedLesson 造课程目录（一节 active）。
+func seedLesson(t *testing.T, dir, id, subject, title string) {
+	t.Helper()
+	cur := tutor.Curriculum{Subjects: []string{subject}, UpdatedAt: time.Now(),
+		Lessons: []tutor.Lesson{{ID: id, Subject: subject, Title: title, Brief: "能写带变量的语句", Status: "active", Order: 1}}}
+	b, _ := json.Marshal(cur)
+	if err := os.WriteFile(filepath.Join(dir, "lessons.json"), b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// 验收 2：第二天开场确实引用了一条记忆，且引用文本能在条目里逐字找到；引用后 hits/confidence 上调。
+func TestOpeningCitesRelevantMemoryVerbatim(t *testing.T) {
+	dir := t.TempDir()
+	s := NewServer(dir)
+	seedLesson(t, dir, "py-01", "Python", "变量与类型")
+	text := "主人在学 Python，每晚去京东做 1.5 小时临时工"
+	if _, err := s.Memory.Add(memory.Entry{ID: "m-1", Text: text, Kind: memory.KindFact,
+		Source: "session:py-01@2026-10-27", Ts: time.Now().AddDate(0, 0, -1), Confidence: 0.9}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	s.Tutor = &tutor.Tutor{Dir: dir, Client: echoLLM{}}
+	lesson := findLesson(s, "py-01")
+	s.Tutor.MemoryNote = s.memoryNote(lesson)
+	if !strings.Contains(s.Tutor.MemoryNote, text) {
+		t.Fatalf("引用笔记应含条目原文: %q", s.Tutor.MemoryNote)
+	}
+	sess, isNew, err := s.Tutor.StartOrResume(*lesson)
+	if err != nil || !isNew {
+		t.Fatalf("开场失败: %v", err)
+	}
+	opening := sess.Messages[len(sess.Messages)-1].Content
+	if !strings.Contains(opening, text) {
+		t.Fatal("开场应逐字引用条目文本")
+	}
+	// 入账：hits+1、confidence +0.05（浮点容差）、lastUsedAt 写回文件
+	st := memory.Load(dir)
+	e := st.Get("m-1")
+	if e.Hits != 1 || math.Abs(e.Confidence-0.95) > 1e-9 || e.LastUsedAt.IsZero() {
+		t.Fatalf("引用应入账: hits=%d conf=%.17g lastUsed zero=%v", e.Hits, e.Confidence, e.LastUsedAt.IsZero())
+	}
+}
+
+// 无相关记忆 → 不引用（memoryNote 为空，绝不出「你上次说」）。
+func TestOpeningSkipsWhenNoRelevantMemory(t *testing.T) {
+	dir := t.TempDir()
+	s := NewServer(dir)
+	seedLesson(t, dir, "py-01", "Python", "变量与类型")
+	if _, err := s.Memory.Add(memory.Entry{ID: "m-2", Text: "主人喜欢摄影", Kind: memory.KindPreference,
+		Source: "session:x", Ts: time.Now(), Confidence: 0.9}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	s.Memory.Save(dir)
+	s.Tutor = &tutor.Tutor{Dir: dir, Client: echoLLM{}}
+	if note := s.memoryNote(findLesson(s, "py-01")); note != "" {
+		t.Fatalf("无关记忆不得引用: %q", note)
+	}
+	if e := memory.Load(dir).Get("m-2"); e.Hits != 0 {
+		t.Fatal("未引用不得入账")
+	}
+}
+
+// 旧结论措辞：ts 超 30 天且 confidence<0.6（未到 cold 线 0.5 之上）→ 「旧结论（截至 X 月）」。
+func TestOpeningStaleMemoryGetsCaveat(t *testing.T) {
+	dir := t.TempDir()
+	s := NewServer(dir)
+	seedLesson(t, dir, "py-01", "Python", "变量与类型")
+	text := "主人当时在学 Python 基础"
+	if _, err := s.Memory.Add(memory.Entry{ID: "m-3", Text: text, Kind: memory.KindFact,
+		Source: "session:old", Ts: time.Now().AddDate(0, 0, -40), Confidence: 0.55}, time.Now().AddDate(0, 0, -40)); err != nil {
+		t.Fatal(err)
+	}
+	s.Tutor = &tutor.Tutor{Dir: dir, Client: echoLLM{}}
+	note := s.memoryNote(findLesson(s, "py-01"))
+	if !strings.Contains(note, "旧结论") || !strings.Contains(note, "现在可能变了") || !strings.Contains(note, text) {
+		t.Fatalf("旧记忆应用旧结论措辞并保留原文: %q", note)
 	}
 }

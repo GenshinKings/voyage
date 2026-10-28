@@ -165,6 +165,31 @@ func (s *Server) RunConsolidate() error {
 	return nil
 }
 
+// memoryNote 开场引用（第七轮 §三）：把记忆变成教学动作。
+// 检索与该知识点相关的 active 条目（time decay 排序），最多引用 1 条，写成自然句；
+// ts 超 30 天且 confidence<0.6 必须用「旧结论（截至 X 月）——现在可能变了」措辞。
+// 引用即入账：hits+1、lastUsedAt=now、confidence +0.05（上限 0.99）。
+func (s *Server) memoryNote(l *tutor.Lesson) string {
+	if l == nil {
+		return ""
+	}
+	now := time.Now()
+	hits := s.memEnsure().Relevant([]string{l.Subject, l.Title}, now, 1)
+	if len(hits) == 0 {
+		return "" // 无相关记忆就闭嘴——绝不生搬硬套
+	}
+	e := hits[0]
+	var note string
+	if now.Sub(e.Ts) > 30*24*time.Hour && e.Confidence < 0.6 {
+		note = fmt.Sprintf("旧结论（截至 %d 月）——现在可能变了：%s", int(e.Ts.Month()), e.Text)
+	} else {
+		note = "你上次说：" + e.Text
+	}
+	s.Memory.Cite(e.ID, now)
+	s.Memory.Save(s.Dir)
+	return note
+}
+
 // truncateRunes 按字符数截断（记忆上下文的体量控制）。
 func truncateRunes(s string, n int) string {
 	r := []rune(strings.TrimSpace(s))

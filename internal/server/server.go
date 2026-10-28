@@ -1984,6 +1984,8 @@ func (s *Server) Handlers() http.Handler {
 		}
 		// 第六轮-P0-2：误因回看——此前在此记录过失败的，开场第一句先点它
 		s.Tutor.MistakeNote = s.mistakeNote(lesson.ID)
+		// 第七轮-P0-3：记忆引用——最多一条相关长期记忆，「你上次说……」（引用即入账）
+		s.Tutor.MemoryNote = s.memoryNote(lesson)
 		sess, isNew, err := s.Tutor.StartOrResume(*lesson)
 		if err != nil {
 			http.Error(w, err.Error(), 500)

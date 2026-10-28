@@ -72,6 +72,7 @@ type Tutor struct {
 	Tools       []Tool         // 助教可用工具（server 组装：GitHub 抓取/入库/阅读；nil=无工具）
 	FetchNote   string         // 今日进货提示（server 注入；开场带给助教一次——收尾时主动推荐延伸材料，用后清空防重复）
 	MistakeNote string         // 第六轮-P0-2 误因回看（server 注入；开场第一句必须先点它，用后清空）
+	MemoryNote  string         // 第七轮-P0-3 记忆引用（server 注入；「你上次说……」式自然引用，必须逐字保留原文，用后清空）
 	NotesDir    string         // 学习者笔记目录 notes/（每日巡检的检查对象，只读）
 	TimeBudget  string         // 小穗三轮问题1：今天的时间预算 10/30/90（server 从 state 同步）——决定讲解长度与检查题数量
 	// Clock 小穗四轮·架构 P1-2：注入时间源（测试用假钟测 fsrs/判定链路不睡）——nil=走 walltime
@@ -392,6 +393,12 @@ func (t *Tutor) StartOrResume(lesson Lesson) (*Session, bool, error) {
 		// 第六轮-P0-2：误因回看——不重头讲一遍，开场第一句先点上次卡在哪
 		user += "\n\n【误因回看】这个知识点学习者此前有过这些错误记录：" + t.MistakeNote + "\n开场第一句必须先点它（「上次你这里是想反了」式的回顾引用），而不是从头再讲；讲完再给检查题。"
 		t.MistakeNote = ""
+	}
+	if t.MemoryNote != "" {
+		// 第七轮-P0-3：记忆引用——把长期记忆变成教学动作。最多一条（server 侧已选好），
+		// 引用必须逐字保留记录原文（验收：引用文本能在条目里逐字找到）；标注了旧结论就照措辞提醒。
+		user += "\n\n【记忆引用】学习者的长期记忆里有这条相关记录：" + t.MemoryNote + "\n开场时用一句自然的话引用它（「你上次说……」式），引号内的记录原文必须逐字保留、不许改写；若记录标注了「旧结论」，按原措辞提醒学习者现在可能已经变化。只引用这一条，没有其他记忆就不要再提「上次」。"
+		t.MemoryNote = ""
 	}
 	s.Messages = append(s.Messages, llm.Message{Role: "user", Content: user})
 	reply, err := t.Client.Chat(t.withAgents(sys), s.Messages)
