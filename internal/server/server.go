@@ -2006,7 +2006,21 @@ func (s *Server) Handlers() http.Handler {
 		verdict := ""
 		// settlePass 收尾入账（履历+FSRS 建卡+课程 done）——延迟记触发：
 		// 首次通过先追问「为什么这么写」，答上（FU-pass 或非首次）才入账；履历不撤回原则=先不记，不事后删。
-		settlePass := func() {
+		// 自查修复②（学生实测 2026-10-28）：只有最终 verdict≠pass 的会话才保留误因记录——
+		// 全懂收尾时清掉本课的 wrongReasons/wrongNotes（那些是「最终答对之前」的过程记录，
+		// 留着会让下次开场引用一条其实已经答对的错因）。partial 半懂有洞，误因保留有用。
+		clearMistakes := func() {
+			if s.WrongReasons != nil {
+				delete(s.WrongReasons, lesson.ID)
+			}
+			if s.WrongNotes != nil {
+				delete(s.WrongNotes, lesson.ID)
+			}
+		}
+		settlePass := func(cleanMistakes bool) {
+			if cleanMistakes {
+				clearMistakes()
+			}
 			s.Ledger.Record(lesson.ID, lesson.Title, evidence.Known, time.Now(), "tutor:"+lesson.Subject, "")
 			// FSRS 建卡（评审 P1-5）：收尾即入遗忘防御——到期由复习闭环召回
 			if s.FSCards == nil {
@@ -2025,15 +2039,15 @@ func (s *Server) Handlers() http.Handler {
 				// 第六轮-P1-1：首次通过必追问，追问过了才真正收尾
 				s.Tutor.AskRealUse(lesson.ID)
 			} else {
-				settlePass()
+				settlePass(true)
 			}
 			verdict = "pass"
 		case v.Kind == "partial":
-			settlePass()
+			settlePass(false)
 			verdict = "partial"
 		case v.Kind == "fu-pass":
-			// 真会度追问守住了——此刻才收尾入账
-			settlePass()
+			// 真会度追问守住了——此刻才收尾入账（全懂：清过程误因）
+			settlePass(true)
 			verdict = "pass"
 			s.recordVerdict("fuzzy-pass", lesson.ID)
 		case v.Kind == "fu-fuzzy":
