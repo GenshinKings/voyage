@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -255,12 +256,16 @@ JSON 顶层键必须是 "nodes"。`),
 	base := t.now().Format("0102") + "-" + sanitize(name)
 	newLessons := make([]Lesson, 0, len(lessons))
 	for i, n := range lessons {
+		st := "pending"
+		if i == 0 {
+			st = "active" // 学生实测④（2026-10-28）：只有当前该学的一节 active，其余 pending
+		}
 		newLessons = append(newLessons, Lesson{
 			ID:      fmt.Sprintf("%s-%02d", base, i+1),
 			Subject: name,
 			Title:   n.Title,
 			Brief:   n.Brief,
-			Status:  "active",
+			Status:  st,
 			Order:   i + 1,
 		})
 	}
@@ -276,6 +281,24 @@ func (t *Tutor) Curriculum() *Curriculum {
 	b, err := os.ReadFile(filepath.Join(t.Dir, "lessons.json"))
 	if err == nil {
 		_ = json.Unmarshal(b, cur)
+	}
+	// 学生实测④（2026-10-28）读取规范化：active 唯一性——老数据/外部改动可能多节 active，
+	// 保留 Order 最小的一节，其余降 pending。幂等，对单 active 数据零影响。
+	activeSeen := false
+	ordered := make([]int, 0, len(cur.Lessons))
+	for i := range cur.Lessons {
+		ordered = append(ordered, i)
+	}
+	sort.Slice(ordered, func(a, b int) bool { return cur.Lessons[ordered[a]].Order < cur.Lessons[ordered[b]].Order })
+	for _, i := range ordered {
+		l := &cur.Lessons[i]
+		if l.Status == "active" {
+			if activeSeen {
+				l.Status = "pending"
+			} else {
+				activeSeen = true
+			}
+		}
 	}
 	return cur
 }
@@ -524,9 +547,23 @@ func (t *Tutor) AskRealUse(nodeID string) {
 // MarkLessonDone 课程状态推进（履历由调用方写）。
 func (t *Tutor) MarkLessonDone(nodeID string) {
 	cur := t.Curriculum()
+	hasActive := false
 	for i := range cur.Lessons {
 		if cur.Lessons[i].ID == nodeID {
 			cur.Lessons[i].Status = "done"
+		}
+		if cur.Lessons[i].Status == "active" {
+			hasActive = true
+		}
+	}
+	// 学生实测④（2026-10-28）：收尾后若无 active，按顺序提升下一节 pending——
+	// 不变式：任意时刻恰好一节 active（TodayLesson「第一个 active」依赖它）
+	if !hasActive {
+		for i := range cur.Lessons {
+			if cur.Lessons[i].Status == "pending" {
+				cur.Lessons[i].Status = "active"
+				break
+			}
 		}
 	}
 	cur.UpdatedAt = t.now()
