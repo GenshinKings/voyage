@@ -166,8 +166,22 @@ func score(e Entry, terms []string, now time.Time) float64 {
 	return n
 }
 
+// wouldCold 条目是否已满足衰减判据（30 天未被引用 且 confidence < below）——
+// pinned 豁免。Decay 用它翻转状态，Relevant 用它即时跳过（不等夜间巩固也能防垃圾进场）。
+func wouldCold(e Entry, now time.Time, unusedFor time.Duration, below float64) bool {
+	if e.Pinned {
+		return false
+	}
+	lastUsed := e.Ts
+	if !e.LastUsedAt.IsZero() {
+		lastUsed = e.LastUsedAt
+	}
+	return now.Sub(lastUsed) >= unusedFor && e.Confidence < below
+}
+
 // Relevant 检索：与 terms 相关的 active 条目，按相关分降序（同分新者先）。
-// cold/superseded 永不返回；limit 上限（开场引用传 1）。
+// cold/superseded 永不返回；已满足衰减判据（未引用 30 天且 confidence<0.5）的条目
+// 即使状态还没翻转也跳过——检索是记忆进场的最后一道闸。limit 上限（开场引用传 1）。
 func (s *Store) Relevant(terms []string, now time.Time, limit int) []*Entry {
 	type hit struct {
 		e *Entry
@@ -177,6 +191,9 @@ func (s *Store) Relevant(terms []string, now time.Time, limit int) []*Entry {
 	for i := range s.Entries {
 		e := &s.Entries[i]
 		if e.Status != StatusActive {
+			continue
+		}
+		if wouldCold(*e, now, 30*24*time.Hour, 0.5) {
 			continue
 		}
 		if v := score(*e, terms, now); v > 0 {
@@ -220,14 +237,7 @@ func (s *Store) Decay(now time.Time, unusedFor time.Duration, below float64) int
 	n := 0
 	for i := range s.Entries {
 		e := &s.Entries[i]
-		if e.Status != StatusActive || e.Pinned {
-			continue
-		}
-		lastUsed := e.Ts
-		if !e.LastUsedAt.IsZero() {
-			lastUsed = e.LastUsedAt
-		}
-		if now.Sub(lastUsed) >= unusedFor && e.Confidence < below {
+		if e.Status == StatusActive && wouldCold(*e, now, unusedFor, below) {
 			e.Status = StatusCold
 			n++
 		}

@@ -192,6 +192,34 @@ func TestConsolidateDropsInvalidOps(t *testing.T) {
 	}
 }
 
+// 验收 4：ts 改成 40 天前且 confidence 0.4 → 跑巩固后进 cold，检索不再返回。
+func TestDecayIntegrationViaConsolidate(t *testing.T) {
+	dir := t.TempDir()
+	s := NewServer(dir)
+	seedLesson(t, dir, "py-01", "Python", "变量与类型")
+	old := time.Now().AddDate(0, 0, -40)
+	if _, err := s.Memory.Add(memory.Entry{ID: "m-old", Text: "主人在学 Python 变量与类型", Kind: memory.KindFact,
+		Source: "session:py-01@2026-09-18", Ts: old, Confidence: 0.4}, old); err != nil {
+		t.Fatal(err)
+	}
+	s.Memory.Save(dir)
+	// 衰减前的检索也拿不到它（双保险）；状态翻转发生在巩固
+	if note := s.memoryNote(findLesson(s, "py-01")); note != "" {
+		t.Fatalf("满足衰减判据的条目不得被检索引用: %q", note)
+	}
+	s.Tutor = &tutor.Tutor{Dir: dir, Client: &memMockLLM{chatJSON: `{"ops":[]}`}}
+	if err := s.consolidateCore(); err != nil {
+		t.Fatal(err)
+	}
+	e := memory.Load(dir).Get("m-old")
+	if e.Status != memory.StatusCold {
+		t.Fatalf("巩固后应翻转 cold: %s", e.Status)
+	}
+	if !strings.Contains(s.FetchConf.MemReport, "衰减 1 条") {
+		t.Fatalf("报告应写明衰减: %q", s.FetchConf.MemReport)
+	}
+}
+
 // 手动入口：/api/memory/consolidate 触发异步巩固。
 func TestConsolidateManualEndpoint(t *testing.T) {
 	dir := t.TempDir()

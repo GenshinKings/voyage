@@ -117,6 +117,8 @@ func (s *Server) applyMemOps(ops []tutor.MemOp, now time.Time) (added, updated, 
 }
 
 // consolidateCore 巩固同步核（当天已做则跳过；步骤互斥复用 beginStep）。
+// 先跑衰减（第七轮 §四：30 天未引用且 confidence<0.5 → cold，pinned 豁免）——
+// 冷存条目不进巩固输入，也不被检索。
 func (s *Server) consolidateCore() error {
 	today := time.Now().Format("2006-01-02")
 	if s.FetchConf != nil && s.FetchConf.MemRun == today {
@@ -126,18 +128,27 @@ func (s *Server) consolidateCore() error {
 		return nil
 	}
 	defer s.endStep()
+	now := time.Now()
+	coldN := s.memEnsure().Decay(now, 30*24*time.Hour, 0.5)
+	if coldN > 0 {
+		s.Memory.Save(s.Dir)
+	}
 	ops, err := s.Tutor.Consolidate(s.memoryContext(), s.existingMemories())
 	report := ""
 	if err == nil {
-		added, updated, deleted, noop, dropped := s.applyMemOps(ops, time.Now())
+		added, updated, deleted, noop, dropped := s.applyMemOps(ops, now)
 		s.memEnsure().Save(s.Dir)
+		head := ""
+		if coldN > 0 {
+			head = fmt.Sprintf("衰减 %d 条进冷存；", coldN)
+		}
 		switch {
 		case added == 0:
-			report = "今天没什么值得记的"
+			report = head + "今天没什么值得记的"
 		case added < 5:
-			report = fmt.Sprintf("巩固完成：新增 %d 条（不足 5 条——宁缺毋滥不凑数）、更新 %d、删除 %d、去重 %d；校验丢弃 %d", added, updated, deleted, noop, dropped)
+			report = head + fmt.Sprintf("巩固完成：新增 %d 条（不足 5 条——宁缺毋滥不凑数）、更新 %d、删除 %d、去重 %d；校验丢弃 %d", added, updated, deleted, noop, dropped)
 		default:
-			report = fmt.Sprintf("巩固完成：新增 %d 条、更新 %d、删除 %d、去重 %d；校验丢弃 %d", added, updated, deleted, noop, dropped)
+			report = head + fmt.Sprintf("巩固完成：新增 %d 条、更新 %d、删除 %d、去重 %d；校验丢弃 %d", added, updated, deleted, noop, dropped)
 		}
 	}
 	if s.FetchConf != nil {
