@@ -4,6 +4,12 @@
 > 同一条教训在 3 个不同工作日出现 → 转正进 AGENTS.md 硬规则区（见晋升通道）。
 > 只记「修完又返工/不该合/验证太糙/静默失败」类教训；一次性笔误不入。
 
+## 2026-10-28
+
+14. 改写既有判定链时，多返回值函数的接值次序必须对照原调用点 | 第八轮-P0-1 重写降档分支写成 `_, ev := ParseCause(reply)`——reason 被丢进 _、拿证据文本做白名单校验恒 false，带 [CAUSE] 的失败轮不再降档；已合入 master 才被既有测试 TestGuideDescendsAfter2Fails 抓住 | 修法：`reason, _ := ParseCause(reply)` 对照原调用点；教训回流见 commit fix(第八轮-P0-1) | Seen 1×
+
+15. 提交链里测试退出码会被管道吃掉 | `go test ... | tail -2 && git commit` 两次带病提交（tail 的退出码代表整条管道）| 修法：全量检查单独跑、失败用 `grep -E "FAIL|panic"` 显式过滤而非 head 截断（head 还会截掉 FAIL 行制造全绿假象）| Seen 2×
+
 ## 2026-10-25
 
 12. 外部页面抓取必须配「真连诊断测试」| trending 解析对 fixture 全绿但真连 0 条——GitHub 把 repo 链接的尾斜杠去掉了（hrefRe 假设 /"结尾），且 svg path 数据里的数字会污染星数提取 | 修法：live_test.go（GHFETCH_LIVE=1 环境开关）+ 失败时 dump 真实页面对比 + 正则放宽（article 类含 Box-row 即可、尾斜杠可选、</svg> 之后再取数）| Seen 1×
