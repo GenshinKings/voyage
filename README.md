@@ -91,13 +91,13 @@ flowchart LR
 
 ## 截图
 
-| 方向 · 接续 | 判定与出口 | 练习 |
+| 今天三步 · 接续 | 判定出口（半懂态） | 设置 · 实验开关 |
 |---|---|---|
-| ![方向](docs/screenshots/D1b-learn.png) | ![判定](docs/screenshots/03-verdict.png) | ![练习](docs/screenshots/D2-exercise.png) |
+| ![今天三步](docs/screenshots/D1b-learn.png) | ![判定出口](docs/screenshots/03-verdict.png) | ![设置](docs/screenshots/D6-settings.png) |
 
-| 沉淀（已学会） | 知识地图 | 阅读/孵化池 |
+| 学会的（空态引导） | 知识地图（空态+图例） | 实战副本大厅（影子+孵化池） |
 |---|---|---|
-| ![沉淀](docs/screenshots/D3b-sediment.png) | ![关联](docs/screenshots/D4f-obsidian.png) | ![阅读](docs/screenshots/D5-read.png) |
+| ![学会的](docs/screenshots/D3b-sediment.png) | ![知识地图](docs/screenshots/D4f-obsidian.png) | ![副本大厅](docs/screenshots/D5-read.png) |
 
 ---
 
