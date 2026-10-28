@@ -1,4 +1,4 @@
-@echo off
+﻿@echo off
 rem Voyage launcher v4: fresh page on every launch
 rem  v2 两处根源缺陷已修：①关窗按进程命令行匹配不到（App 窗口无独立进程）
 rem                     → 改 Win32 窗口标题枚举 close_voyage_windows.ps1
@@ -6,7 +6,9 @@ rem  ②URL 无版本参数，Edge 磁盘缓存直接吃旧 HTML → URL 带随�
 cd /d "%~dp0"
 netstat -ano | findstr /C:"127.0.0.1:7412" | findstr /C:"LISTENING" >nul 2>&1
 if not errorlevel 1 goto reuse
-start "voyage" /min outpost2.exe serve --no-open
+set "BIN=voyage.exe"
+if not exist "%BIN%" set "BIN=outpost2.exe"
+start "voyage" /min %BIN% serve --no-open
 setlocal enabledelayedexpansion
 set /a tries=0
 :waitloop
