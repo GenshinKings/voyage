@@ -49,6 +49,17 @@ import (
 //go:embed static/index.html
 var indexHTML []byte
 
+//go:embed static/copy.json
+var copyJSON []byte
+
+// copyTable 第八轮-P1-1 白话文案映射表：代码里只引用 key，工程词不出现在用户界面。
+// 随 /api/state 下发（STATE.copy）；单测保证每个 key 都有值。
+var copyTable = func() map[string]string {
+	m := map[string]string{}
+	_ = json.Unmarshal(copyJSON, &m)
+	return m
+}()
+
 // Store 应用壳的文件持久化（引擎层的 JSON 落盘装配）。
 type Store struct {
 	Dir string
@@ -1729,6 +1740,7 @@ func (s *Server) Handlers() http.Handler {
 				"wrongHits":    s.WrongHits,
 				"guideLevels":  s.GuideLevels,
 				"wrongReasons": s.WrongReasons,
+				"copy":         copyTable,
 				"ledger":       s.Ledger.List(), "counts": map[string]int{"known": k, "used": u, "done": d},
 				"graduation": map[string]any{"state": string(g), "reason": gReason},
 				"curriculum": curriculum, "today": today, "sessions": sessions,

@@ -1,0 +1,10 @@
+{
+  "guide.sample": "我先给你看个例子",
+  "guide.hint": "我提示你一点",
+  "guide.ask": "你先说说看",
+  "verdict.partial": "半懂也记下了，再答一次就过",
+  "verdict.pass": "过关，这条记进履历了",
+  "level": "我讲得多细",
+  "closing.record": "助教说你过关后，这里会按「知道 / 用过 / 做过」三个深度记录下来。",
+  "challenge.prefill": "(这个我会) 给我最有挑战的验收题——我直接做出来给你看。"
+}

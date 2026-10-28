@@ -512,6 +512,9 @@ const $=id=>document.getElementById(id);
 const toast=(m,ms)=>{const t=$('toast');t.textContent=m;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',ms||2400)};
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 let STATE=null, CURRENT=null, LASTVERDICT=false;
+/* 第八轮-P1-1 白话文案：工程词不出现在界面——代码只引用 key，映射表随 /api/state 下发（STATE.copy），fb=兜底 */
+function copyText(k,fb){const c=(STATE||{}).copy||{};return c[k]||fb||''}
+function guideCopy(gl){return gl>=3?copyText('guide.ask','你先说说看'):gl===2?copyText('guide.hint','我提示你一点'):copyText('guide.sample','我先给你看个例子')}
 
 async function api(path,body){const r=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});const j=await r.json().catch(()=>({}));if(r.status>=400)throw new Error(j.error||j.Error||'请求失败');return j}
 // 输入乱码防线（编码统一）：剪贴板编码不一致的文本带典型特征——提示但不拦发
@@ -566,7 +569,7 @@ function fmtContent(raw){
     hint='<span class="mark propose">📋 课程提案已生成'+(curView==='dir'?'——见下方卡片':'')+'</span>';
   }
   let html=mdToHtml(raw);
-  html=html.replace(/\[PASS:partial\]/g,'<span class="mark partial">◐ 本节收尾（半懂也记录在案，继续往下走）</span>');
+  html=html.replace(/\[PASS:partial\]/g,'<span class="mark partial">◐ '+copyText('verdict.partial','半懂也记下了，再答一次就过')+'</span>');
   html=html.replace(/\[PASS\]/g,'<span class="mark">✓ 本节收尾通过</span>');
   const body=hint+(html?'<br>'+html:'');
   return hints?hints+(body?'<br>'+body:''):body;
@@ -713,7 +716,7 @@ let STUCK_N=0;
 function skipChallenge(){
   STUCK_N=0;
   const ta=$('input');
-  ta.value='(这个我会) 给我最有挑战的判定式验收题——我直接做出来给你看。';
+  ta.value=copyText('challenge.prefill','(这个我会) 给我最有挑战的验收题——我直接做出来给你看。');
   send();
 }
 function deepen(){
@@ -768,7 +771,7 @@ function todaySteps(){
   const today=st.today;
   // 第六轮-P0-1：引导档位小字（样例/半提示/提问）——state.guideLevels 由判定推进
   const gl=(STATE.guideLevels||{})[(today||{}).id];
-  const s1={done:!today,title:today?today.title:'今日已讲完',act:today?'继续讲':'明天再来',gn:(typeof gl==='number'&&gl>=2)?(gl===3?'提问':'半提示'):'样例'};
+  const s1={done:!today,title:today?today.title:'今日已讲完',act:today?'继续讲':'明天再来',gn:guideCopy(typeof gl==='number'?gl:1)};
   // 步2 练：今日练习全过=✓；有未过=当前
   const exs=st.exercises||[];
   const doneEx=exs.filter(e=>e.status==='done').length;
@@ -878,7 +881,7 @@ function renderPlanBody(){
     h+='<div style="display:flex;align-items:center;gap:12px;padding:7px 0;opacity:'+(dim?'.5':'1')+';'+(i<steps.length-1?'border-bottom:1px dashed var(--line);':'')+'">'
       +'<span style="width:22px;height:22px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;'
       +(s.done?'background:var(--green);color:#fff':(primary?'background:var(--pink);color:#fff':'background:var(--chip);color:var(--mut)'))+'">'+(s.done?'✓':(dim?'-':i+1))+'</span>'
-      +'<span style="flex:1;min-width:0;font-size:13.5px;font-weight:'+(primary?'600':'500')+'">'+esc(s.k)+' · '+esc(s.title)+(s.min&&!s.done?' <span style="font-size:10.5px;color:var(--mut);font-weight:400">· '+esc(s.min)+'</span>':'')+(s.gn&&!s.done?' <span style="font-size:10.5px;color:var(--mut);font-weight:400">· 引导：'+esc(s.gn)+'</span>':'')+(dim?' <span style="font-size:10.5px;color:var(--mut)">（今天到此为止，明天继续）</span>':'')+'</span>'
+      +'<span style="flex:1;min-width:0;font-size:13.5px;font-weight:'+(primary?'600':'500')+'">'+esc(s.k)+' · '+esc(s.title)+(s.min&&!s.done?' <span style="font-size:10.5px;color:var(--mut);font-weight:400">· '+esc(s.min)+'</span>':'')+(s.gn&&!s.done?' <span style="font-size:10.5px;color:var(--mut);font-weight:400">· '+esc(s.gn)+'</span>':'')+(dim?' <span style="font-size:10.5px;color:var(--mut)">（今天到此为止，明天继续）</span>':'')+'</span>'
       +(dim
         ?'<span class="va" style="border:1px dashed var(--line);background:transparent;color:var(--mut);padding:6px 16px;font-size:12px;border-radius:8px">留给明天</span>'
         :'<button class="'+(primary?'va primary':'va')+'" onclick="'+s.fn+'" style="border:1px solid var(--line);background:'+(primary?'var(--pink)':'var(--card)')+';color:'+(primary?'#fff':'var(--ink)')+';padding:6px 16px;font-size:12px;border-radius:8px;cursor:pointer;'+(primary?'border-color:var(--pink);font-weight:600;':'')+'">'+esc(s.act)+'</button>')
@@ -1419,7 +1422,7 @@ function renderSediment(){
   if(!(st.ledger||[]).length)html+='<div style="text-align:center;padding:30px 10px 14px;color:var(--mut)">'
     +'<div style="font-size:30px">✓</div>'
     +'<div style="font-size:15px;font-weight:600;color:var(--ink);margin-top:12px">还没有已学会的知识点</div>'
-    +'<div style="max-width:410px;margin:8px auto 0;font-size:12.5px;line-height:1.8">助教判定「收尾」后，这里会按「知道 / 用过 / 做过」三个深度记录下来。</div>'
+    +'<div style="max-width:410px;margin:8px auto 0;font-size:12.5px;line-height:1.8">'+copyText('closing.record','助教说你过关后，这里会按「知道 / 用过 / 做过」三个深度记录下来。')+'</div>'
     +'<button class="va primary" onclick="todayGoLearn()" style="margin-top:16px;border:1px solid var(--pink);background:var(--pink);color:#fff;padding:7px 18px;font-size:12.5px;border-radius:8px;cursor:pointer;font-weight:600">继续今天的学习 →</button>'
     +'</div>';
   /* 连锚：纪念卡与铸成它的知识点（副本 v2） */
