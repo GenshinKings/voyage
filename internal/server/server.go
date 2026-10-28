@@ -173,6 +173,8 @@ type Server struct {
 	// 第六轮-P0-2 误因分类：lessonID → 误因分布；WrongNotes 记最近一条证据（开场引用用）
 	WrongReasons map[string]map[string]int `json:"wrongReasons"`
 	WrongNotes   map[string]string         `json:"wrongNotes"`
+	// 第八轮-P0-2 错因事件流：错因不只是计数——可回放，开场检索「该科目最近 3 条」的原料
+	WrongLog []WrongEvent `json:"wrongLog,omitempty"`
 	// 第六轮-P1-2 取材：学习者最近一次沙箱给的本机代码目录（出题读真实函数名；前端只给路径输入时也存）
 	SandboxDir string `json:"sandboxDir,omitempty"`
 	// 副本学习（用户 2026-10-26 设计）：用已收尾知识复现真实项目，通关揭晓恍然大悟
@@ -919,15 +921,11 @@ func (s *Server) mistakeNote(nodeID string) string {
 		return ""
 	}
 	parts := []string{}
-	add := func(k, label string, n int) {
-		if n > 0 {
-			parts = append(parts, fmt.Sprintf("%s×%d（%s）", label, n, reasonWord(k)))
+	for _, k := range []string{"condition", "concept", "env", "slip", "unfinished"} {
+		if n := dist[k]; n > 0 {
+			parts = append(parts, fmt.Sprintf("%s×%d", causeLabel(k), n))
 		}
 	}
-	add("condition", "看漏条件", dist["condition"])
-	add("concept", "概念没懂", dist["concept"])
-	add("env", "环境问题", dist["env"])
-	add("slip", "手滑/拼写", dist["slip"])
 	if len(parts) == 0 {
 		return ""
 	}
@@ -936,11 +934,6 @@ func (s *Server) mistakeNote(nodeID string) string {
 		note += "；最近一次证据：" + ev
 	}
 	return note
-}
-
-// reasonWord 误因类别白名单的中文短词（非法类别不进分布，这里只是兜底标注）。
-func reasonWord(k string) string {
-	return k // 分布 key 本身已用英文标签（concept/condition/env/slip），保持原样便于审计
 }
 
 // recordVerdict 判定埋点：分布计数 + 连续天数 + 步耗时（open→verdict）。
@@ -1984,6 +1977,12 @@ func (s *Server) Handlers() http.Handler {
 		}
 		// 第六轮-P0-2：误因回看——此前在此记录过失败的，开场第一句先点它
 		s.Tutor.MistakeNote = s.mistakeNote(lesson.ID)
+		if s.Tutor.MistakeNote == "" {
+			// 第八轮-P0-2：本科目最近错因参与开场——「上次你错在……」，相关才提，无中生有的「上次」不出现
+			s.Tutor.MistakeNote = s.subjectWrongNote(lesson)
+		}
+		// 第八轮-P0-2：档位初始化由历史决定——同一知识点连错 ≥2 次直接半提示档起步
+		s.guideFromHistory(lesson)
 		// 第七轮-P0-3：记忆引用——最多一条相关长期记忆，「你上次说……」（引用即入账）
 		s.Tutor.MemoryNote = s.memoryNote(lesson)
 		sess, isNew, err := s.Tutor.StartOrResume(*lesson)
@@ -2079,20 +2078,13 @@ func (s *Server) Handlers() http.Handler {
 				reason, evid = v.Cause, v.Evidence
 			}
 			if tutor.ValidCause(reason) {
-				if s.WrongReasons == nil {
-					s.WrongReasons = map[string]map[string]int{}
-				}
-				if s.WrongReasons[lesson.ID] == nil {
-					s.WrongReasons[lesson.ID] = map[string]int{}
-				}
-				s.WrongReasons[lesson.ID][reason]++
-				if s.WrongNotes == nil {
-					s.WrongNotes = map[string]string{}
-				}
-				if evid != "" {
-					s.WrongNotes[lesson.ID] = evid
-				}
-				s.saveState()
+				s.recordWrongCause(lesson, reason, evid)
+			}
+		}
+		// 第八轮-P0-2：半懂收尾带的 [CAUSE] 也是「未消除的错因」——照记，收尾预告才有料
+		if v.Kind == "partial" {
+			if reason, evid := tutor.ParseCause(v.Reply); tutor.ValidCause(reason) {
+				s.recordWrongCause(lesson, reason, evid)
 			}
 		}
 		s.recordVerdict(verdict, lesson.ID)
@@ -2106,7 +2098,14 @@ func (s *Server) Handlers() http.Handler {
 		s.saveState()
 		s.LastStop = &LastStop{NodeID: lesson.ID, Title: lesson.Title,
 			Step: "判定结束", At: time.Now()}
-		writeJSON(w, map[string]any{"reply": v.Reply, "verdict": verdict, "guide": v.Guide})
+		resp := map[string]any{"reply": v.Reply, "verdict": verdict, "guide": v.Guide}
+		if verdict == "partial" {
+			// 第八轮-P0-2：收尾「下节预告」——带着未消除错因半懂收尾，明说下次先考什么
+			if note := s.mistakeNote(lesson.ID); note != "" {
+				resp["preview"] = "下次会先考你这个：" + note
+			}
+		}
+		writeJSON(w, resp)
 	})
 	mux.HandleFunc("/api/exercise/generate", func(w http.ResponseWriter, _ *http.Request) {
 		today := time.Now().Format("2006-01-02")

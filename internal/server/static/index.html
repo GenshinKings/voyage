@@ -756,6 +756,8 @@ async function send(){
     // 自查修复（2026-10-28）：档位随每轮判定即时刷新——卡住/失败轮 verdict 为空不走 loadState，
     // 此前「讲」卡小字停留在旧档位直到下一次全量刷新
     if(typeof r.guide==='number'&&r.guide>0){STATE.guideLevels=STATE.guideLevels||{};STATE.guideLevels[CURRENT]=r.guide;renderTodaySteps()}
+    // 第八轮-P0-2：半懂收尾带着未消除错因 → 「下次会先考你这个」预告（下节开场的承诺）
+    if(r.preview){c.insertAdjacentHTML('beforeend','<div class="msg a"><div class="bubble" style="border-left:3px solid var(--pink);font-size:13.5px">'+esc(r.preview)+'</div></div>');$('view').scrollTop=$('view').scrollHeight}
     if(r.verdict){LASTVERDICT=true;await loadState();renderVerdictActions(r.verdict)}
   }catch(e){const tmp=$('tmpwait');if(tmp)tmp.closest('.msg').remove();toast('失败：'+e.message)}
 }
