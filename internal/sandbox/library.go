@@ -17,23 +17,6 @@ func Library() map[string]*BreakCase {
 	}
 }
 
-// Pick 按薄弱域定向选坑（精准喂坑）：域匹配优先，其次按难度递进序。
-func Pick(library map[string]*BreakCase, weakDomain string, doneIDs map[string]bool) *BreakCase {
-	var fallback *BreakCase
-	for _, c := range library {
-		if doneIDs[c.ID] {
-			continue
-		}
-		if c.Domain == weakDomain {
-			return c
-		}
-		if fallback == nil {
-			fallback = c
-		}
-	}
-	return fallback
-}
-
 // ---- 案例 1：MCP 工具注册表的标识符错（typo，知道级） ----
 
 func caseMCPTypo() *BreakCase {
@@ -62,15 +45,12 @@ func (r *Registry) Register(name string, fn func(string) string) {
 func (r *Registry) List() []string {
 	names := []string{}
 	for name := range r.handlers {
-		names = appand(names, name) // TODO: 好像不太对？
+		names = append(names, name)
 	}
 	sort.Strings(names)
 	return names
 }
 
-func appand(xs []string, x string) []string {
-	return append(xs, x)
-}
 
 func main() {
 	r := NewRegistry()

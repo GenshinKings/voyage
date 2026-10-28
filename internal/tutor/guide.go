@@ -20,18 +20,6 @@ const (
 	GuideAsk    = 3
 )
 
-// GuideName 档位名（前端「今天三步·讲」小字与日志用）。
-func GuideName(level int) string {
-	switch level {
-	case GuideAsk:
-		return "提问"
-	case GuideHint:
-		return "半提示"
-	default:
-		return "样例"
-	}
-}
-
 // NextGuide 纯函数：凑满阈值升/降**一级**并把连击清零——每档至少停留一次事件，
 // 防止长连击跨档跳级（半提示还没体验过就跳到提问，渐隐失去中间态）。
 func NextGuide(level, passStreak, failStreak int) int {

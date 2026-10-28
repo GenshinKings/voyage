@@ -629,10 +629,3 @@ func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_ = json.NewEncoder(w).Encode(v)
 }
-
-func graduationReason(done int) string {
-	if done == 0 {
-		return "还没做过东西——能力要有实证才谈毕业"
-	}
-	return "做过 " + fmt.Sprint(done) + " 件——继续"
-}

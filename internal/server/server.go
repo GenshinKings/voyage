@@ -48,28 +48,6 @@ var copyTable = func() map[string]string {
 	return m
 }()
 
-// Store 应用壳的文件持久化（引擎层的 JSON 落盘装配）。
-type Store struct {
-	Dir string
-}
-
-func (s *Store) load(path string, v any) bool {
-	b, err := os.ReadFile(filepath.Join(s.Dir, path))
-	if err != nil {
-		return false
-	}
-	return json.Unmarshal(b, v) == nil
-}
-
-func (s *Store) save(path string, v any) {
-	_ = os.MkdirAll(s.Dir, 0o755)
-	b, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		return
-	}
-	_ = os.WriteFile(filepath.Join(s.Dir, path), b, 0o644)
-}
-
 // Goal 产出物（持久化形态：验收清单可消化）。
 type Goal struct {
 	ID       string   `json:"id"`
@@ -334,9 +312,6 @@ func NewServer(dir string) *Server {
 func (s *Server) saveState() { // 小穗四轮·性能1+3：默认入口=置脏+300ms 合并落盘（见 statecache.go）
 	s.saveStateSoon()
 }
-
-// saveStateNow 关键路径（verdict/trophy/pause/budget/export）立即落盘并刷缓存。
-func (s *Server) saveStateNow() { s.flushState() }
 
 // rebuildLLM 按当前激活 Profile 重建 LLM 客户端（切换/新增模型后热生效）。
 func (s *Server) rebuildLLM() {

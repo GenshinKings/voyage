@@ -54,9 +54,6 @@ func TestSessionHelpersAndFirstFile(t *testing.T) {
 }
 
 func TestGraduationReasonAndIterHour(t *testing.T) {
-	if graduationReason(0) == "" || graduationReason(3) == "" {
-		t.Fatal("毕业理由两端非空")
-	}
 	s := NewServer(t.TempDir())
 	s.FetchConf.IterHour = 99
 	if s.iterHour() != 3 {

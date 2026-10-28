@@ -122,13 +122,3 @@ func (s *Session) Verify() (CheckResult, error) {
 	}
 	return s.Case.Check(current), nil
 }
-
-// VerifyWith 外部验收器（可选注入：如 go test 执行器）。
-func (s *Session) VerifyWith(fn Checker) (CheckResult, error) {
-	current := map[string]string{}
-	for rel := range s.Case.Files {
-		b, _ := os.ReadFile(filepath.Join(s.Root, rel))
-		current[rel] = string(b)
-	}
-	return fn(current), nil
-}

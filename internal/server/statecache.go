@@ -4,7 +4,8 @@ package server
 // ① 序列化缓存：state 变更置 dirty（bytes 失效），请求只在 dirty 时重新 marshal；
 //    响应带 ETag，客户端 If-None-Match 命中且缓存新鲜即 304。
 // ② 落盘去抖：saveStateSoon 把窗口内多次变更合并成一次真实 IO（300ms）；
-//    关键路径（verdict/trophy/pause/budget/export/resume）用 saveStateNow 立即刷。
+//    （原「关键路径立即刷」的 saveStateNow 已删——第九轮-P1-1：全仓零调用点，
+//     关键路径走 saveState 后由 flushDelay 合并落盘，磁盘安全由 .tmp+rename 保证。）
 // 磁盘安全不降级：save() 仍是 .tmp+rename 原子替换+.bak（五轮①），断电永不截断。
 //
 // 第九轮-P0-3：缓存从包级全局改成 Server 实例字段——

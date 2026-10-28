@@ -24,12 +24,3 @@ func TestNextGuide(t *testing.T) {
 		}
 	}
 }
-
-// GuideName 前端小字用的名字不可漂移。
-func TestGuideName(t *testing.T) {
-	for l, want := range map[int]string{GuideSample: "样例", GuideHint: "半提示", GuideAsk: "提问", 0: "样例", 9: "样例"} {
-		if got := GuideName(l); got != want {
-			t.Errorf("GuideName(%d)=%q want %q", l, got, want)
-		}
-	}
-}

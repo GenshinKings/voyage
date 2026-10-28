@@ -58,22 +58,6 @@ func TestPathSafety(t *testing.T) {
 	}
 }
 
-// 精准喂坑：薄弱域命中优先；已修案例不重复出。
-func TestPickByWeakDomain(t *testing.T) {
-	lib := Library()
-	got := Pick(lib, "mcp", map[string]bool{})
-	if got.ID != "bc-mcp-typo" {
-		t.Fatalf("mcp 薄弱域应命中 typo 案例: %s", got.ID)
-	}
-	got = Pick(lib, "mcp", map[string]bool{"bc-mcp-typo": true})
-	if got.ID == "bc-mcp-typo" {
-		t.Fatal("已修案例不应重复出")
-	}
-	if got == nil {
-		t.Fatal("无匹配域应有 fallback")
-	}
-}
-
 // 非空工作区拒绝开箱（防误伤用户文件）。
 func TestRefuseNonEmptyRoot(t *testing.T) {
 	root := t.TempDir()

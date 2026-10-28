@@ -61,11 +61,6 @@ func Jaccard(a, b map[string]struct{}) float64 {
 	return float64(inter) / float64(union)
 }
 
-// Similarity 便捷：文本 a 与 b 的 shingle Jaccard。
-func Similarity(a, b string) float64 {
-	return Jaccard(Shingles(a), Shingles(b))
-}
-
 // GateResult 相似度闸门结果。
 type GateResult struct {
 	Passed     bool    `json:"passed"`
