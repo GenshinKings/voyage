@@ -508,9 +508,9 @@ func (t *Tutor) Send(lesson Lesson, userText string) (Verdict, error) {
 		t.GuideStreak[0] = 0
 		t.GuideStreak[1] = 0
 	} else if !stuckRound {
-		_, ev := ParseCause(reply)
+		reason, _ := ParseCause(reply)
 		structuredFail := channel == "structured" && vCause != ""
-		if ValidCause(strings.TrimSpace(ev)) || structuredFail {
+		if ValidCause(reason) || structuredFail {
 			// 第六轮-P0-2：检查题判定失败（显式 [CAUSE] 标签或结构化通道 fail）= 一次未通过，进入引导降档判据
 			t.guideBump(false)
 		}
