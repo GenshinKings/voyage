@@ -1,6 +1,7 @@
 package exercise
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -65,7 +66,7 @@ type rawEx struct {
 // Generate 按当前在学的知识点出 3 道语境式实操题。difficultyNote 为空串则不加难度约束。
 // 第六轮-P1-2：GenerationMaterial（学习者的真实仓库摘要）非空时优先取材于它——
 // 题面引用真实文件名与函数名；材料不足时由 LLM 退回通用例子，不硬凑。
-func (e *Engine) Generate(topics []string, difficultyNote string) ([]Exercise, error) {
+func (e *Engine) Generate(ctx context.Context, topics []string, difficultyNote string) ([]Exercise, error) {
 	if e.Client == nil {
 		return nil, usererr.New("今天的出题还没接上模型，去设置里贴一个就能用",
 			"[exercise] 出题失败：模型未配置（outpost2-data/llm.json）")
@@ -83,7 +84,7 @@ func (e *Engine) Generate(topics []string, difficultyNote string) ([]Exercise, e
 		payload += "\n\n【学习者的真实仓库摘要（出题优先取材）】\n" + m
 		e.GenerationMaterial = "" // 用后即清——下一轮材料要重取（代码可能变了）
 	}
-	raw, err := e.Client.ChatJSON(e.withAgents(system), []llm.Message{{Role: "user", Content: payload}})
+	raw, err := llm.ChatJSONWith(ctx, e.Client, e.withAgents(system), []llm.Message{{Role: "user", Content: payload}})
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +120,7 @@ func (e *Engine) Generate(topics []string, difficultyNote string) ([]Exercise, e
 
 // Answer 批改一次作答；完全正确时回复末尾出现 [PASS]，练习转 done。
 // 作答文本若是一个存在的本地文件路径（写代码的题），读文件内容作为提交物进批改上下文。
-func (e *Engine) Answer(ex *Exercise, text string) (string, bool, error) {
+func (e *Engine) Answer(ctx context.Context, ex *Exercise, text string) (string, bool, error) {
 	if e.Client == nil {
 		return "", false, usererr.New("评卷要用模型，先去设置里接上",
 			"[exercise] 评卷失败：模型未配置（outpost2-data/llm.json）")
@@ -137,7 +138,7 @@ func (e *Engine) Answer(ex *Exercise, text string) (string, bool, error) {
 	}
 	ex.Messages = append(ex.Messages, llm.Message{Role: "user", Content: content})
 	system := `你是实操练习的批改助教。对照题面评学习者这次作答：先说对在哪、错在哪、漏了什么关键点；如果解法已完整正确，在回复最后单独一行输出 [PASS]；否则只给一步提示，不要直接报答案。`
-	reply, err := e.Client.Chat(e.withAgents(system), ex.Messages)
+	reply, err := llm.ChatWith(ctx, e.Client, e.withAgents(system), ex.Messages)
 	if err != nil {
 		return "", false, err
 	}

@@ -340,7 +340,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 		}
 		// 第六轮-P1-2 取材：优先学习者的真实仓库（沙箱记忆目录）——读不到退回通用例子
 		s.Exer.GenerationMaterial = learnerMaterial(s.SandboxDir)
-		list, err := s.Exer.Generate(ordered, diffNote)
+		list, err := s.Exer.Generate(r.Context(), ordered, diffNote)
 		if err != nil {
 			s.httpErr(w, r, err, 500)
 			return
@@ -387,7 +387,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 			if s.Exercises[i].ID != req.ID {
 				continue
 			}
-			reply, done, err := s.Exer.Answer(&s.Exercises[i], req.Text)
+			reply, done, err := s.Exer.Answer(r.Context(), &s.Exercises[i], req.Text)
 			if err != nil {
 				s.httpErr(w, r, err, 500)
 				return

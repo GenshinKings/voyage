@@ -92,6 +92,29 @@ func (st *Store) ActiveProfile() (Profile, error) {
 }
 
 // ChatClient 对话接口（生产=*Client；测试=mock 可注入）。
+// ctxChatClient 是「会尊重取消」的客户端。老实现（含测试 mock）没有这两个方法时，
+// ChatWith/ChatJSONWith 会退回不带 ctx 的调用——保证增量改造期间谁都不会编译不过。
+type ctxChatClient interface {
+	ChatCtx(ctx context.Context, system string, msgs []Message) (string, error)
+	ChatJSONCtx(ctx context.Context, system string, msgs []Message) (string, error)
+}
+
+// ChatWith 优先走可取消的路径。
+func ChatWith(ctx context.Context, c ChatClient, system string, msgs []Message) (string, error) {
+	if cc, ok := c.(ctxChatClient); ok {
+		return cc.ChatCtx(ctx, system, msgs)
+	}
+	return c.Chat(system, msgs)
+}
+
+// ChatJSONWith 同 ChatWith，但要求 JSON 输出。
+func ChatJSONWith(ctx context.Context, c ChatClient, system string, msgs []Message) (string, error) {
+	if cc, ok := c.(ctxChatClient); ok {
+		return cc.ChatJSONCtx(ctx, system, msgs)
+	}
+	return c.ChatJSON(system, msgs)
+}
+
 type ChatClient interface {
 	Chat(system string, msgs []Message) (string, error)
 	ChatJSON(system string, msgs []Message) (string, error)
