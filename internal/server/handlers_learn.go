@@ -231,7 +231,9 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 		s.saveState()
 		s.LastStop = &LastStop{NodeID: lesson.ID, Title: lesson.Title,
 			Step: "判定结束", At: time.Now()}
-		resp := map[string]any{"reply": v.Reply, "verdict": verdict, "guide": v.Guide}
+		// 结构判定把「错在哪类 / 卡在哪 / 下一步做什么」一并下发——前端只说「再想想」等于没反馈
+		resp := map[string]any{"reply": v.Reply, "verdict": verdict, "guide": v.Guide,
+			"channel": v.Channel, "cause": v.Cause, "where": v.Where, "action": v.Action}
 		if verdict == "partial" {
 			// 第八轮-P0-2：收尾「下节预告」——带着未消除错因半懂收尾，明说下次先考什么
 			if note := s.mistakeNote(lesson.ID); note != "" {
