@@ -187,13 +187,15 @@ type Server struct {
 	hatchOnce sync.Once
 	hatchDay  atomic.Value // string 日期
 	// 模型配置口：多 Profile 热切换（key 只落本地 llm.json，0600，不入仓库）
-	LLMStore    *llm.Store       `json:"-"`
-	AgentsPath  string           `json:"-"` // AGENTS.md 约束文件（每次 LLM 调用热读）
-	ProfilePath string           `json:"-"` // 学习者画像 memory/profile.md（热读注入 + 方向同步时自动沉淀）
-	RefDir      string           `json:"-"` // 教学参考库 kb/（教务抓取的原文，教学注入清单）
-	NotesDir    string           `json:"-"` // 学习者笔记 notes/（助教每日巡检对象，只读）
-	Tutor       *tutor.Tutor     `json:"-"`
-	Exer        *exercise.Engine `json:"-"`
+	LLMStore        *llm.Store       `json:"-"`
+	AgentsPath      string           `json:"-"` // AGENTS.md 约束文件（每次 LLM 调用热读）
+	ProfilePath     string           `json:"-"` // 学习者画像 memory/profile.md（热读注入 + 方向同步时自动沉淀）
+	RefDir          string           `json:"-"` // 教学参考库 kb/（教务抓取的原文，教学注入清单）
+	NotesDir        string           `json:"-"` // 学习者笔记 notes/（助教每日巡检对象，只读）
+	defaultNotesDir string           `json:"-"` // 默认 notes/（切换仓库后回退用）
+	vaultPath       string           `json:"-"` // 用户选的笔记仓库（空=默认 notes/）
+	Tutor           *tutor.Tutor     `json:"-"`
+	Exer            *exercise.Engine `json:"-"`
 
 	// 内容进货（用户 2026-10-25 决策）：助教带 GitHub 抓取工具，定时+按钮触发
 	FetchConf      *FetchConfig    `json:"-"` // fetch.json：代理/时刻/上次报告
@@ -250,6 +252,8 @@ func (s *Server) save(path string, v any) {
 // NewServer 装配：缺 goals 时写入种子（90 天冲刺三产出物）。
 func NewServer(dir string) *Server {
 	s := &Server{Dir: dir, st: store.New(), Ledger: evidence.New(), Bandit: bandit.New(time.Now().UnixNano()), Ability: ability.New(), AgentsPath: filepath.Join(dir, "AGENTS.md"), ProfilePath: profile.Ensure(dir), RefDir: reflib.Ensure(dir), NotesDir: notes.Ensure(dir)}
+	s.defaultNotesDir = s.NotesDir
+	s.loadVaultConf()
 	s.loadFetchConf()
 	s.maybeComeback(time.Now()) // 弃学防线：隔了几天没来才打一次招呼
 	s.FSRS = fsrs.NewScheduler()
@@ -550,6 +554,7 @@ func (s *Server) Handlers() http.Handler {
 	s.registerReviewHandlers(mux)
 	s.registerInkpalHandlers(mux)
 	s.registerInkpalVaultHandlers(mux)
+	s.registerVaultHandlers(mux)
 
 	// 第八轮-P1-2：路由按域拆文件（learn/kb/shop/sys），此处只做装配
 	s.registerKBHandlers(mux)

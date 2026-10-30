@@ -24,6 +24,12 @@ type File struct {
 }
 
 // Ensure 确保 notes 目录存在（返回路径；失败返回空串）。
+// ValidDir 判断一个路径是否是可用的笔记目录（给「切换笔记仓库」用）。
+// 放在本包而不是 server：server 的直接文件操作有预算闸门。
+func ValidDir(dir string) bool {
+	st, err := os.Stat(dir)
+	return err == nil && st.IsDir()
+}
 func Ensure(dataDir string) string {
 	dir := filepath.Join(dataDir, DirName)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -35,19 +41,39 @@ func Ensure(dataDir string) string {
 // List 列出全部笔记（.md，按修改时间新→旧；首启为空列表=正常态）。
 func List(dir string) []File {
 	out := []File{}
-	entries, err := os.ReadDir(dir)
+	root, err := filepath.Abs(dir)
 	if err != nil {
 		return out
 	}
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(strings.ToLower(e.Name()), ".md") {
-			continue
-		}
-		info, err := e.Info()
+	// 递归：Obsidian 库的笔记通常在子目录里；跳过 Obsidian 自己的元数据目录
+	walkErr := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
-			continue
+			return nil
 		}
-		out = append(out, File{Name: e.Name(), Size: int(info.Size()), ModTime: info.ModTime().Format("2006-01-02T15:04:05")})
+		name := d.Name()
+		if d.IsDir() {
+			switch name {
+			case ".obsidian", ".trash", "node_modules", ".git":
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(strings.ToLower(name), ".md") {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return nil
+		}
+		rel, relErr := filepath.Rel(root, path)
+		if relErr != nil {
+			rel = name
+		}
+		out = append(out, File{Name: filepath.ToSlash(rel), Size: int(info.Size()), ModTime: info.ModTime().Format("2006-01-02T15:04:05")})
+		return nil
+	})
+	if walkErr != nil && len(out) == 0 {
+		return out // 整个目录都读不了才放弃；部分失败时保留已读到的笔记
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ModTime > out[j].ModTime })
 	return out
@@ -55,10 +81,22 @@ func List(dir string) []File {
 
 // Read 读一篇笔记全文（name 需在 List 结果内——防路径逃逸）。
 func Read(dir, name string) (string, error) {
-	if strings.ContainsAny(name, "/\\") || !strings.HasSuffix(strings.ToLower(name), ".md") {
+	if !strings.HasSuffix(strings.ToLower(name), ".md") {
 		return "", os.ErrInvalid
 	}
-	b, err := os.ReadFile(filepath.Join(dir, filepath.Base(name)))
+	root, absErr := filepath.Abs(dir)
+	if absErr != nil {
+		return "", absErr
+	}
+	full, joinErr := filepath.Abs(filepath.Join(root, filepath.FromSlash(name)))
+	if joinErr != nil {
+		return "", joinErr
+	}
+	// 防路径逃逸：解析后必须仍在根目录内
+	if full != root && !strings.HasPrefix(full, root+string(os.PathSeparator)) {
+		return "", os.ErrInvalid
+	}
+	b, err := os.ReadFile(full)
 	if err != nil {
 		return "", err
 	}

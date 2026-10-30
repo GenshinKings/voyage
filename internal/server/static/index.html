@@ -1392,7 +1392,7 @@ function renderNotesBox(){
   const el=document.getElementById('notesBox');if(!el)return;
   api('/api/notes').then(d=>{
     const list=d.list||[];
-    let h='<div>共 '+list.length+' 篇'+(d.noteRun?' ｜ 助教上次巡检 '+esc(d.noteRun):' ｜ 尚未巡检')+' <button class="backbtn" onclick="runNoteReview()" style="margin-left:8px">立即巡检</button></div>';
+    let h='<div>共 '+list.length+' 篇'+(d.noteRun?' ｜ 助教上次巡检 '+esc(d.noteRun):' ｜ 尚未巡检')+' <button class="backbtn" onclick="runNoteReview()" style="margin-left:8px">立即巡检</button> <button class="backbtn" onclick="pickVault()" style="margin-left:6px">设置仓库</button></div>';
     if(list.length)h+='<div style="margin-top:4px;color:var(--mut)">'+list.slice(0,6).map(x=>esc(x.name)).join(' · ')+(list.length>6?' 等 '+list.length+' 篇':'')+'</div>';
     if(d.noteReport)h+='<pre style="white-space:pre-wrap;font-size:11.5px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px;margin-top:6px">'+esc(d.noteReport)+'</pre>';
     el.innerHTML=h;
@@ -2500,6 +2500,18 @@ function daySpark(byDay){
     +'<polyline fill="none" stroke="var(--pink)" stroke-width="1.6" points="'+line+'"/></svg>'
     +'<span style="font-size:11.5px;color:var(--mut)">近 7 天：'+Math.round(last.rate*100)+'%'
     +(lowSample?'（含样本不足的日子）':'')+'</span></div>';
+}
+// 设置笔记仓库（Obsidian vault）：只读挂载，不写用户的库
+async function pickVault(){
+  let cur='';
+  try{ cur=(await api('/api/vault')).path||''; }catch(e){}
+  const p=prompt('笔记仓库路径（Obsidian 库的根目录；留空恢复默认 notes/）', cur);
+  if(p===null)return;
+  try{
+    const r=await api('/api/vault',{path:p.trim()});
+    toast('已切到仓库：'+r.path+'（'+r.notes+' 篇）',3200);
+    renderNotesBox();
+  }catch(e){toast('失败：'+(e.message||e))}
 }</script>
 </body>
 </html>

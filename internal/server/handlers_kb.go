@@ -104,6 +104,8 @@ func (s *Server) noteReviewCore() error {
 		return nil
 	}
 	defer s.endStep()
+	// 仓库可能刚切过：巡检必须跟着 s.NotesDir 走，否则永远读默认 notes/
+	s.Tutor.NotesDir = s.NotesDir
 	report, err := s.Tutor.ReviewNotes(s.noteContext())
 	if s.FetchConf != nil {
 		s.FetchConf.NoteRun = today
