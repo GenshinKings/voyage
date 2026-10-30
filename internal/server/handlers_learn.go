@@ -339,7 +339,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 			diffNote += "\n\n【错题回归】以下知识点学习者曾做错——优先以其中 1-2 个为核心知识点出变式题：换一个新场景、考同一个点，难度不升：\n- " + strings.Join(wrongList, "\n- ")
 		}
 		// 第六轮-P1-2 取材：优先学习者的真实仓库（沙箱记忆目录）——读不到退回通用例子
-		s.Exer.GenerationMaterial = learnerMaterial(s.SandboxDir)
+		s.Exer.GenerationMaterial = s.exerciseMaterial()
 		list, err := s.Exer.Generate(r.Context(), ordered, diffNote)
 		if err != nil {
 			s.httpErr(w, r, err, 500)
