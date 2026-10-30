@@ -241,8 +241,8 @@ func (s *Server) registerSysHandlers(mux *http.ServeMux) {
 	})
 
 	mux.HandleFunc("/api/complete-main", func(w http.ResponseWriter, r *http.Request) {
-		stateMutex.Lock()
-		defer stateMutex.Unlock()
+		s.st.State.Lock()
+		defer s.st.State.Unlock()
 		var req struct {
 			Title string `json:"title"`
 		}

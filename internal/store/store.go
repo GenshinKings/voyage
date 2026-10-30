@@ -1,5 +1,9 @@
-// Package store — 小穗四轮·架构 P1-1：把「文件读写的原子性/锁/损坏自愈」收敛成独立存储层，
-// Server 只做薄委托；后续所有 JSON 落盘逻辑统一走这里（.tmp+rename+.bak+解析失败回退）。
+// Package store 管落盘的原子性与「读-改-写」的互斥。
+//
+// 架构体检 2026-10-30：之前这里挂的是两个**包级全局 sync.Mutex**，
+// 所有 Server 实例共用一把锁——测试并行、多实例运行时互相阻塞，
+// 和我们刚拆掉的包级状态缓存是同一类病。
+// 现在改成 Store 结构体：谁 new 谁持有，锁跟着实例走。
 package store
 
 import (
@@ -10,15 +14,19 @@ import (
 	"sync"
 )
 
-var (
-	// WriteMutex 串行化全部文件落盘（tmp+rename+race 一并消掉）。
-	WriteMutex sync.Mutex
-	// StateMutex 保住 state 的「读-改-写」临界区（并发保存互相覆盖的根因治理）。
-	StateMutex sync.Mutex
-)
+// Store 一个实例一份锁。零值不可用，请用 New。
+type Store struct {
+	// State 保住 state 的「读-改-写」临界区（并发保存互相覆盖的根因治理）。
+	State sync.Mutex
+	// Write 串行化本实例的全部文件落盘。
+	write sync.Mutex
+}
 
-// Load 读 JSON；解析失败自动回退同名 .bak（server 上层负责 log 提示语义）。
-func Load(dir, name string, v any) bool {
+// New 造一个 Store。
+func New() *Store { return &Store{} }
+
+// Load 读 JSON；解析失败自动回退同名 .bak（上层负责 log 提示语义）。
+func (s *Store) Load(dir, name string, v any) bool {
 	b, err := os.ReadFile(filepath.Join(dir, name))
 	if err != nil {
 		return false
@@ -38,9 +46,12 @@ func Load(dir, name string, v any) bool {
 }
 
 // Save 原子写：.tmp → rename 覆盖（Windows rename 失败退化处理）→ 成功后同步留 .bak。
-func Save(dir, name string, v any) {
-	WriteMutex.Lock()
-	defer WriteMutex.Unlock()
+func (s *Store) Save(dir, name string, v any) {
+	if s == nil {
+		s = New() // 兜底：调用方偷懒没初始化时不至于 panic
+	}
+	s.write.Lock()
+	defer s.write.Unlock()
 	_ = os.MkdirAll(dir, 0o755)
 	b, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {

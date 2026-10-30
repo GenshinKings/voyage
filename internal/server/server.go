@@ -128,6 +128,7 @@ type Reading struct {
 type Server struct {
 	sc        stateCacheT          // 序列化缓存 + 去抖落盘（statecache.go），每实例一份
 	Dir       string               `json:"dir"`
+	st        *store.Store         // 本实例的存储锁与原子写，不再用包级全局
 	Goals     []Goal               `json:"goals"`
 	Plan      *scheduler.TodayPlan `json:"plan,omitempty"`
 	Done      Completed            `json:"done"`
@@ -230,23 +231,17 @@ type FetchConfig struct {
 	MemReport string `json:"memReport,omitempty"` // 上次巩固报告
 }
 
-func (s *Server) load(path string, v any) bool { // 架构 P1-1：原始逻辑收敛至 internal/store
-	return store.Load(s.Dir, path, v)
+func (s *Server) load(path string, v any) bool {
+	return s.st.Load(s.Dir, path, v)
 }
 
-// stateMutex 保住 state 的「读-改-写」临界区（小穗五轮①：并发保存互相覆盖的根因治理）
-var stateMutex = &store.StateMutex
-
-// saveMutex 串行化全部文件落盘（state 与各数据文件共用一把=够用且简单）
-var saveMutex = &store.WriteMutex
-
-func (s *Server) save(path string, v any) { // 架构 P1-1：原子写收敛至 internal/store
-	store.Save(s.Dir, path, v)
+func (s *Server) save(path string, v any) {
+	s.st.Save(s.Dir, path, v)
 }
 
 // NewServer 装配：缺 goals 时写入种子（90 天冲刺三产出物）。
 func NewServer(dir string) *Server {
-	s := &Server{Dir: dir, Ledger: evidence.New(), Bandit: bandit.New(time.Now().UnixNano()), Ability: ability.New(), AgentsPath: filepath.Join(dir, "AGENTS.md"), ProfilePath: profile.Ensure(dir), RefDir: reflib.Ensure(dir), NotesDir: notes.Ensure(dir)}
+	s := &Server{Dir: dir, st: store.New(), Ledger: evidence.New(), Bandit: bandit.New(time.Now().UnixNano()), Ability: ability.New(), AgentsPath: filepath.Join(dir, "AGENTS.md"), ProfilePath: profile.Ensure(dir), RefDir: reflib.Ensure(dir), NotesDir: notes.Ensure(dir)}
 	s.loadFetchConf()
 	s.FSRS = fsrs.NewScheduler()
 	// 助教改进观察 backlog + 仓库根（自迭代工作区）

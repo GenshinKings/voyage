@@ -66,7 +66,7 @@ func (s *Server) flushState() {
 		c.mu.Unlock()
 		return
 	}
-	stateMutex.Lock()
+	s.st.State.Lock()
 	s.save("state.json", s)
 	c.mu.Lock()
 	still := c.dirty // flush 期间又被 mark（新变更不丢，补一轮）
@@ -75,7 +75,7 @@ func (s *Server) flushState() {
 		c.timer = time.AfterFunc(flushDelay, func() { s.flushState() })
 	}
 	c.mu.Unlock()
-	stateMutex.Unlock()
+	s.st.State.Unlock()
 }
 
 // Close 停掉挂起的落盘并立即刷一次。测试与优雅退出用。

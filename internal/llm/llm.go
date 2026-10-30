@@ -4,6 +4,7 @@ package llm
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -225,12 +226,15 @@ func (e *upstreamError) Error() string {
 	return fmt.Sprintf("上游 HTTP %d（可重试）: %s", e.code, truncateLog(e.body))
 }
 
-func (c *Client) post(body []byte) (wireMessage, error) {
+func (c *Client) post(ctx context.Context, body []byte) (wireMessage, error) {
 	// 小穗五轮二：网络抖动/429/5xx/超时 重试 2 次指数退避（1s/3s）；每次调用写 server.log（时间+耗时+结果）
 	// 第六轮研究落地（docs/research/Agent可靠性与记忆.md 规则5）：服务端显式要求等待（Item-Retry-After）时按其秒数退避，覆盖指数退避。
 	var msg wireMessage
 	var lastErr error
 	for attempt := 0; attempt < 3; attempt++ {
+		if ctx != nil && ctx.Err() != nil {
+			return wireMessage{}, usererr.New("这次请求已经取消（页面关了或换了操作），不用重试", "llm: ctx canceled: "+ctx.Err().Error())
+		}
 		if attempt > 0 {
 			backoff := time.Duration(1<<(attempt-1)) * time.Second // 1s, 2s（近似 1s/3s 语义的指数退避）
 			var ue *upstreamError
@@ -240,7 +244,7 @@ func (c *Client) post(body []byte) (wireMessage, error) {
 			backoffSleep(backoff)
 		}
 		start := time.Now()
-		msg, lastErr = c.postOnce(body)
+		msg, lastErr = c.postOnce(ctx, body)
 		elapsed := time.Since(start)
 		if lastErr == nil {
 			log.Printf("[LLM] ok %s %s 耗时%.1fs", c.Config.Model, c.profTag(), elapsed.Seconds())
@@ -280,9 +284,9 @@ func isRetryable(err error) bool {
 	return true // 其余（网络断/超时/非 2xx 包装错误）可重试
 }
 
-func (c *Client) postOnce(body []byte) (wireMessage, error) {
+func (c *Client) postOnce(ctx context.Context, body []byte) (wireMessage, error) {
 	url := c.Config.BaseURL + "/chat/completions"
-	req, err := http.NewRequest("POST", url, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
 	if err != nil {
 		return wireMessage{}, err
 	}
@@ -335,7 +339,11 @@ func lr2seq(body []byte) []string {
 }
 
 // Chat 多轮对话（system + 历史 + 本题）。
+// Chat 保留旧签名：不关心取消的调用点继续用它（内部等价 ChatCtx(context.Background(), …)）。
 func (c *Client) Chat(system string, msgs []Message) (string, error) {
+	return c.ChatCtx(context.Background(), system, msgs)
+}
+func (c *Client) ChatCtx(ctx context.Context, system string, msgs []Message) (string, error) {
 	if c.Config.Key == "" {
 		return "", usererr.New("模型还没接上——去设置页配置一个就能用", "LLM 未配置（outpost2-data/llm.json）")
 	}
@@ -344,7 +352,7 @@ func (c *Client) Chat(system string, msgs []Message) (string, error) {
 		all = append(all, toWire(m))
 	}
 	body, _ := json.Marshal(chatRequest{Model: c.Config.Model, Messages: all})
-	wm, err := c.post(body)
+	wm, err := c.post(ctx, body)
 	if err != nil {
 		return "", wrapUpstream(err)
 	}
@@ -366,7 +374,12 @@ func wrapUpstream(err error) error {
 
 // ChatTools 带 function calling 的对话：返回模型的文本内容（可为空）与工具调用清单。
 // tools 为空时退化为普通 Chat（不发 tools 字段——部分服务端拒绝空数组）。
+// ChatTools 保留旧签名，内部等价 ChatToolsCtx(context.Background(), …)。
 func (c *Client) ChatTools(system string, msgs []Message, tools []Tool) (string, []ToolCall, error) {
+	return c.ChatToolsCtx(context.Background(), system, msgs, tools)
+}
+
+func (c *Client) ChatToolsCtx(ctx context.Context, system string, msgs []Message, tools []Tool) (string, []ToolCall, error) {
 	if c.Config.Key == "" {
 		return "", nil, usererr.New("模型还没接上——去设置页配置一个就能用", "LLM 未配置（outpost2-data/llm.json）")
 	}
@@ -388,7 +401,7 @@ func (c *Client) ChatTools(system string, msgs []Message, tools []Tool) (string,
 		}
 	}
 	body, _ := json.Marshal(req)
-	wm, err := c.post(body)
+	wm, err := c.post(ctx, body)
 	if err != nil {
 		return "", nil, wrapUpstream(err)
 	}
@@ -397,8 +410,13 @@ func (c *Client) ChatTools(system string, msgs []Message, tools []Tool) (string,
 }
 
 // ChatJSON 要求 JSON 输出并剥围栏。
+// ChatJSON 保留旧签名，内部等价 ChatJSONCtx(context.Background(), …)。
 func (c *Client) ChatJSON(system string, msgs []Message) (string, error) {
-	raw, err := c.Chat(system+"\n输出严格 JSON，不要 markdown 围栏。", msgs)
+	return c.ChatJSONCtx(context.Background(), system, msgs)
+}
+
+func (c *Client) ChatJSONCtx(ctx context.Context, system string, msgs []Message) (string, error) {
+	raw, err := c.ChatCtx(ctx, system+"\n输出严格 JSON，不要 markdown 围栏。", msgs)
 	if err != nil {
 		return "", err
 	}

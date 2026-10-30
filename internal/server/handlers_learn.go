@@ -130,8 +130,8 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 	})
 
 	mux.HandleFunc("/api/tutor/send", func(w http.ResponseWriter, r *http.Request) {
-		stateMutex.Lock()
-		defer stateMutex.Unlock()
+		s.st.State.Lock()
+		defer s.st.State.Unlock()
 		var req struct {
 			NodeID string `json:"nodeId"`
 			Text   string `json:"text"`
@@ -372,8 +372,8 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 	})
 
 	mux.HandleFunc("/api/exercise/answer", func(w http.ResponseWriter, r *http.Request) {
-		stateMutex.Lock()
-		defer stateMutex.Unlock()
+		s.st.State.Lock()
+		defer s.st.State.Unlock()
 		var req struct {
 			ID   string `json:"id"`
 			Text string `json:"text"`
@@ -526,8 +526,8 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 	})
 
 	mux.HandleFunc("/api/dungeon/send", func(w http.ResponseWriter, r *http.Request) {
-		stateMutex.Lock()
-		defer stateMutex.Unlock()
+		s.st.State.Lock()
+		defer s.st.State.Unlock()
 		var req struct {
 			ID   string `json:"id"`
 			Text string `json:"text"`
