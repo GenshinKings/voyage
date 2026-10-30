@@ -150,7 +150,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Micr
 .bubble .mark.propose{color:var(--pink);font-size:12.5px;font-weight:600}
 .msg.u .bubble .mark.partial{color:#ffd60a}
 .inputbar{position:absolute;bottom:0;left:0;right:0;z-index:3;padding:14px 28px 18px;background:rgba(245,245,247,.72);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border-top:1px solid rgba(0,0,0,.05)}
-#chatbox{max-width:min(920px,100%);margin:0 auto;display:flex;gap:10px}
+    /* 输入区：发送是唯一主按钮，快捷操作降级成次要小按钮——避免习惯性手滑点到「我会」 */
+    #chatbox{display:flex;gap:10px;align-items:flex-end}
+    #quickbar{display:flex;gap:6px;flex-wrap:wrap;max-width:52%;margin-bottom:3px}
+    #chatbox .qbtn{background:transparent;color:var(--mut);border:1px solid var(--line);border-radius:10px;padding:8px 11px;font-size:12.5px;font-weight:500;transition:color 120ms,border-color 120ms}
+    #chatbox .qbtn:hover{color:var(--ink);border-color:var(--pink)}
+    #sendBtn{min-width:104px;margin-left:auto;background:var(--pink);color:#fff;border:none;border-radius:12px;padding:10px 20px;font-size:14px;font-weight:600;cursor:pointer}
+    @media (max-width:640px){#quickbar{max-width:100%;order:3;width:100%}#chatbox{flex-wrap:wrap}#sendBtn{margin-left:0}}
 #chatbox textarea{flex:1;border:1px solid rgba(0,0,0,.12);border-radius:12px;padding:11px 15px;font:inherit;font-size:14px;resize:none;height:48px;outline:none;background:#fff;transition:border-color 150ms,box-shadow 150ms}
 #chatbox textarea:focus{border-color:var(--pink);box-shadow:0 0 0 3.5px var(--focus)}
 #chatbox button{align-self:flex-end;border:none;background:var(--pink);color:#fff;padding:10px 20px;border-radius:12px;cursor:pointer;font:inherit;font-size:14px;font-weight:600;transition:transform 100ms ease-out,filter 150ms}
@@ -521,11 +527,13 @@ kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;paddi
   <div class="inputbar">
     <div id="chatbox">
       <textarea id="input" aria-label="回答输入框" tabindex="1" placeholder="回答检查题，或问点什么…（Enter 发送）"></textarea>
-      <button onclick="skipChallenge()" aria-label="这个我会——出验收题跳过" title="这个我会——出一道验收题，过了就跳过">我会</button>
-      <button onclick="deepen()" aria-label="太浅了，加深一档" title="太浅了：加深一档">再深一点</button>
-      <button onclick="stuckHint()" aria-label="我卡住了，要更简单的提示">我卡住了</button>
-      <button onclick="openSandbox()" aria-label="打开代码沙箱" title="打开代码沙箱：修一个真实 bug">🧪 沙箱</button>
-      <button onclick="send()" aria-label="发送回答" tabindex="2">发送</button>
+      <div id="quickbar">
+        <button class="qbtn" onclick="skipChallenge()" title="这个我会——出一道验收题，过了就跳过">我会</button>
+        <button class="qbtn" onclick="deepen()" title="太浅了：加深一档">再深一点</button>
+        <button class="qbtn" onclick="stuckHint()" title="我卡住了：只给一条最小提示">我卡住了</button>
+        <button class="qbtn" onclick="openSandbox()" title="打开代码沙箱：修一个真实 bug">🧪 沙箱</button>
+      </div>
+      <button id="sendBtn" onclick="send()" aria-label="发送回答" tabindex="2">发送</button>
     </div>
   </div>
 </div>
