@@ -41,7 +41,7 @@ func (s *Server) httpErr(w http.ResponseWriter, r *http.Request, err error, code
 		apiDiagRing = apiDiagRing[len(apiDiagRing)-50:]
 	}
 	apiDiagMu.Unlock()
-	http.Error(w, user, code)
+	writeErr(w, code, user)
 }
 
 // diagSnapshot 诊断环快照（/api/diagnostics 用）。

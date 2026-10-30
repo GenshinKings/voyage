@@ -33,12 +33,12 @@ func (s *Server) registerRunHandlers(mux *http.ServeMux) {
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		p, ok := run.TemplateByID(req.TemplateID)
 		if !ok {
-			http.Error(w, "没有这个模板", 400)
+			writeErr(w, 400, "没有这个模板")
 			return
 		}
 		r0, err := run.Start(p)
 		if err != nil {
-			http.Error(w, err.Error(), 500)
+			writeErr(w, 500, err.Error())
 			return
 		}
 		s.RunState = r0
@@ -53,7 +53,7 @@ func (s *Server) registerRunHandlers(mux *http.ServeMux) {
 		}
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		if s.RunState == nil {
-			http.Error(w, "还没开始一个项目", 400)
+			writeErr(w, 400, "还没开始一个项目")
 			return
 		}
 		ok, reason := s.RunState.Submit(req.Output)

@@ -179,12 +179,12 @@ func (s *Server) registerSysHandlers(mux *http.ServeMux) {
 				return
 			}
 		}
-		http.Error(w, "纪念卡不存在", 404)
+		writeErr(w, 404, "纪念卡不存在")
 	})
 
 	mux.HandleFunc("/api/resume/export", func(w http.ResponseWriter, r *http.Request) { // 落盘+打开（POST——避免预取弹窗）
 		if r.Method != http.MethodPost {
-			http.Error(w, "POST only", 405)
+			writeErr(w, 405, "POST only")
 			return
 		}
 		path, err := s.exportResume()
@@ -204,7 +204,7 @@ func (s *Server) registerSysHandlers(mux *http.ServeMux) {
 		}
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		if req.Days <= 0 || req.Days > 90 {
-			http.Error(w, "暂停天数限 1-90", 400)
+			writeErr(w, 400, "暂停天数限 1-90")
 			return
 		}
 		t := time.Now().AddDate(0, 0, req.Days)
@@ -216,7 +216,7 @@ func (s *Server) registerSysHandlers(mux *http.ServeMux) {
 	// 小穗二轮问题2：旧 /api/resume（恢复学习）与简历命名撞车且 GET 带副作用——拆为 /api/pause/end（POST）
 	mux.HandleFunc("/api/pause/end", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			http.Error(w, "POST only", 405)
+			writeErr(w, 405, "POST only")
 			return
 		}
 		s.PausedUntil = nil
@@ -273,7 +273,7 @@ func (s *Server) registerSysHandlers(mux *http.ServeMux) {
 		}
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		if req.Budget != "2" && req.Budget != "10" && req.Budget != "30" && req.Budget != "90" && req.Budget != "" {
-			http.Error(w, "预算限 2/10/30/90/空", 400)
+			writeErr(w, 400, "预算限 2/10/30/90/空")
 			return
 		}
 		s.setBudget(req.Budget)
@@ -305,7 +305,7 @@ func (s *Server) registerSysHandlers(mux *http.ServeMux) {
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		req.Name = strings.TrimSpace(req.Name)
 		if req.Name == "" || req.BaseURL == "" || req.Model == "" {
-			http.Error(w, "name / baseUrl / model 必填", 400)
+			writeErr(w, 400, "name / baseUrl / model 必填")
 			return
 		}
 		if s.LLMStore == nil {
@@ -318,7 +318,7 @@ func (s *Server) registerSysHandlers(mux *http.ServeMux) {
 			}
 		}
 		if key == "" {
-			http.Error(w, "key 不能为空（首次配置该模型时必填）", 400)
+			writeErr(w, 400, "key 不能为空（首次配置该模型时必填）")
 			return
 		}
 		s.LLMStore.Profiles[req.Name] = llm.Profile{Name: req.Name, BaseURL: req.BaseURL, Key: key, Model: req.Model}
@@ -625,6 +625,11 @@ func (s *Server) mistakeNote(nodeID string) string {
 	return note
 }
 
+func writeErr(w http.ResponseWriter, code int, msg string) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(code)
+	_ = json.NewEncoder(w).Encode(map[string]any{"error": msg})
+}
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_ = json.NewEncoder(w).Encode(v)

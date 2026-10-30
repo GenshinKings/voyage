@@ -541,7 +541,7 @@ let STATE=null, CURRENT=null, LASTVERDICT=false;
 function copyText(k,fb){const c=(STATE||{}).copy||{};return c[k]||fb||''}
 function guideCopy(gl){return gl>=3?copyText('guide.ask','你先说说看'):gl===2?copyText('guide.hint','我提示你一点'):copyText('guide.sample','我先给你看个例子')}
 
-async function api(path,body){const r=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});const j=await r.json().catch(()=>({}));if(r.status>=400)throw new Error(j.error||j.Error||'请求失败');return j}
+async function api(path,body){const r=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});const raw=await r.text();let j={};try{j=raw?JSON.parse(raw):{}}catch(e){j={error:raw.trim()}}if(r.status>=400)throw new Error(j.error||j.Error||raw.trim()||'请求失败');return j}
 // 输入乱码防线（编码统一）：剪贴板编码不一致的文本带典型特征——提示但不拦发
 function looksGarbled(t){
   if(!t)return false;

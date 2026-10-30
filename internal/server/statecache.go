@@ -98,12 +98,12 @@ func (s *Server) serveStateCache(w http.ResponseWriter, r *http.Request, build f
 		c.mu.Unlock()
 		val, err := build()
 		if err != nil {
-			http.Error(w, err.Error(), 500)
+			writeErr(w, 500, err.Error())
 			return
 		}
 		bb, err := json.MarshalIndent(val, "", "  ")
 		if err != nil {
-			http.Error(w, err.Error(), 500)
+			writeErr(w, 500, err.Error())
 			return
 		}
 		sum := sha1.Sum(bb)

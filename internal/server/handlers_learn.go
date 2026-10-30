@@ -45,11 +45,11 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		card, ok := s.FSCards[req.ID]
 		if !ok || card == nil {
-			http.Error(w, "复习卡不存在", 404)
+			writeErr(w, 404, "复习卡不存在")
 			return
 		}
 		if req.Rating < 1 || req.Rating > 4 {
-			http.Error(w, "rating 取值 1-4", 400)
+			writeErr(w, 400, "rating 取值 1-4")
 			return
 		}
 		next, _ := s.FSRS.Review(*card, fsrs.Rating(req.Rating), time.Now(), 0)
@@ -77,7 +77,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 		}
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		if strings.TrimSpace(req.Name) == "" {
-			http.Error(w, "科目名不能为空", 400)
+			writeErr(w, 400, "科目名不能为空")
 			return
 		}
 		if s.Tutor == nil {
@@ -102,7 +102,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		lesson := findLesson(s, req.NodeID)
 		if lesson == nil {
-			http.Error(w, "知识点不存在", 404)
+			writeErr(w, 404, "知识点不存在")
 			return
 		}
 		// 第六轮-P0-2：误因回看——此前在此记录过失败的，开场第一句先点它
@@ -139,7 +139,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		lesson := findLesson(s, req.NodeID)
 		if lesson == nil {
-			http.Error(w, "知识点不存在", 404)
+			writeErr(w, 404, "知识点不存在")
 			return
 		}
 		// 第六轮-P1-1「首次通过」判据：Send 前快照会话判定态
@@ -271,7 +271,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 			}
 		}
 		if len(arms) == 0 {
-			http.Error(w, "先把今天的课收尾——收尾过的知识点才有练习", 400)
+			writeErr(w, 400, "先把今天的课收尾——收尾过的知识点才有练习")
 			return
 		}
 		// 策略层 v1：Thompson 采样选题——高奖励的知识点多出（利用），低后验的也会被采到（探索）
@@ -470,7 +470,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 			writeJSON(w, map[string]any{"reply": reply, "verdict": done})
 			return
 		}
-		http.Error(w, "练习不存在", 404)
+		writeErr(w, 404, "练习不存在")
 	})
 
 	// 助教导读：深入 GitHub 项目源码（browse→fetch 多文件）→ 结构化消化（用户 2026-10-26 指令）
@@ -481,11 +481,11 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 		}
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		if s.Tutor == nil {
-			http.Error(w, "LLM 未配置", 400)
+			writeErr(w, 400, "LLM 未配置")
 			return
 		}
 		if s.activeDungeon() != nil {
-			http.Error(w, "已有进行中的副本——一次只打一个", 400)
+			writeErr(w, 400, "已有进行中的副本——一次只打一个")
 			return
 		}
 		for i := range s.Readings {
@@ -495,11 +495,11 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 			rd := &s.Readings[i]
 			repo := githubRepoFromURL(rd.URL)
 			if repo == "" {
-				http.Error(w, "该条目不是 GitHub 项目", 400)
+				writeErr(w, 400, "该条目不是 GitHub 项目")
 				return
 			}
 			if rd.Brief == "" || rd.Shadow == nil {
-				http.Error(w, "先孵化这个影子（助教导读+定档），再开门", 400)
+				writeErr(w, 400, "先孵化这个影子（助教导读+定档），再开门")
 				return
 			}
 			d, missing, err := s.Tutor.DungeonStart(briefContext(s, rd), repo, rd.Brief)
@@ -508,7 +508,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 				return
 			}
 			if d == nil {
-				http.Error(w, missing, 400) // 重合度不足——缺什么如实告知
+				writeErr(w, 400, missing) // 重合度不足——缺什么如实告知
 				return
 			}
 			d.ID = fmt.Sprintf("dn-%s-%d", time.Now().Format("0102"), len(s.Duns)+1)
@@ -522,7 +522,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 			writeJSON(w, map[string]any{"dungeon": d})
 			return
 		}
-		http.Error(w, "阅读条目不存在", 404)
+		writeErr(w, 404, "阅读条目不存在")
 	})
 
 	mux.HandleFunc("/api/dungeon/send", func(w http.ResponseWriter, r *http.Request) {
@@ -535,7 +535,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		d := s.activeDungeon()
 		if d == nil || d.ID != req.ID {
-			http.Error(w, "副本不在进行中", 400)
+			writeErr(w, 400, "副本不在进行中")
 			return
 		}
 		reply, err := s.Tutor.DungeonSend(d, req.Text, s.buildFetchTools())
@@ -596,7 +596,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 		}
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		if s.activeDungeon() != nil {
-			http.Error(w, "已有进行中的副本——一次只打一个", 400)
+			writeErr(w, 400, "已有进行中的副本——一次只打一个")
 			return
 		}
 		for _, d := range s.Duns {
@@ -607,7 +607,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 				return
 			}
 		}
-		http.Error(w, "副本不存在或非放弃态", 404)
+		writeErr(w, 404, "副本不存在或非放弃态")
 	})
 
 	mux.HandleFunc("/api/dungeon/abandon", func(w http.ResponseWriter, r *http.Request) {
@@ -623,7 +623,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 				return
 			}
 		}
-		http.Error(w, "副本不存在或已结束", 404)
+		writeErr(w, 404, "副本不存在或已结束")
 	})
 
 	mux.HandleFunc("/api/reading/brief", func(w http.ResponseWriter, r *http.Request) {
@@ -632,7 +632,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 		}
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		if s.Tutor == nil {
-			http.Error(w, "LLM 未配置", 400)
+			writeErr(w, 400, "LLM 未配置")
 			return
 		}
 		for i := range s.Readings {
@@ -643,7 +643,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 			// 用户点击即重新生成（覆盖旧导读——网络失败/换一次生成的重试入口）
 			repo := githubRepoFromURL(rd.URL)
 			if repo == "" {
-				http.Error(w, "该条目不是 GitHub 项目，无法深入源码导读", 400)
+				writeErr(w, 400, "该条目不是 GitHub 项目，无法深入源码导读")
 				return
 			}
 			brief, err := s.Tutor.ProjectBrief(briefContext(s, rd), repo, s.buildReadTools())
@@ -661,7 +661,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 			writeJSON(w, map[string]any{"brief": brief, "shadow": rd.Shadow})
 			return
 		}
-		http.Error(w, "阅读条目不存在", 404)
+		writeErr(w, 404, "阅读条目不存在")
 	})
 
 	mux.HandleFunc("/api/direction/open", func(w http.ResponseWriter, r *http.Request) {
@@ -689,7 +689,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 		}
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		if req.Subject == "" || len(req.Lessons) == 0 {
-			http.Error(w, "提案不完整", 400)
+			writeErr(w, 400, "提案不完整")
 			return
 		}
 		// 蒸馏输入要在 ResetDirection 删文件前快照
@@ -718,7 +718,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 		lib := sandbox.Library()
 		c, ok := lib[req.CaseID]
 		if !ok {
-			http.Error(w, "未知案例", 400)
+			writeErr(w, 400, "未知案例")
 			return
 		}
 		if _, err := sandbox.Create(req.Dir, c); err != nil {
@@ -742,7 +742,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 		lib := sandbox.Library()
 		c, ok := lib[req.CaseID]
 		if !ok {
-			http.Error(w, "未知案例", 400)
+			writeErr(w, 400, "未知案例")
 			return
 		}
 		sess := &sandbox.Session{Case: c, Root: req.Dir}
