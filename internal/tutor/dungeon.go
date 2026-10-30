@@ -10,6 +10,7 @@
 package tutor
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -239,7 +240,7 @@ func (t *Tutor) DungeonSend(d *Dungeon, userText string, tools []Tool) (reply st
 	stage := d.Stages[cur]
 	sys := t.withAgents(dungeonMasterSystem + "\n\n【当前关卡】第 " + fmt.Sprint(cur+1) + "/" + fmt.Sprint(len(d.Stages)) + " 关「" + stage.Title + "」：\n" + stage.Goal + "\n\n【项目导读（只给你参考，不透露给学习者）】\n" + d.Brief)
 	d.Messages = append(d.Messages, llm.Message{Role: "user", Content: userText})
-	reply, _, err = t.runAgent(sys, d.Messages, tools)
+	reply, _, err = t.runAgent(context.Background(), sys, d.Messages, tools)
 	if err != nil {
 		return "", err
 	}

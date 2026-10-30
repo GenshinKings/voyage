@@ -8,6 +8,7 @@
 package tutor
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -363,7 +364,7 @@ func (t *Tutor) save(s *Session) {
 }
 
 // StartOrResume 开场或续聊：无会话 → 助教开场（讲解+检查题）；有会话 → 原样返回。
-func (t *Tutor) StartOrResume(lesson Lesson) (*Session, bool, error) {
+func (t *Tutor) StartOrResume(ctx context.Context, lesson Lesson) (*Session, bool, error) {
 	if s := t.Load(lesson.ID); s != nil {
 		return s, false, nil
 	}
@@ -403,7 +404,7 @@ func (t *Tutor) StartOrResume(lesson Lesson) (*Session, bool, error) {
 		t.MemoryNote = ""
 	}
 	s.Messages = append(s.Messages, llm.Message{Role: "user", Content: user})
-	reply, err := t.Client.Chat(t.withAgents(sys), s.Messages)
+	reply, err := llm.ChatWith(ctx, t.Client, t.withAgents(sys), s.Messages)
 	if err != nil {
 		return nil, false, err
 	}
@@ -425,14 +426,14 @@ type Verdict struct {
 
 // Send 学习者发言 → 助教回复；解析 [PASS] 判定并落履历标记。
 // 返回：回复文本、判定（pass/partial 时调用方记履历）、错误。
-func (t *Tutor) Send(lesson Lesson, userText string) (Verdict, error) {
+func (t *Tutor) Send(ctx context.Context, lesson Lesson, userText string) (Verdict, error) {
 	s := t.Load(lesson.ID)
 	if s == nil {
 		return Verdict{}, fmt.Errorf("会话不存在（先 open）")
 	}
 	if s.Verdict != "" {
 		// 收尾后不锁对话：学习者可能在回答收尾前的加深追问，或继续追问
-		return t.followup(s, userText)
+		return t.followup(ctx, s, userText)
 	}
 	if t.Client == nil {
 		return Verdict{}, fmt.Errorf("LLM 未配置")
@@ -463,7 +464,7 @@ func (t *Tutor) Send(lesson Lesson, userText string) (Verdict, error) {
 	default:
 		// 90 或未填：正常展开
 	}
-	reply, conv, err := t.runAgent(t.withAgents(sys), s.Messages, t.Tools)
+	reply, conv, err := t.runAgent(ctx, t.withAgents(sys), s.Messages, t.Tools)
 	if err != nil {
 		return Verdict{}, err
 	}
@@ -478,7 +479,7 @@ func (t *Tutor) Send(lesson Lesson, userText string) (Verdict, error) {
 	case !stuckRound && judgeWarranted(s, userText):
 		// 结构化通道：把学生回答+验收标准丢给一次独立小调用——闭环不依赖模型记得吐标记
 		start := t.now()
-		pass, reason, cause, retried, jerr := t.judgeStructured(lesson, s)
+		pass, reason, cause, retried, jerr := t.judgeStructured(ctx, lesson, s)
 		d := Diag{At: t.now(), Channel: "structured", DurationMs: t.now().Sub(start).Milliseconds(),
 			Retried: retried, Note: markWarn}
 		if jerr != nil {
@@ -524,7 +525,7 @@ func (t *Tutor) Send(lesson Lesson, userText string) (Verdict, error) {
 //
 // 第六轮-P1-1：若「为什么这么写」追问挂起（AskWhy），这一轮改为真会度判定：
 // 答得出 → [FU-PASS]（调用方收尾入账）；答不上/含糊 → [FU-FUZZY]（不收尾 + 给一道更小的同类题）。
-func (t *Tutor) followup(s *Session, userText string) (Verdict, error) {
+func (t *Tutor) followup(ctx context.Context, s *Session, userText string) (Verdict, error) {
 	if t.Client == nil {
 		return Verdict{}, fmt.Errorf("LLM 未配置")
 	}
@@ -534,7 +535,7 @@ func (t *Tutor) followup(s *Session, userText string) (Verdict, error) {
 - 答不上/含糊其辞/只是复述表象（如「我看着对」「因为教程这么写」）→ 单独一行输出标记 [FU-FUZZY]，然后直接给一道**更小的同类题**（比刚才的检查题更简单、更具体、给半个开头），不批评不说教。
 [FU-PASS] 与 [FU-FUZZY] 必须单独成行。`
 		s.Messages = append(s.Messages, llm.Message{Role: "user", Content: userText})
-		reply, err := t.Client.Chat(t.withAgents(sys), s.Messages)
+		reply, err := llm.ChatWith(ctx, t.Client, t.withAgents(sys), s.Messages)
 		if err != nil {
 			return Verdict{}, err
 		}
@@ -562,7 +563,7 @@ func (t *Tutor) followup(s *Session, userText string) (Verdict, error) {
 正常回应：如果他在回答你的追问，判断对错并点评；如果是新问题，直接解答。≤250 字，保持助教口吻。
 不要再输出 [PASS] 或 [PASS:partial] 标记（履历已记录，不重复）。`
 	s.Messages = append(s.Messages, llm.Message{Role: "user", Content: userText})
-	reply, err := t.Client.Chat(sys, s.Messages)
+	reply, err := llm.ChatWith(ctx, t.Client, sys, s.Messages)
 	if err != nil {
 		return Verdict{}, err
 	}

@@ -1,6 +1,7 @@
 package tutor
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -64,14 +65,14 @@ func TestSubjectDecomposeAndFlow(t *testing.T) {
 	if today.ID != cur.Lessons[0].ID {
 		t.Fatalf("今日知识点错误: %+v", today)
 	}
-	s, isNew, err := tu.StartOrResume(*today)
+	s, isNew, err := tu.StartOrResume(context.Background(), *today)
 	if err != nil || !isNew {
 		t.Fatalf("开场失败: %v isNew=%v", err, isNew)
 	}
 	if len(s.Messages) != 2 {
 		t.Fatalf("开场应 2 条消息: %d", len(s.Messages))
 	}
-	v, err := tu.Send(*today, "函数是特殊的映射：定义域和陪域都是数集")
+	v, err := tu.Send(context.Background(), *today, "函数是特殊的映射：定义域和陪域都是数集")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +91,7 @@ func TestSubjectDecomposeAndFlow(t *testing.T) {
 		t.Fatalf("今日应推进: %+v", next)
 	}
 	// 收尾后不锁对话：继续输入走陪聊（不重复判定、不出收尾标记）
-	v2, _ := tu.Send(*today, "再讲讲类型论？")
+	v2, _ := tu.Send(context.Background(), *today, "再讲讲类型论？")
 	if v2.Kind != "" {
 		t.Fatalf("收尾后陪聊不应再判定: %+v", v2)
 	}
@@ -111,17 +112,17 @@ func TestRetryBeforePass(t *testing.T) {
 	tu := &Tutor{Dir: dir, Client: mc}
 	cur, _ := tu.StartSubject("科目Y")
 	lesson := cur.Lessons[0]
-	if _, _, err := tu.StartOrResume(lesson); err != nil {
+	if _, _, err := tu.StartOrResume(context.Background(), lesson); err != nil {
 		t.Fatal(err)
 	}
-	v1, _ := tu.Send(lesson, "乱答一")
+	v1, _ := tu.Send(context.Background(), lesson, "乱答一")
 	if v1.Kind != "" {
 		t.Fatalf("第一次应继续对话不判定: %+v", v1)
 	}
 	if s := tu.Load(lesson.ID); len(s.Messages) != 4 {
 		t.Fatalf("追问后应 4 条消息: %d", len(s.Messages))
 	}
-	v2, _ := tu.Send(lesson, "答对二")
+	v2, _ := tu.Send(context.Background(), lesson, "答对二")
 	if v2.Kind != "pass" {
 		t.Fatalf("第二次应 pass: %+v", v2)
 	}
@@ -137,7 +138,7 @@ func TestSessionPersistence(t *testing.T) {
 	tu := &Tutor{Dir: dir, Client: mc}
 	cur, _ := tu.StartSubject("科目X")
 	lesson := cur.Lessons[0]
-	if _, _, err := tu.StartOrResume(lesson); err != nil {
+	if _, _, err := tu.StartOrResume(context.Background(), lesson); err != nil {
 		t.Fatal(err)
 	}
 	loaded := tu.Load(lesson.ID)
@@ -181,7 +182,7 @@ func TestStartSubjectNormalizeAndReplace(t *testing.T) {
 		t.Fatalf("同名科目应幂等: %d", len(cur2.Lessons))
 	}
 	// 换科目=替换：课程表只剩新科目。替换前先给旧科目开会话（验证会话文件保留）
-	if _, _, err := tu.StartOrResume(cur.Lessons[0]); err != nil {
+	if _, _, err := tu.StartOrResume(context.Background(), cur.Lessons[0]); err != nil {
 		t.Fatal(err)
 	}
 	mc3 := &mockClient{

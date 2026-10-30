@@ -6,6 +6,7 @@
 package tutor
 
 import (
+	"context"
 	"fmt"
 
 	"voyage/internal/llm"
@@ -34,6 +35,6 @@ func (t *Tutor) CurateOnce(ctx string, tools []Tool) (string, error) {
 		return "", fmt.Errorf("没有可用工具（GitHub 抓取未配置）")
 	}
 	user := "学习者上下文：\n" + ctx + "\n\n开始今天的进货：用工具完成挑选与入库，最后输出进货报告。"
-	report, _, err := t.runAgent(curateSystem, []llm.Message{{Role: "user", Content: user}}, tools)
+	report, _, err := t.runAgent(context.Background(), curateSystem, []llm.Message{{Role: "user", Content: user}}, tools)
 	return report, err
 }

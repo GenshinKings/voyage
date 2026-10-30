@@ -1,6 +1,7 @@
 package tutor
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -60,7 +61,7 @@ func TestRunAgentToolLoop(t *testing.T) {
 	refDir := reflib.Ensure(dir)
 	mc := &toolMockClient{}
 	tu := &Tutor{Dir: dir, Client: mc, RefDir: refDir}
-	final, conv, err := tu.runAgent("SYS", []llm.Message{{Role: "user", Content: "进货"}}, []Tool{kbSaveTool(refDir)})
+	final, conv, err := tu.runAgent(context.Background(), "SYS", []llm.Message{{Role: "user", Content: "进货"}}, []Tool{kbSaveTool(refDir)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,12 +85,12 @@ func TestRunAgentFallbackNoTools(t *testing.T) {
 	dir := t.TempDir()
 	mc := &mockClient{replies: []string{"普通回复"}}
 	tu := &Tutor{Dir: dir, Client: mc}
-	final, _, err := tu.runAgent("SYS", []llm.Message{{Role: "user", Content: "hi"}}, nil)
+	final, _, err := tu.runAgent(context.Background(), "SYS", []llm.Message{{Role: "user", Content: "hi"}}, nil)
 	if err != nil || final != "普通回复" {
 		t.Fatalf("无工具应退化 Chat: %q %v", final, err)
 	}
 	// ChatClient 不实现 ToolClient + 有工具 → 同样退化
-	if _, _, err := (&Tutor{Dir: dir, Client: mc}).runAgent("SYS", []llm.Message{{Role: "user", Content: "hi"}}, []Tool{kbSaveTool(dir)}); err != nil {
+	if _, _, err := (&Tutor{Dir: dir, Client: mc}).runAgent(context.Background(), "SYS", []llm.Message{{Role: "user", Content: "hi"}}, []Tool{kbSaveTool(dir)}); err != nil {
 		t.Fatalf("不支持工具的客户端应降级: %v", err)
 	}
 }

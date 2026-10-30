@@ -2,6 +2,7 @@ package server
 
 // memory_test.go — 第七轮验收：巩固产出三件套齐全、矛盾 UPDATE 不并存、失败不阻塞主流程。
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"math"
@@ -277,7 +278,7 @@ func TestOpeningCitesRelevantMemoryVerbatim(t *testing.T) {
 	if !strings.Contains(s.Tutor.MemoryNote, text) {
 		t.Fatalf("引用笔记应含条目原文: %q", s.Tutor.MemoryNote)
 	}
-	sess, isNew, err := s.Tutor.StartOrResume(*lesson)
+	sess, isNew, err := s.Tutor.StartOrResume(context.Background(), *lesson)
 	if err != nil || !isNew {
 		t.Fatalf("开场失败: %v", err)
 	}

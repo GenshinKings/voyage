@@ -8,6 +8,7 @@
 package tutor
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -62,7 +63,7 @@ cause 只有六种：concept（概念没懂）、condition（看漏条件）、e
 
 // judgeStructured 结构化判定通道：独立小调用，不依赖教学会话的标记习惯。
 // retried=true 表示第一次 JSON 解析失败、重试了一次（二次校验）。
-func (t *Tutor) judgeStructured(lesson Lesson, s *Session) (pass bool, reason, cause string, retried bool, err error) {
+func (t *Tutor) judgeStructured(ctx context.Context, lesson Lesson, s *Session) (pass bool, reason, cause string, retried bool, err error) {
 	if t.Client == nil {
 		return false, "", "", false, fmt.Errorf("LLM 未配置")
 	}
@@ -77,7 +78,7 @@ func (t *Tutor) judgeStructured(lesson Lesson, s *Session) (pass bool, reason, c
 		lesson.Title, lesson.Brief, truncRunes(q, 400), truncRunes(a, 400))
 	for attempt := 0; attempt < 2; attempt++ {
 		retried = attempt > 0
-		raw, jerr := t.Client.ChatJSON(t.withAgents(judgeSystem), []llm.Message{{Role: "user", Content: user}})
+		raw, jerr := llm.ChatJSONWith(ctx, t.Client, t.withAgents(judgeSystem), []llm.Message{{Role: "user", Content: user}})
 		if jerr != nil {
 			return false, "", "", retried, jerr
 		}

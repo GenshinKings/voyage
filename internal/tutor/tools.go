@@ -8,6 +8,7 @@
 package tutor
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -31,9 +32,9 @@ const maxToolRounds = 8
 
 // runAgent 带工具循环的对话：返回最终文本回复与完整对话（含工具调用帧——调用方持久化）。
 // 工具执行失败不中断——错误文本作为工具结果回给模型，让它自行调整。
-func (t *Tutor) runAgent(system string, msgs []llm.Message, tools []Tool) (string, []llm.Message, error) {
+func (t *Tutor) runAgent(ctx context.Context, system string, msgs []llm.Message, tools []Tool) (string, []llm.Message, error) {
 	fallback := func() (string, []llm.Message, error) {
-		out, err := t.Client.Chat(system, msgs)
+		out, err := llm.ChatWith(ctx, t.Client, system, msgs)
 		conv := append(append([]llm.Message{}, msgs...), llm.Message{Role: "assistant", Content: out})
 		return out, conv, err
 	}

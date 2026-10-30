@@ -1,6 +1,7 @@
 package tutor
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -71,7 +72,7 @@ func TestTimeBudgetChangesOpening(t *testing.T) {
 	for budget, keyword := range want {
 		cc := &capClient{replies: []string{"开场"}}
 		tu, lesson := newLessonTutor(t, budget, cc)
-		if _, _, err := tu.StartOrResume(lesson); err != nil {
+		if _, _, err := tu.StartOrResume(context.Background(), lesson); err != nil {
 			t.Fatal(err)
 		}
 		sys := cc.systems[len(cc.systems)-1] // StartOrResume 是最近一次调用
@@ -88,7 +89,7 @@ func TestTimeBudgetChangesOpening(t *testing.T) {
 	for _, budget := range []string{"90", ""} {
 		cc := &capClient{replies: []string{"开场"}}
 		tu, lesson := newLessonTutor(t, budget, cc)
-		if _, _, err := tu.StartOrResume(lesson); err != nil {
+		if _, _, err := tu.StartOrResume(context.Background(), lesson); err != nil {
 			t.Fatal(err)
 		}
 		sys := cc.systems[0]
@@ -116,10 +117,10 @@ func TestTimeBudgetChangesOpening(t *testing.T) {
 func TestTimeBudgetChangesSend(t *testing.T) {
 	cc := &capClient{replies: []string{"开场", "回复10"}}
 	tu, lesson := newLessonTutor(t, "10", cc)
-	if _, _, err := tu.StartOrResume(lesson); err != nil {
+	if _, _, err := tu.StartOrResume(context.Background(), lesson); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tu.Send(lesson, "答"); err != nil {
+	if _, err := tu.Send(context.Background(), lesson, "答"); err != nil {
 		t.Fatal(err)
 	}
 	sendSys := cc.systems[len(cc.systems)-1] // Send 是最近一次调用
@@ -129,10 +130,10 @@ func TestTimeBudgetChangesSend(t *testing.T) {
 
 	cc2 := &capClient{replies: []string{"开场", "回复90"}}
 	tu2, lesson2 := newLessonTutor(t, "90", cc2)
-	if _, _, err := tu2.StartOrResume(lesson2); err != nil {
+	if _, _, err := tu2.StartOrResume(context.Background(), lesson2); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tu2.Send(lesson2, "答"); err != nil {
+	if _, err := tu2.Send(context.Background(), lesson2, "答"); err != nil {
 		t.Fatal(err)
 	}
 	if s := cc2.systems[1]; strings.Contains(s, "一句话讲完") {
@@ -166,11 +167,11 @@ func setupAtGuide(t *testing.T, target string) (*Tutor, []Lesson, *capClient) {
 	for i := 0; i < need; i++ {
 		l := cur.Lessons[i]
 		cc.replies = append(cc.replies, "开场占位")
-		if _, _, err := tu.StartOrResume(l); err != nil {
+		if _, _, err := tu.StartOrResume(context.Background(), l); err != nil {
 			t.Fatal(err)
 		}
 		cc.replies = append(cc.replies, "好\n[PASS]")
-		if _, err := tu.Send(l, "答"); err != nil {
+		if _, err := tu.Send(context.Background(), l, "答"); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -189,11 +190,11 @@ func TestGuideAscendsAfter3Passes(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		l := cur.Lessons[i]
 		cc.replies = append(cc.replies, "开场占位")
-		if _, _, err := tu.StartOrResume(l); err != nil {
+		if _, _, err := tu.StartOrResume(context.Background(), l); err != nil {
 			t.Fatal(err)
 		}
 		cc.replies = append(cc.replies, "好\n[PASS]")
-		v, err := tu.Send(l, "答")
+		v, err := tu.Send(context.Background(), l, "答")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -215,11 +216,11 @@ func TestGuideAscendsAfter3Passes(t *testing.T) {
 	for i := 3; i < 6; i++ {
 		l := cur.Lessons[i]
 		cc.replies = append(cc.replies, "开场占位")
-		if _, _, err := tu.StartOrResume(l); err != nil {
+		if _, _, err := tu.StartOrResume(context.Background(), l); err != nil {
 			t.Fatal(err)
 		}
 		cc.replies = append(cc.replies, "更好\n[PASS]")
-		v, _ := tu.Send(l, "答")
+		v, _ := tu.Send(context.Background(), l, "答")
 		// 第 4 课（累计 4 连过，含新的连续 3 过）即触发第二次升档；此后封顶提问档
 		if v.Guide != 3 {
 			t.Fatalf("第 %d 课后应升到提问档，got %d", i+1, v.Guide)
@@ -237,11 +238,11 @@ func TestGuideDescendsAfter2Fails(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		l := lessons[6+i]
 		cc.replies = append(cc.replies, "开场占位")
-		if _, _, err := tu.StartOrResume(l); err != nil {
+		if _, _, err := tu.StartOrResume(context.Background(), l); err != nil {
 			t.Fatal(err)
 		}
 		cc.replies = append(cc.replies, "不对——[CAUSE:concept|没懂映射方向]")
-		v, err := tu.Send(l, "错答")
+		v, err := tu.Send(context.Background(), l, "错答")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -256,11 +257,11 @@ func TestGuideDescendsAfter2Fails(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		l := lessons[8+i]
 		cc.replies = append(cc.replies, "开场占位")
-		if _, _, err := tu.StartOrResume(l); err != nil {
+		if _, _, err := tu.StartOrResume(context.Background(), l); err != nil {
 			t.Fatal(err)
 		}
 		cc.replies = append(cc.replies, "[CAUSE:slip|拼写]")
-		if _, err := tu.Send(l, "错答"); err != nil {
+		if _, err := tu.Send(context.Background(), l, "错答"); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -273,11 +274,11 @@ func TestGuideStuckImmediatelyDemotes(t *testing.T) {
 	tu, lessons, cc := setupAtGuide(t, "2") // 半提示档
 	l := lessons[3]
 	cc.replies = append(cc.replies, "开场占位")
-	if _, _, err := tu.StartOrResume(l); err != nil {
+	if _, _, err := tu.StartOrResume(context.Background(), l); err != nil {
 		t.Fatal(err)
 	}
 	cc.replies = append(cc.replies, "给完整样例：先建 main.go……")
-	if _, err := tu.Send(l, "(我卡住了) 完全不会"); err != nil {
+	if _, err := tu.Send(context.Background(), l, "(我卡住了) 完全不会"); err != nil {
 		t.Fatal(err)
 	}
 	if tu.GuideLevel != 1 {
@@ -297,11 +298,11 @@ func TestGuidePartialResetsStreak(t *testing.T) {
 	// 半懂：清零人级连败但不升降
 	l := lessons[3]
 	cc.replies = append(cc.replies, "开场占位")
-	if _, _, err := tu.StartOrResume(l); err != nil {
+	if _, _, err := tu.StartOrResume(context.Background(), l); err != nil {
 		t.Fatal(err)
 	}
 	cc.replies = append(cc.replies, "半对\n[PASS:partial]")
-	v, _ := tu.Send(l, "半答")
+	v, _ := tu.Send(context.Background(), l, "半答")
 	if v.Kind != "partial" {
 		t.Fatalf("应判 partial: %+v", v)
 	}
@@ -312,11 +313,11 @@ func TestGuidePartialResetsStreak(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		l2 := lessons[4+i]
 		cc.replies = append(cc.replies, "开场占位")
-		if _, _, err := tu.StartOrResume(l2); err != nil {
+		if _, _, err := tu.StartOrResume(context.Background(), l2); err != nil {
 			t.Fatal(err)
 		}
 		cc.replies = append(cc.replies, "过\n[PASS]")
-		if _, err := tu.Send(l2, "过答"); err != nil {
+		if _, err := tu.Send(context.Background(), l2, "过答"); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -330,13 +331,13 @@ func TestGuidePartialResetsStreak(t *testing.T) {
 func TestPassParsingKeepsBlindSpotLine(t *testing.T) {
 	cc := &capClient{replies: []string{"开场"}}
 	tu, lesson := newLessonTutor(t, "90", cc)
-	if _, _, err := tu.StartOrResume(lesson); err != nil {
+	if _, _, err := tu.StartOrResume(context.Background(), lesson); err != nil {
 		t.Fatal(err)
 	}
 	// 盲区自查行在 [PASS] 标记之前——必须原样保留给学习者决定
 	blind := "【还有没讲的：复合映射的结合律——要继续学吗？】\n关键点你都答对了。\n[PASS]"
 	cc.replies = append(cc.replies, blind)
-	v, err := tu.Send(lesson, "答")
+	v, err := tu.Send(context.Background(), lesson, "答")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -354,12 +355,12 @@ func TestPassParsingKeepsBlindSpotLine(t *testing.T) {
 func TestPartialMarkerWins(t *testing.T) {
 	cc := &capClient{replies: []string{"开场"}}
 	tu, lesson := newLessonTutor(t, "90", cc)
-	if _, _, err := tu.StartOrResume(lesson); err != nil {
+	if _, _, err := tu.StartOrResume(context.Background(), lesson); err != nil {
 		t.Fatal(err)
 	}
 	// 两个标记同时出现（模型口嗨）：半懂优先
 	cc.replies = append(cc.replies, "大体对\n[PASS]\n但有一处\n[PASS:partial]")
-	v, _ := tu.Send(lesson, "答")
+	v, _ := tu.Send(context.Background(), lesson, "答")
 	if v.Kind != "partial" {
 		t.Fatalf("partial 应优先于 pass: %+v", v)
 	}
@@ -368,10 +369,10 @@ func TestPartialMarkerWins(t *testing.T) {
 func TestAskWhyFlowPassAndFuzzy(t *testing.T) {
 	cc := &capClient{replies: []string{"开场", "收尾判定\n[PASS]"}}
 	tu, lesson := newLessonTutor(t, "90", cc)
-	if _, _, err := tu.StartOrResume(lesson); err != nil {
+	if _, _, err := tu.StartOrResume(context.Background(), lesson); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tu.Send(lesson, "答"); err != nil {
+	if _, err := tu.Send(context.Background(), lesson, "答"); err != nil {
 		t.Fatal(err)
 	}
 	// 首次通过 → 追问挂起
@@ -386,7 +387,7 @@ func TestAskWhyFlowPassAndFuzzy(t *testing.T) {
 	}
 	// 答得上 → fu-pass（AskWhy 清除，判定保持 pass）
 	cc.replies = append(cc.replies, "因为映射要求陪域整体被覆盖，所以是满射\n[FU-PASS]")
-	v, err := tu.Send(lesson, "因为函数要求每个输入有唯一输出")
+	v, err := tu.Send(context.Background(), lesson, "因为函数要求每个输入有唯一输出")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -399,15 +400,15 @@ func TestAskWhyFlowPassAndFuzzy(t *testing.T) {
 	// 普通 FU-FUZZY 路径（另起会话验证）：判定降 partial
 	cc2 := &capClient{replies: []string{"开场", "收尾\n[PASS]"}}
 	tu2, lesson2 := newLessonTutor(t, "90", cc2)
-	if _, _, err := tu2.StartOrResume(lesson2); err != nil {
+	if _, _, err := tu2.StartOrResume(context.Background(), lesson2); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tu2.Send(lesson2, "答"); err != nil {
+	if _, err := tu2.Send(context.Background(), lesson2, "答"); err != nil {
 		t.Fatal(err)
 	}
 	tu2.AskRealUse(lesson2.ID)
 	cc2.replies = append(cc2.replies, "说不上来？那从更小的题开始：只判断 f(x)=2x 是不是映射。\n[FU-FUZZY]")
-	v2, err := tu2.Send(lesson2, "呃……不知道，看着像")
+	v2, err := tu2.Send(context.Background(), lesson2, "呃……不知道，看着像")
 	if err != nil {
 		t.Fatal(err)
 	}

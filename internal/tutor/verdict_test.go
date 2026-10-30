@@ -2,6 +2,7 @@ package tutor
 
 // verdict_test.go — 第八轮-P0-1 验收：标记容错矩阵 + 双通道判定。
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -65,7 +66,7 @@ func (m *verdictMock) ChatJSON(system string, msgs []llm.Message) (string, error
 // 开一场「检查题在等答案」的会话。
 func openCheckSession(t *testing.T, tu *Tutor, lesson Lesson) *Session {
 	t.Helper()
-	s, _, err := tu.StartOrResume(lesson)
+	s, _, err := tu.StartOrResume(context.Background(), lesson)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +83,7 @@ func TestSendStructuredChannelWhenMarkerMissing(t *testing.T) {
 	tu := &Tutor{Dir: dir, Client: mc}
 	lesson := Lesson{ID: "l1", Subject: "测试", Title: "变量", Brief: "能说出变量是什么", Status: "active", Order: 1}
 	openCheckSession(t, tu, lesson)
-	v, err := tu.Send(lesson, "输出是 hello")
+	v, err := tu.Send(context.Background(), lesson, "输出是 hello")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +109,7 @@ func TestSendMarkerInCodeFenceNotPass(t *testing.T) {
 	tu := &Tutor{Dir: dir, Client: mc}
 	lesson := Lesson{ID: "l2", Subject: "测试", Title: "变量", Brief: "能说出变量是什么", Status: "active", Order: 1}
 	openCheckSession(t, tu, lesson)
-	v, err := tu.Send(lesson, "hello")
+	v, err := tu.Send(context.Background(), lesson, "hello")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +139,7 @@ func TestSendFullWidthMarkPassesViaMarker(t *testing.T) {
 	tu := &Tutor{Dir: dir, Client: mc}
 	lesson := Lesson{ID: "l3", Subject: "测试", Title: "变量", Brief: "能说出变量是什么", Status: "active", Order: 1}
 	openCheckSession(t, tu, lesson)
-	v, err := tu.Send(lesson, "hello")
+	v, err := tu.Send(context.Background(), lesson, "hello")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +158,7 @@ func TestSendStructuredChannelErrorKeepsLessonOpen(t *testing.T) {
 	tu := &Tutor{Dir: dir, Client: mc}
 	lesson := Lesson{ID: "l4", Subject: "测试", Title: "变量", Brief: "能说出变量是什么", Status: "active", Order: 1}
 	openCheckSession(t, tu, lesson)
-	v, err := tu.Send(lesson, "hello")
+	v, err := tu.Send(context.Background(), lesson, "hello")
 	if err != nil || v.Kind != "" {
 		t.Fatalf("判定器挂了应继续对话: %+v %v", v, err)
 	}

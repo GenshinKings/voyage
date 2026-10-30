@@ -6,6 +6,7 @@
 package tutor
 
 import (
+	"context"
 	"fmt"
 
 	"voyage/internal/llm"
@@ -38,6 +39,6 @@ func (t *Tutor) ProjectBrief(ctx, repo string, tools []Tool) (string, error) {
 		return "", fmt.Errorf("抓取工具未就绪（需要 GitHub 抓取工具组）")
 	}
 	user := "学习者上下文：\n" + ctx + "\n\n目标仓库：" + repo + "\n\n开始调研并输出导读。"
-	report, _, err := t.runAgent(briefSystem, []llm.Message{{Role: "user", Content: user}}, tools)
+	report, _, err := t.runAgent(context.Background(), briefSystem, []llm.Message{{Role: "user", Content: user}}, tools)
 	return report, err
 }

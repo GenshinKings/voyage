@@ -7,6 +7,7 @@
 package tutor
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -94,5 +95,5 @@ func (t *Tutor) SelfIterate(obs Observation, tools []Tool) (string, []llm.Messag
 		"- 缺口：" + obs.Gap + "\n" +
 		"- 建议：" + obs.Suggestion + "\n\n" +
 		"按工作流程实现这一条改进，最后输出实现报告。"
-	return t.runAgent(iterateSystem, []llm.Message{{Role: "user", Content: user}}, tools)
+	return t.runAgent(context.Background(), iterateSystem, []llm.Message{{Role: "user", Content: user}}, tools)
 }
