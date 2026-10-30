@@ -67,9 +67,9 @@ func TestStatsPersist(t *testing.T) {
 func TestRecordVerdict(t *testing.T) {
 	tu := &Tutor{Dir: t.TempDir()}
 
-	tu.recordVerdict("pass", false, "", "structured")
-	tu.recordVerdict("fail", false, "concept", "structured")
-	tu.recordVerdict("", false, "", "marker") // 陪聊轮：不该计入
+	tu.recordVerdict("pass", false, "", "structured", "l1")
+	tu.recordVerdict("fail", false, "concept", "structured", "l1")
+	tu.recordVerdict("", false, "", "marker", "l1") // 陪聊轮：不该计入
 
 	snap := tu.stats().Snapshot()
 	if snap["judged"] != 2 {

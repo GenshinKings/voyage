@@ -523,7 +523,7 @@ func (t *Tutor) Send(ctx context.Context, lesson Lesson, userText string) (Verdi
 		}
 	}
 	t.save(s)
-	t.recordVerdict(kind, stuckRound, vCause, channel)
+	t.recordVerdict(kind, stuckRound, vCause, channel, lesson.ID)
 	return Verdict{Kind: kind, Reply: reply, Guide: t.guideLevel(), Channel: channel, Cause: vCause, Evidence: vReason, Where: vWhere, Action: vAction}, nil
 }
 
