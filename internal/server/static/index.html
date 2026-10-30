@@ -2332,6 +2332,7 @@ async function renderRun(){
     if(!st.started){await renderRunPicker(box);return;}
     RUN_STATE=st;
     box.innerHTML=runShell(st);
+    renderTeachStats(box);
   }catch(e){
     box.innerHTML='<div class="empty" style="padding:24px 10px">加载失败：'+esc(String(e.message||e))+'</div>';
   }
@@ -2410,6 +2411,31 @@ function runHint(){
   msg.textContent=s&&s.hint?('卡住的话，先做这一件：'+s.hint):'先做最小的一步：让它在你的机器上跑起来，哪怕只打印一行字。';
 }
 
-</script>
+
+// 教学指标条：三个数（独立通过率 / 错误类型分布 / 退档回升率）。
+// 没有数据时说「还没数据」，不假装有数字。
+async function renderTeachStats(box){
+  if(!box)return;
+  let m=null;
+  try{ m=await api('/api/stats'); }catch(e){ return }
+  if(!m)return;
+  const judged=(m.judged||0);
+  const rate=(Math.round((m.independentPassRate||0)*100));
+  const rec=(m.downgrades||0)>0?(Math.round((m.recoveryRate||0)*100)+'%'):'—';
+  const causes=m.causes||{};
+  const keys=Object.keys(causes);
+  const causeTxt=keys.length?keys.map(k=>k+' '+causes[k]).join(' · '):'—';
+  const cell=(label,val)=>'<div style="flex:1;min-width:96px"><div style="font-size:11.5px;color:var(--mut);margin-bottom:2px">'+label+'</div><div style="font-size:15px;font-weight:600">'+val+'</div></div>';
+  const html='<div class="va" style="border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:0 0 12px;background:var(--card)">'
+    +'<div style="display:flex;gap:12px;margin-bottom:8px">'
+    +cell('判定轮次', judged?judged:'0')
+    +cell('独立通过率', judged?rate+'%':'—')
+    +cell('退档回升率', rec)
+    +'</div>'
+    +'<div style="font-size:11.5px;color:var(--mut)">错误类型：'+esc(causeTxt)+'</div>'
+    +(judged?'':'<div style="font-size:11.5px;color:var(--mut);margin-top:6px">还没有判定记录——做一节课的检查题才会开始积累</div>')
+    +'</div>';
+  box.insertAdjacentHTML('afterbegin',html);
+}</script>
 </body>
 </html>

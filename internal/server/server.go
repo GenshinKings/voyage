@@ -543,6 +543,7 @@ func (s *Server) Handlers() http.Handler {
 	// 第八轮-P1-2：路由按域拆文件（learn/kb/shop/sys），此处只做装配
 	s.registerLearnHandlers(mux)
 	s.registerRunHandlers(mux)
+	s.registerTeachHandlers(mux)
 
 	// 第八轮-P1-2：路由按域拆文件（learn/kb/shop/sys），此处只做装配
 	s.registerKBHandlers(mux)
