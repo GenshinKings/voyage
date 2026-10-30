@@ -56,7 +56,23 @@ func (s *Server) registerRunHandlers(mux *http.ServeMux) {
 			writeErr(w, 400, "还没开始一个项目")
 			return
 		}
-		ok, reason := s.RunState.Submit(req.Output)
+		// Expect 为空的关卡机器看不出对错：交给模型判，判过再解锁。
+		// 没配模型时退回「非空即过」，不让闯关卡死。
+		var ok bool
+		var reason string
+		if st := s.RunState.CurrentStage(); st != nil && len(st.Expect) == 0 {
+			pass, why, action, usable := s.judgeStage(r.Context(), *st, req.Output)
+			if usable {
+				ok, reason = s.RunState.SubmitJudged(req.Output, pass, why)
+				if !ok && action != "" {
+					reason = reason + " 下一步：" + action
+				}
+			} else {
+				ok, reason = s.RunState.Submit(req.Output)
+			}
+		} else {
+			ok, reason = s.RunState.Submit(req.Output)
+		}
 		s.saveState()
 		resp := map[string]any{"ok": ok, "progress": s.RunState.Progress()}
 		if !ok {

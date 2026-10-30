@@ -486,6 +486,7 @@ kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;paddi
   <div class="sidebtns">
     <div class="sbtn on" data-v="learn">◈ <span class="sbtn-t">今天</span></div>
     <div class="sbtn" data-v="progress">◎ <span class="sbtn-t">我的进度</span></div>
+    <div class="sbtn" data-v="run">▮ <span class="sbtn-t">项目通关</span></div>
     <div class="sbtn lab-extra" data-v="dir">◈ <span class="sbtn-t">方向</span></div>
     <div class="sbtn lab-extra" data-v="dungeon">⚔ <span class="sbtn-t">实战副本</span></div>
     <div class="sbtn lab-extra" data-v="sediment">✓ <span class="sbtn-t">学会的</span></div>
@@ -502,6 +503,7 @@ kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;paddi
   <div id="topbar"><div style="display:flex;align-items:center;gap:10px"><button id="sideToggle" aria-label="打开或收起侧栏" onclick="toggleSideDrawer()">☰</button><div><div class="kicker" id="kicker">LEARNING · 对话式教学</div><h1 id="lessonTitle">今天丢来的</h1></div></div><div style="display:flex;gap:8px;flex-shrink:0"><button id="todayClass" class="backbtn hidden" style="border-color:var(--line);color:var(--mut)" onclick="openTodayClass()">今天的课</button><button id="backToday" class="backbtn hidden" onclick="backToday()">← 跳回今日知识点</button></div></div>
   <div id="view">
     <div id="chatOuter"><div id="guideCard"></div><div id="planCard"></div><div id="chat"></div></div>
+    <div id="runView" class="hidden"></div>
     <div id="dirView" class="hidden"></div>
     <div id="progressView" class="hidden">
     <div id="progressTabs">
@@ -650,11 +652,13 @@ function switchTab(v){
   $('setView').classList.toggle('hidden',v!=='set');
   $('sediment').classList.toggle('hidden',v!=='sediment');
   $('graphWrap').classList.toggle('hidden',v!=='graph');
+  $('runView').classList.toggle('hidden',v!=='run');
   updateChrome(v);
   if(v==='dir')renderDirection();
   if(v==='progress')renderProgress();
   if(v==='set')renderSettings();
   if(v==='sediment')renderSediment();
+  if(v==='run')renderRun();
   if(v==='graph'){
     // 上一次可能因为面板不可见被推迟：切过来后重画一次
     if(window.__graphPending){window.__graphPending=false;}
@@ -2310,6 +2314,97 @@ try{
     }catch(e){}
   }
 })();
+
+
+// 项目通关（Project Run）：一次只给当前这一关，过不了不放行。
+// 设计说明见 docs/run/README.md。
+let RUN_STATE=null,RUN_TPL=null;
+
+async function renderRun(){
+  const box=$('runView');if(!box)return;
+  box.innerHTML='<div class="empty" style="padding:24px 10px">加载中…</div>';
+  try{
+    const st=await api('/api/run/state');
+    if(!st.started){await renderRunPicker(box);return;}
+    RUN_STATE=st;
+    box.innerHTML=runShell(st);
+  }catch(e){
+    box.innerHTML='<div class="empty" style="padding:24px 10px">加载失败：'+esc(String(e.message||e))+'</div>';
+  }
+}
+
+async function renderRunPicker(box){
+  if(!RUN_TPL){const r=await api('/api/run/templates');RUN_TPL=r.templates||[]}
+  const cards=RUN_TPL.map(t=>'<div class="va" style="border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:12px;background:var(--card)">'
+    +'<div style="font-size:13px;color:var(--mut);margin-bottom:6px">'+esc(t.tier)+' · '+t.steps+' 关</div>'
+    +'<div style="font-size:15px;font-weight:600;margin-bottom:6px">'+esc(t.title)+'</div>'
+    +'<div style="font-size:12.5px;color:var(--mut);line-height:1.8;margin-bottom:10px">'+esc(t.why)+'</div>'
+    +'<button class="va primary" style="border:1px solid var(--pink);background:var(--pink);color:#fff;padding:6px 16px;border-radius:8px;cursor:pointer" onclick="startRun(\''+t.id+'\')">开始这一档 →</button>'
+    +'</div>').join('');
+  box.innerHTML='<div style="padding:6px 2px 0">'
+    +'<div style="font-size:13px;color:var(--mut);line-height:1.9;margin-bottom:14px">从零做出一个能给别人看的东西。一次只给你一关：做到才解锁下一关。</div>'
+    +cards+'</div>';
+}
+
+function runShell(st){
+  const s=st.stage||{};
+  return '<div style="padding:6px 2px 0">'
+    +'<div style="font-size:12.5px;color:var(--mut);margin-bottom:6px">'+esc(st.tier||'')+' · 进度 '+esc(st.progress||'')+'</div>'
+    +'<div style="font-size:17px;font-weight:600;margin-bottom:12px">'+esc(st.title||'')+'</div>'
+    +'<div class="va" style="border:1px solid var(--line);border-radius:10px;padding:14px 16px;background:var(--card)">'
+    +'<div style="font-size:13px;color:var(--mut);margin-bottom:6px">这一关的目标</div>'
+    +'<div style="font-size:14px;line-height:1.9;margin-bottom:12px">'+esc(s.goal||'')+'</div>'
+    +'<div style="font-size:13px;color:var(--mut);margin-bottom:6px">怎么算过关</div>'
+    +'<div style="font-size:14px;line-height:1.9;margin-bottom:12px">'+esc(s.check||'')+'</div>'
+    +'<textarea id="runOut" placeholder="把这一步跑出来的结果贴在这里（命令输出 / 文件内容 / 链接）" style="width:100%;min-height:110px;border:1px solid var(--line);border-radius:8px;padding:10px;font-size:13px;line-height:1.7;background:var(--bg);color:var(--ink);resize:vertical"></textarea>'
+    +'<div style="display:flex;gap:10px;margin-top:10px;align-items:center">'
+    +'<button class="va primary" style="border:1px solid var(--pink);background:var(--pink);color:#fff;padding:7px 18px;border-radius:8px;cursor:pointer" onclick="submitRun()">交这一关</button>'
+    +'<button class="va" style="border:1px solid var(--line);background:transparent;color:var(--mut);padding:7px 14px;border-radius:8px;cursor:pointer" onclick="runHint()">卡住了</button>'
+    +'</div>'
+    +'<div id="runMsg" style="margin-top:12px;font-size:13px;line-height:1.9;color:var(--mut)"></div>'
+    +'</div></div>';
+}
+
+async function startRun(id){
+  try{
+    await api('/api/run/start',{templateId:id});
+    await renderRun();
+  }catch(e){toast('开始失败：'+(e.message||e))}
+}
+
+async function submitRun(){
+  const t=$('runOut');const out=(t&&t.value||'').trim();
+  const msg=$('runMsg');
+  if(!out){if(msg)msg.textContent='先把结果贴上来再交';return}
+  if(msg)msg.textContent='判定中…';
+  try{
+    const r=await api('/api/run/submit',{output:out});
+    if(r.ok){
+      if(r.finished){
+        toast('全部过关了',3600);
+        await renderRun();
+        const box=$('runView');
+        if(box&&r.deliverable){box.insertAdjacentHTML('afterbegin','<div class="va" style="border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:12px;white-space:pre-wrap;font-size:13px;line-height:1.9">'+esc(r.deliverable)+'</div>')}
+      }else{
+        toast('过关，下一关解锁',2600);
+        await renderRun();
+      }
+      return;
+    }
+    const lines=[];
+    if(r.reason)lines.push(r.reason);
+    if(r.hint)lines.push('下一步：'+r.hint);
+    if(msg)msg.textContent=lines.join('\n')||'这一步还没达到验收标准';
+  }catch(e){
+    if(msg)msg.textContent='提交失败：'+(e.message||e);
+  }
+}
+
+function runHint(){
+  const msg=$('runMsg');if(!msg)return;
+  const s=RUN_STATE&&RUN_STATE.stage;
+  msg.textContent=s&&s.hint?('卡住的话，先做这一件：'+s.hint):'先做最小的一步：让它在你的机器上跑起来，哪怕只打印一行字。';
+}
 
 </script>
 </body>

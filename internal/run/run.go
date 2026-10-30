@@ -139,6 +139,37 @@ func (r *Run) Submit(output string) (ok bool, reason string) {
 	return true, ""
 }
 
+// SubmitJudged 交给外部判定（模型或人）之后再提交。
+// 外部判不过就直接拦下，不进关卡；判过则跳过 Expect 校验直接解锁——
+// 因为需要外部判定的关卡本来就是「机器看不出对错」的那类。
+func (r *Run) SubmitJudged(output string, pass bool, reason string) (ok bool, why string) {
+	st := r.CurrentStage()
+	if st == nil {
+		return false, "已经全部过关了"
+	}
+	if strings.TrimSpace(output) == "" {
+		return false, "还没贴东西——把这一步跑出来的结果发我"
+	}
+	if !pass {
+		if reason == "" {
+			reason = "这一步还没达到验收标准"
+		}
+		return false, reason
+	}
+	r.Results[st.ID] = strings.TrimSpace(output)
+	r.Current++
+	if r.Current >= len(r.Stages) {
+		r.Finished = true
+	}
+	return true, ""
+}
+
+// NeedsExternalJudge 这一关是否需要模型/人工判定（Expect 为空即需要）。
+func (r *Run) NeedsExternalJudge() bool {
+	st := r.CurrentStage()
+	return st != nil && len(st.Expect) == 0
+}
+
 // Deliverable 全部过关后的「交付证明」——直接能贴进简历/README。
 func (r *Run) Deliverable() string {
 	if r == nil || !r.Finished {
