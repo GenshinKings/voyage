@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="zh">
 <head>
 <meta charset="utf-8">
@@ -655,7 +655,11 @@ function switchTab(v){
   if(v==='progress')renderProgress();
   if(v==='set')renderSettings();
   if(v==='sediment')renderSediment();
-  if(v==='graph')renderGraph();
+  if(v==='graph'){
+    // 上一次可能因为面板不可见被推迟：切过来后重画一次
+    if(window.__graphPending){window.__graphPending=false;}
+    renderGraph();
+  }
 }
 
 async function addSubject(){
@@ -1524,8 +1528,10 @@ async function renderGraph(){
     window.__graphErr='drawing';
     await new Promise(r=>setTimeout(r,60)); // 布局兜底。不用 rAF：后台页 rAF 会被节流
     const cv=$('graphCanvas');
-    if(!cv||!cv.clientWidth){await new Promise(r=>setTimeout(r,60));}
-    if(!cv||!cv.clientWidth)throw new Error('画布无尺寸');
+    // 面板还没显示时不要报错：记成待绘，切到图标签页再补画（之前这里直接 throw，只会给用户一个莫名其妙的 toast）
+    for(let i=0;i<8&&cv&&!cv.clientWidth;i++){await new Promise(r=>setTimeout(r,80));}
+    if(!cv||!cv.clientWidth||!cv.clientHeight){window.__graphPending=true;return;}
+    window.__graphPending=false;
     const dpr=window.devicePixelRatio||1;
     cv.width=cv.clientWidth*dpr;cv.height=cv.clientHeight*dpr;
     cv.style.width=cv.clientWidth+'px';cv.style.height=cv.clientHeight+'px';
