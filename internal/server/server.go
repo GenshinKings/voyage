@@ -29,6 +29,7 @@ import (
 	"voyage/internal/notes"
 	"voyage/internal/profile"
 	"voyage/internal/reflib"
+	"voyage/internal/run"
 	"voyage/internal/scheduler"
 	"voyage/internal/store"
 	"voyage/internal/tutor"
@@ -130,6 +131,7 @@ type Server struct {
 	Dir       string               `json:"dir"`
 	st        *store.Store         // 本实例的存储锁与原子写，不再用包级全局
 	Goals     []Goal               `json:"goals"`
+	RunState  *run.Run             `json:"run,omitempty"` // 「从零做开源项目」当前闯关进度
 	Plan      *scheduler.TodayPlan `json:"plan,omitempty"`
 	Done      Completed            `json:"done"`
 	Ledger    *evidence.Ledger     `json:"-"` // 履历单一真相源=ledger.json（Record 时落盘）；state.json 不存副本——此前双写不一致导致重启即丢履历（事故 2026-10-20）
@@ -536,6 +538,7 @@ func (s *Server) Handlers() http.Handler {
 
 	// 第八轮-P1-2：路由按域拆文件（learn/kb/shop/sys），此处只做装配
 	s.registerLearnHandlers(mux)
+	s.registerRunHandlers(mux)
 
 	// 第八轮-P1-2：路由按域拆文件（learn/kb/shop/sys），此处只做装配
 	s.registerKBHandlers(mux)
