@@ -127,11 +127,14 @@ type Reading struct {
 
 // Server 应用壳。
 type Server struct {
-	sc        stateCacheT          // 序列化缓存 + 去抖落盘（statecache.go），每实例一份
-	Dir       string               `json:"dir"`
-	st        *store.Store         // 本实例的存储锁与原子写，不再用包级全局
-	Goals     []Goal               `json:"goals"`
-	RunState  *run.Run             `json:"run,omitempty"` // 「从零做开源项目」当前闯关进度
+	sc       stateCacheT  // 序列化缓存 + 去抖落盘（statecache.go），每实例一份
+	Dir      string       `json:"dir"`
+	st       *store.Store // 本实例的存储锁与原子写，不再用包级全局
+	Goals    []Goal       `json:"goals"`
+	RunState *run.Run     `json:"run,omitempty"` // 「从零做开源项目」当前闯关进度
+	// 弃学防线（comeback.go）：上次学习日期 与 召回招呼（只打一次）
+	LastLearn string               `json:"lastLearn,omitempty"`
+	Comeback  string               `json:"comeback,omitempty"`
 	Plan      *scheduler.TodayPlan `json:"plan,omitempty"`
 	Done      Completed            `json:"done"`
 	Ledger    *evidence.Ledger     `json:"-"` // 履历单一真相源=ledger.json（Record 时落盘）；state.json 不存副本——此前双写不一致导致重启即丢履历（事故 2026-10-20）
@@ -245,6 +248,7 @@ func (s *Server) save(path string, v any) {
 func NewServer(dir string) *Server {
 	s := &Server{Dir: dir, st: store.New(), Ledger: evidence.New(), Bandit: bandit.New(time.Now().UnixNano()), Ability: ability.New(), AgentsPath: filepath.Join(dir, "AGENTS.md"), ProfilePath: profile.Ensure(dir), RefDir: reflib.Ensure(dir), NotesDir: notes.Ensure(dir)}
 	s.loadFetchConf()
+	s.maybeComeback(time.Now()) // 弃学防线：隔了几天没来才打一次招呼
 	s.FSRS = fsrs.NewScheduler()
 	// 助教改进观察 backlog + 仓库根（自迭代工作区）
 	_ = s.load("backlog.json", &s.Obs)

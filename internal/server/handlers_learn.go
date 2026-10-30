@@ -115,6 +115,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 		s.guideFromHistory(lesson)
 		// 第七轮-P0-3：记忆引用——最多一条相关长期记忆，「你上次说……」（引用即入账）
 		s.Tutor.MemoryNote = s.memoryNote(lesson)
+		s.touchLearn() // 弃学防线：记下今天来过
 		sess, isNew, err := s.Tutor.StartOrResume(r.Context(), *lesson)
 		if err != nil {
 			s.httpErr(w, r, err, 500)
@@ -145,6 +146,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 		// 第六轮-P1-1「首次通过」判据：Send 前快照会话判定态
 		pre := s.Tutor.Load(req.NodeID)
 		firstPass := pre == nil || pre.Verdict == ""
+		s.touchLearn() // 弃学防线：记下今天来过
 		v, err := s.Tutor.Send(r.Context(), *lesson, req.Text)
 		if err != nil {
 			s.httpErr(w, r, err, 500)
