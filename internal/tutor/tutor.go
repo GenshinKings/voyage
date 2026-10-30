@@ -83,6 +83,8 @@ type Tutor struct {
 	// 第六轮-P0-1 引导档位（随人不随课——挂在 Tutor 级跨课程累计；server 常驻期间有效）
 	GuideLevel  int    `json:"-"` // 0=未设 → 视为样例档
 	GuideStreak [2]int `json:"-"` // [连过数, 连没过数]
+	// 教学指标（docs/teach/spec.md 第八节）：nil=未加载，取用时经 stats() 懒加载
+	Stats *Stats `json:"-"`
 }
 
 // guideLevel 当前引导档位（未设=样例）。
@@ -517,6 +519,7 @@ func (t *Tutor) Send(ctx context.Context, lesson Lesson, userText string) (Verdi
 		}
 	}
 	t.save(s)
+	t.recordVerdict(kind, stuckRound, vCause, channel)
 	return Verdict{Kind: kind, Reply: reply, Guide: t.guideLevel(), Channel: channel, Cause: vCause, Evidence: vReason}, nil
 }
 

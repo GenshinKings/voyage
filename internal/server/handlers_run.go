@@ -87,6 +87,15 @@ func (s *Server) registerRunHandlers(mux *http.ServeMux) {
 			"finished": s.RunState.Finished,
 		})
 	})
+
+	// 教学指标（docs/teach/spec.md 第八节）：独立通过率 / 错误类型分布 / 退档后回升率。
+	mux.HandleFunc("/api/stats", func(w http.ResponseWriter, r *http.Request) {
+		if s.Tutor == nil {
+			writeJSON(w, map[string]any{"judged": 0, "note": "助教还没起来"})
+			return
+		}
+		writeJSON(w, s.Tutor.LoadStats().Snapshot())
+	})
 }
 
 // currentHint 只取当前关卡的「下一步」，不给答案。
@@ -95,4 +104,5 @@ func currentHint(r *run.Run) string {
 		return st.Hint
 	}
 	return ""
+
 }
