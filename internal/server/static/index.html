@@ -1390,10 +1390,12 @@ async function runFetch(){
 }
 function renderNotesBox(){
   const el=document.getElementById('notesBox');if(!el)return;
+  if(!NOTE_INDEX)loadNoteIndex(false).then(()=>{const e2=document.getElementById('notesBox');if(e2&&NOTE_INDEX){renderNotesBox();}});
   api('/api/notes').then(d=>{
     const list=d.list||[];
-    let h='<div>共 '+list.length+' 篇'+(d.noteRun?' ｜ 助教上次巡检 '+esc(d.noteRun):' ｜ 尚未巡检')+' <button class="backbtn" onclick="runNoteReview()" style="margin-left:8px">立即巡检</button> <button class="backbtn" onclick="pickVault()" style="margin-left:6px">设置仓库</button></div>';
+    let h='<div>共 '+list.length+' 篇'+(d.noteRun?' ｜ 助教上次巡检 '+esc(d.noteRun):' ｜ 尚未巡检')+' <button class="backbtn" onclick="runNoteReview()" style="margin-left:8px">立即巡检</button> <button class="backbtn" onclick="pickVault()" style="margin-left:6px">设置仓库</button> <button class="backbtn" onclick="rebuildNoteIndex()" style="margin-left:6px">重建索引</button></div>';
     if(list.length)h+='<div style="margin-top:4px;color:var(--mut)">'+list.slice(0,6).map(x=>esc(x.name)).join(' · ')+(list.length>6?' 等 '+list.length+' 篇':'')+'</div>';
+    if(NOTE_INDEX)h+=dirListHTML(NOTE_INDEX);
     if(d.noteReport)h+='<pre style="white-space:pre-wrap;font-size:11.5px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px;margin-top:6px">'+esc(d.noteReport)+'</pre>';
     el.innerHTML=h;
   }).catch(e=>{el.innerHTML='<div class="empty">'+esc(e.message)+'</div>'});
@@ -2512,6 +2514,35 @@ async function pickVault(){
     toast('已切到仓库：'+r.path+'（'+r.notes+' 篇）',3200);
     renderNotesBox();
   }catch(e){toast('失败：'+(e.message||e))}
+}
+// 笔记索引：按目录列出「什么笔记在哪」，不用每次全翻
+let NOTE_INDEX=null;
+async function loadNoteIndex(force){
+  try{
+    if(force){ await api('/api/notes/index/rebuild',{}); }
+    NOTE_INDEX = await api('/api/notes/index');
+  }catch(e){ NOTE_INDEX=null; }
+  return NOTE_INDEX;
+}
+async function rebuildNoteIndex(){
+  try{
+    const r=await api('/api/notes/index/rebuild',{});
+    toast('索引已重建：'+r.count+' 篇',2800);
+    renderNotesBox();
+  }catch(e){toast('失败：'+(e.message||e))}
+}
+function dirListHTML(idx){
+  if(!idx||!idx.byDir)return '';
+  const keys=Object.keys(idx.byDir).sort();
+  if(!keys.length)return '';
+  let h='';
+  keys.forEach(d=>{
+    const arr=idx.byDir[d]||[];
+    const label=d===''?'（根目录）':d;
+    h+='<div style="margin-top:6px"><b>'+esc(label)+'</b> <span style="color:var(--mut)">'+arr.length+' 篇</span></div>';
+    h+='<div style="color:var(--mut);line-height:1.6">'+arr.slice(0,8).map(x=>esc(x.split('/').pop())).join(' · ')+(arr.length>8?' 等 '+arr.length+' 篇':'')+'</div>';
+  });
+  return '<div style="margin-top:8px;border-top:1px solid var(--line);padding-top:6px">'+h+'</div>';
 }</script>
 </body>
 </html>

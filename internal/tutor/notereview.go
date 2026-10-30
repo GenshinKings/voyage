@@ -49,3 +49,43 @@ func (t *Tutor) ReviewNotes(ctx string) (string, error) {
 	}
 	return raw, nil
 }
+
+// ReviewPicked 按索引挑几篇细读，而不是每次全库翻一遍。
+//
+// 为什么：Obsidian 库上千篇时，全量 transcript 既慢又贵，还会把真正该看的那几篇
+// 挤出上下文。所以先给模型「目录」（哪个目录有哪些笔记），再给「挑中的几篇全文」。
+func (t *Tutor) ReviewPicked(ctx string, picks []notes.File, dirList string) (string, error) {
+	if t.Client == nil {
+		return "", fmt.Errorf("LLM 未配置")
+	}
+	var b strings.Builder
+	if dirList != "" {
+		b.WriteString("仓库目录（先看结构，知道什么笔记在哪）：\n" + dirList + "\n\n")
+	}
+	b.WriteString("本次要细读的笔记：\n")
+	n := 0
+	for _, f := range picks {
+		body, err := notes.Read(t.NotesDir, f.Name)
+		if err != nil {
+			continue
+		}
+		if len(body) > 6000 {
+			body = body[:6000] + "\n…（截断）"
+		}
+		b.WriteString("\n=== " + f.Name + " ===\n" + body + "\n")
+		n++
+	}
+	if n == 0 {
+		return "", fmt.Errorf("还没有笔记（该目录下没读到可巡检的笔记）")
+	}
+	user := "当前教学内容：\n" + ctx + "\n\n" + b.String() + "\n开始巡检，输出诊断报告（可以点名指出未细读但目录里看着有问题的笔记）。"
+	raw, err := t.Client.Chat(t.withAgents(noteReviewSystem), []llm.Message{{Role: "user", Content: user}})
+	if err != nil {
+		return "", err
+	}
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", fmt.Errorf("巡检输出为空")
+	}
+	return raw, nil
+}

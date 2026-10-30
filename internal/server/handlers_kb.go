@@ -106,7 +106,17 @@ func (s *Server) noteReviewCore() error {
 	defer s.endStep()
 	// 仓库可能刚切过：巡检必须跟着 s.NotesDir 走，否则永远读默认 notes/
 	s.Tutor.NotesDir = s.NotesDir
-	report, err := s.Tutor.ReviewNotes(s.noteContext())
+	// 先看索引再挑几篇细读：上千篇的库全翻一遍既慢又抓不到重点
+	idx := notes.Build(s.NotesDir)
+	s.saveNoteIndex(idx)
+	picks := make([]notes.File, 0, 12)
+	for _, e := range idx.Entries {
+		if len(picks) >= 12 {
+			break
+		}
+		picks = append(picks, notes.File{Name: e.Path})
+	}
+	report, err := s.Tutor.ReviewPicked(s.noteContext(), picks, noteIndexForPrompt(idx, 60))
 	if s.FetchConf != nil {
 		s.FetchConf.NoteRun = today
 		if err != nil {
