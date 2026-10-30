@@ -424,6 +424,9 @@ type Verdict struct {
 	Channel  string `json:"channel,omitempty"` // marker | structured | ""
 	Cause    string `json:"cause,omitempty"`
 	Evidence string `json:"evidence,omitempty"`
+	// 结构化判定带出来的「卡在哪」和「下一步做什么」：只说「再想想」等于没反馈
+	Where  string `json:"where,omitempty"`
+	Action string `json:"action,omitempty"`
 }
 
 // Send 学习者发言 → 助教回复；解析 [PASS] 判定并落履历标记。
@@ -474,24 +477,25 @@ func (t *Tutor) Send(ctx context.Context, lesson Lesson, userText string) (Verdi
 	// 第八轮-P0-1 判定双通道：先解析标记（容错），缺失时走结构化判定
 	kind, markWarn := ParsePassMark(reply)
 	channel := "marker"
-	var vCause, vReason string
+	var vCause, vReason, vWhere, vAction string
 	switch {
 	case kind != "":
 		s.addDiag(Diag{At: t.now(), Channel: "marker", Verdict: kind, Note: markWarn})
 	case !stuckRound && judgeWarranted(s, userText):
 		// 结构化通道：把学生回答+验收标准丢给一次独立小调用——闭环不依赖模型记得吐标记
 		start := t.now()
-		pass, reason, cause, retried, jerr := t.judgeStructured(ctx, lesson, s)
+		jres, jerr := t.judgeStructured(ctx, lesson, s)
 		d := Diag{At: t.now(), Channel: "structured", DurationMs: t.now().Sub(start).Milliseconds(),
-			Retried: retried, Note: markWarn}
+			Retried: jres.Retried, Note: markWarn}
 		if jerr != nil {
 			d.Verdict = "error"
 			d.Note += " " + jerr.Error()
-		} else if pass {
+		} else if jres.Pass {
 			kind, d.Verdict = "pass", "pass"
 		} else {
 			d.Verdict = "fail"
-			vCause, vReason = cause, reason
+			vCause, vReason = jres.Cause, jres.Reason
+			vWhere, vAction = jres.Where, jres.Action
 		}
 		channel = "structured"
 		s.addDiag(d)
@@ -520,7 +524,7 @@ func (t *Tutor) Send(ctx context.Context, lesson Lesson, userText string) (Verdi
 	}
 	t.save(s)
 	t.recordVerdict(kind, stuckRound, vCause, channel)
-	return Verdict{Kind: kind, Reply: reply, Guide: t.guideLevel(), Channel: channel, Cause: vCause, Evidence: vReason}, nil
+	return Verdict{Kind: kind, Reply: reply, Guide: t.guideLevel(), Channel: channel, Cause: vCause, Evidence: vReason, Where: vWhere, Action: vAction}, nil
 }
 
 // followup 收尾后的陪聊：学习者可能在回答收尾前的加深追问，或继续追问。

@@ -59,13 +59,13 @@ const judgeSystem = `你是收尾判定器。学生刚回答了助教的检查�
 - 部分对但有明显洞 → pass=false，cause 标「concept」
 
 cause 只有六种：concept（概念没懂）、condition（看漏条件）、env（环境/报错）、slip（拼写/命令打错）、unfinished（没做完步骤）、none（通过时用）。
-输出严格 JSON（无围栏）：{"pass":true,"reason":"一句话依据","cause":"none"}`
+输出严格 JSON（无围栏）：{"pass":true,"reason":"一句话依据","cause":"none","where":"卡在哪个具体点（没卡就给空串）","action":"让他下一步做的一件小事，一句话，不要给答案"}`
 
 // judgeStructured 结构化判定通道：独立小调用，不依赖教学会话的标记习惯。
 // retried=true 表示第一次 JSON 解析失败、重试了一次（二次校验）。
-func (t *Tutor) judgeStructured(ctx context.Context, lesson Lesson, s *Session) (pass bool, reason, cause string, retried bool, err error) {
+func (t *Tutor) judgeStructured(ctx context.Context, lesson Lesson, s *Session) (r JudgeResult, err error) {
 	if t.Client == nil {
-		return false, "", "", false, fmt.Errorf("LLM 未配置")
+		return JudgeResult{}, fmt.Errorf("LLM 未配置")
 	}
 	q, a := "", s.Messages[len(s.Messages)-1].Content
 	for i := len(s.Messages) - 2; i >= 0; i-- {
@@ -77,15 +77,17 @@ func (t *Tutor) judgeStructured(ctx context.Context, lesson Lesson, s *Session) 
 	user := fmt.Sprintf("知识点：《%s》——%s\n\n检查题（助教最后一条）：\n%s\n\n学生回答：\n%s\n\n判定。",
 		lesson.Title, lesson.Brief, truncRunes(q, 400), truncRunes(a, 400))
 	for attempt := 0; attempt < 2; attempt++ {
-		retried = attempt > 0
+		retried := attempt > 0
 		raw, jerr := llm.ChatJSONWith(ctx, t.Client, t.withAgents(judgeSystem), []llm.Message{{Role: "user", Content: user}})
 		if jerr != nil {
-			return false, "", "", retried, jerr
+			return JudgeResult{Retried: retried}, jerr
 		}
 		var out struct {
 			Pass   bool   `json:"pass"`
 			Reason string `json:"reason"`
 			Cause  string `json:"cause"`
+			Where  string `json:"where"`
+			Action string `json:"action"`
 		}
 		if uerr := json.Unmarshal([]byte(raw), &out); uerr != nil {
 			continue // JSON 漂移：重试一次
@@ -93,9 +95,9 @@ func (t *Tutor) judgeStructured(ctx context.Context, lesson Lesson, s *Session) 
 		if out.Cause == "" {
 			out.Cause = "none"
 		}
-		return out.Pass, out.Reason, out.Cause, retried, nil
+		return JudgeResult{Pass: out.Pass, Reason: out.Reason, Cause: out.Cause, Where: out.Where, Action: out.Action, Retried: retried}, nil
 	}
-	return false, "", "", retried, fmt.Errorf("判定 JSON 两次解析失败")
+	return JudgeResult{}, fmt.Errorf("判定 JSON 两次解析失败")
 }
 
 // judgeWarranted 是否值得走结构化通道：助教刚问过问题（检查题在等答案）、
@@ -133,4 +135,15 @@ func truncRunes(s string, n int) string {
 		return s
 	}
 	return string(r[:n]) + "…"
+}
+
+// JudgeResult 结构化判定的结果：不只过/不过，还要说清「错在哪类、卡在哪、下一步做什么」。
+// 这是 docs/teach/spec.md 里「懂教」的最小要求——只说「再想想」等于没反馈。
+type JudgeResult struct {
+	Pass    bool   `json:"pass"`
+	Reason  string `json:"reason"`           // 一句话依据
+	Cause   string `json:"cause"`            // concept | condition | env | slip | unfinished | none
+	Where   string `json:"where,omitempty"`  // 卡在哪个具体点（没卡给空串）
+	Action  string `json:"action,omitempty"` // 下一步做的一件小事（不给答案）
+	Retried bool   `json:"retried,omitempty"`
 }
