@@ -2333,6 +2333,7 @@ async function renderRun(){
     RUN_STATE=st;
     box.innerHTML=runShell(st);
     renderTeachStats(box);
+    renderReviews(box);
   }catch(e){
     box.innerHTML='<div class="empty" style="padding:24px 10px">加载失败：'+esc(String(e.message||e))+'</div>';
   }
@@ -2433,9 +2434,67 @@ async function renderTeachStats(box){
     +cell('退档回升率', rec)
     +'</div>'
     +'<div style="font-size:11.5px;color:var(--mut)">错误类型：'+esc(causeTxt)+'</div>'
+    +(m.byDay?daySpark(m.byDay):'')
     +(judged?'':'<div style="font-size:11.5px;color:var(--mut);margin-top:6px">还没有判定记录——做一节课的检查题才会开始积累</div>')
     +'</div>';
   box.insertAdjacentHTML('afterbegin',html);
+}
+// ---- 待判区：机器判不了的产物，交给人来判（单人本地版=自己判）----
+async function renderReviews(box){
+  if(!box)return;
+  let r=null;
+  try{ r=await api('/api/reviews'); }catch(e){ return }
+  const list=(r&&r.pending)||[];
+  if(!list.length)return;
+  const cards=list.map(it=>{
+    const out=String(it.output||'');
+    const brief=out.length>240?out.slice(0,240)+'…':out;
+    return '<div class="va" style="border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:var(--card)">'
+      +'<div style="font-size:13px;color:var(--mut);margin-bottom:6px">待判 · '+esc(it.target||'')+'</div>'
+      +'<pre style="white-space:pre-wrap;font-size:12.5px;line-height:1.7;margin:0 0 10px;background:var(--bg);border-radius:6px;padding:8px">'+esc(brief)+'</pre>'
+      +'<div style="display:flex;gap:10px">'
+      +'<button class="va primary" style="border:1px solid var(--pink);background:var(--pink);color:#fff;padding:6px 14px;border-radius:8px;cursor:pointer" onclick="decideReview(\''+it.id+'\',true)">通过</button>'
+      +'<button class="va" style="border:1px solid var(--line);background:transparent;color:var(--mut);padding:6px 14px;border-radius:8px;cursor:pointer" onclick="decideReview(\''+it.id+'\',false)">不过</button>'
+      +'</div></div>';
+  }).join('');
+  box.insertAdjacentHTML('afterbegin','<div id="reviewBox" style="margin-bottom:12px">'
+    +'<div style="font-size:12.5px;color:var(--mut);margin-bottom:8px">'+list.length+' 条待判：机器判不了的，你来判</div>'
+    +cards+'</div>');
+}
+
+async function decideReview(id,pass){
+  let where='',action='';
+  if(!pass){
+    where=prompt('差在哪？（一句话，会记进你的学习记录）')||'';
+    action=prompt('下一步做的一件小事？')||'';
+  }
+  try{
+    const r=await api('/api/reviews/verdict',{id,pass,where,action});
+    toast(pass?'记过了'+(r.advanced?'，这一关解锁':''):'记下了，按下一步继续',2600);
+    await renderRun();
+  }catch(e){toast('判定失败：'+(e.message||e))}
+}
+
+// ---- 趋势线：近 7 天每天的平滑率折线（样本不足会标注）----
+function daySpark(byDay){
+  const days=Object.keys(byDay||{}).sort().slice(-7);
+  if(days.length<2)return '';
+  const pts=days.map(d=>{
+    const b=byDay[d]||{};
+    const rate=((b.independent||0)+1)/((b.judged||0)+2);
+    return {d,rate,judged:b.judged||0};
+  });
+  const W=180,H=36,pad=3;
+  const xs=(i)=>pad+i*(W-2*pad)/Math.max(1,pts.length-1);
+  const ys=(p)=>H-pad-(H-2*pad)*p.rate;
+  const line=pts.map((p,i)=>xs(i).toFixed(1)+','+ys(p).toFixed(1)).join(' ');
+  const lowSample=pts.some(p=>p.judged<5);
+  const last=pts[pts.length-1];
+  return '<div style="display:flex;align-items:center;gap:10px;margin-top:10px">'
+    +'<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'">'
+    +'<polyline fill="none" stroke="var(--pink)" stroke-width="1.6" points="'+line+'"/></svg>'
+    +'<span style="font-size:11.5px;color:var(--mut)">近 7 天：'+Math.round(last.rate*100)+'%'
+    +(lowSample?'（含样本不足的日子）':'')+'</span></div>';
 }</script>
 </body>
 </html>
