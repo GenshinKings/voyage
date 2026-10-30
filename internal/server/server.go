@@ -29,6 +29,7 @@ import (
 	"voyage/internal/notes"
 	"voyage/internal/profile"
 	"voyage/internal/reflib"
+	"voyage/internal/review"
 	"voyage/internal/run"
 	"voyage/internal/scheduler"
 	"voyage/internal/store"
@@ -132,6 +133,8 @@ type Server struct {
 	st       *store.Store // 本实例的存储锁与原子写，不再用包级全局
 	Goals    []Goal       `json:"goals"`
 	RunState *run.Run     `json:"run,omitempty"` // 「从零做开源项目」当前闯关进度
+	// 第三方判定待判队列（单人本地版：判卷人=用户自己）
+	Reviews *review.Manager `json:"-" `
 	// 弃学防线（comeback.go）：上次学习日期 与 召回招呼（只打一次）
 	LastLearn string               `json:"lastLearn,omitempty"`
 	Comeback  string               `json:"comeback,omitempty"`
@@ -544,6 +547,7 @@ func (s *Server) Handlers() http.Handler {
 	s.registerLearnHandlers(mux)
 	s.registerRunHandlers(mux)
 	s.registerTeachHandlers(mux)
+	s.registerReviewHandlers(mux)
 
 	// 第八轮-P1-2：路由按域拆文件（learn/kb/shop/sys），此处只做装配
 	s.registerKBHandlers(mux)

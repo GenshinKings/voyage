@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"voyage/internal/review"
 	"voyage/internal/run"
 )
 
@@ -68,7 +69,17 @@ func (s *Server) registerRunHandlers(mux *http.ServeMux) {
 					reason = reason + " 下一步：" + action
 				}
 			} else {
-				ok, reason = s.RunState.Submit(req.Output)
+				// 没有可用模型：不静默判过，进待判队列（第三方判定的兜底入口）
+				it := s.Reviews.Enqueue(review.Item{
+					StageID: st.ID,
+					Target:  st.Goal,
+					Output:  req.Output,
+					Reason:  "没有可用模型，自动判定不了，转为待判",
+				})
+				writeJSON(w, map[string]any{"ok": false, "pendingReview": it.ID,
+					"reason": "这一关机器判不了，已记成待判——去「待判」里自己判一下（或接个模型）",
+					"hint":   st.Hint, "progress": s.RunState.Progress()})
+				return
 			}
 		} else {
 			ok, reason = s.RunState.Submit(req.Output)
