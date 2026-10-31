@@ -24,6 +24,7 @@ import (
 	"voyage/internal/evidence"
 	"voyage/internal/exercise"
 	"voyage/internal/ghfetch"
+	"voyage/internal/inbox"
 	"voyage/internal/llm"
 	"voyage/internal/memory"
 	"voyage/internal/notes"
@@ -135,6 +136,7 @@ type Server struct {
 	RunState *run.Run     `json:"run,omitempty"` // 「从零做开源项目」当前闯关进度
 	// 第三方判定待判队列（单人本地版：判卷人=用户自己）
 	Reviews *review.Manager `json:"-" `
+	Inbox   *inbox.Box      `json:"-"` // 麻烦收件箱（一句话→任务卡）
 	// 弃学防线（comeback.go）：上次学习日期 与 召回招呼（只打一次）
 	LastLearn string               `json:"lastLearn,omitempty"`
 	Comeback  string               `json:"comeback,omitempty"`
@@ -556,6 +558,7 @@ func (s *Server) Handlers() http.Handler {
 	s.registerInkpalVaultHandlers(mux)
 	s.registerVaultHandlers(mux)
 	s.registerNoteIndexHandlers(mux)
+	s.registerInboxHandlers(mux)
 
 	// 第八轮-P1-2：路由按域拆文件（learn/kb/shop/sys），此处只做装配
 	s.registerKBHandlers(mux)
