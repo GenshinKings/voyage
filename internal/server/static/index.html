@@ -2634,7 +2634,7 @@ async function setUncertain(){
   const st=RUN_STATE; if(!st||!st.stage) return;
   const v=prompt('这一关，你哪里还不确定？（写具体：哪一步、哪个结果）',(st.uncertain&&st.uncertain[st.stage.id])||'');
   if(v===null) return;
-  try{ await api('/api/run/submit',{output:'（仅记录不确定，未提交产物）',uncertain:v}); toast('记下了',2600); await renderRun(); }
+  try{ await api('/api/run/uncertain',{stageId:st.stage.id, text:v}); toast('记下了',2600); await renderRun(); }
   catch(e){ toast('没记上：'+(e.message||e)); }
 }
 async function setRetro(){

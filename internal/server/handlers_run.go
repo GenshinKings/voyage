@@ -133,6 +133,30 @@ func (s *Server) registerRunHandlers(mux *http.ServeMux) {
 	})
 
 	// 教学指标（docs/teach/spec.md 第八节）：独立通过率 / 错误类型分布 / 退档后回升率。
+	// 只记「我哪里还不确定」，不算一次提交。
+	// 为什么单独开一个口：走 submit 会把这段文字当成产物存进 Results，
+	// 等于用一句自述冒充答案——判定也会被它污染。
+	mux.HandleFunc("/api/run/uncertain", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeErr(w, 405, "只支持 POST")
+			return
+		}
+		var req struct {
+			StageID string `json:"stageId"`
+			Text    string `json:"text"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.StageID == "" {
+			writeErr(w, 400, "需要 stageId")
+			return
+		}
+		if s.RunState == nil {
+			writeErr(w, 400, "还没开始一个项目")
+			return
+		}
+		s.RunState.NoteUncertain(req.StageID, req.Text)
+		s.saveState()
+		writeJSON(w, map[string]any{"ok": true, "uncertain": s.RunState.Uncertain})
+	})
 	// 事后对账：这次「不确定」后来真出问题了吗。
 	// 这是量「判断准确度」的唯一入口——没有它，「判断」那层永远只有自述。
 	mux.HandleFunc("/api/run/reconcile", func(w http.ResponseWriter, r *http.Request) {
