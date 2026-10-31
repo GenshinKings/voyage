@@ -127,6 +127,8 @@ func (s *Server) registerRunHandlers(mux *http.ServeMux) {
 			"uncertain":    s.RunState.Uncertain,
 			"reconcile":    s.RunState.Reconcile,
 			"judgementHit": s.RunState.JudgementHit(),
+			"retro":        s.RunState.Retro,
+			"retroCounts":  s.RunState.RetroCount(),
 		})
 	})
 
@@ -158,6 +160,44 @@ func (s *Server) registerRunHandlers(mux *http.ServeMux) {
 		writeJSON(w, map[string]any{"ok": true, "hit": s.RunState.JudgementHit()})
 	})
 
+	// 复盘：卡点类型 + 一句「下次怎么办」。这是错误谱系的唯一入口。
+	mux.HandleFunc("/api/run/retro", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeErr(w, 405, "只支持 POST")
+			return
+		}
+		var req struct {
+			StageID string `json:"stageId"`
+			Kind    string `json:"kind"`
+			Note    string `json:"note"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.StageID == "" {
+			writeErr(w, 400, "需要 stageId")
+			return
+		}
+		if s.RunState == nil {
+			writeErr(w, 400, "还没开始一个项目")
+			return
+		}
+		if !run.ValidRetroKind(req.Kind) {
+			writeErr(w, 400, "kind 只能是 concept / condition / env / slip / unfinished")
+			return
+		}
+		if trimSpace(req.Note) == "" {
+			writeErr(w, 400, "写一句「下次怎么办」——只记类型不记做法，下次还会栽")
+			return
+		}
+		if !s.RunState.NoteRetro(req.StageID, req.Kind, req.Note) {
+			writeErr(w, 400, "这条复盘没记下来")
+			return
+		}
+		s.saveState()
+		writeJSON(w, map[string]any{
+			"ok":       true,
+			"counts":   s.RunState.RetroCount(),
+			"dominant": s.RunState.DominantKind(),
+		})
+	})
 	mux.HandleFunc("/api/stats", func(w http.ResponseWriter, r *http.Request) {
 		if s.Tutor == nil {
 			writeJSON(w, map[string]any{"judged": 0, "note": "助教还没起来"})
@@ -174,4 +214,16 @@ func currentHint(r *run.Run) string {
 	}
 	return ""
 
+}
+
+// trimSpace 去掉首尾空白（这个文件里只需要这一处，留在本地不额外建包）。
+func trimSpace(s string) string {
+	start, end := 0, len(s)
+	for start < end && (s[start] == ' ' || s[start] == '\t' || s[start] == '\n' || s[start] == '\r') {
+		start++
+	}
+	for end > start && (s[end-1] == ' ' || s[end-1] == '\t' || s[end-1] == '\n' || s[end-1] == '\r') {
+		end--
+	}
+	return s[start:end]
 }

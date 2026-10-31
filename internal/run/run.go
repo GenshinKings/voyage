@@ -74,8 +74,11 @@ type Run struct {
 	// Reconcile 关卡 ID -> 事后对账结果（was-problem / no-problem）。
 	// 用来量「判断的准确度」——说会出问题的地方，后来真出问题了吗。
 	Reconcile map[string]string `json:"reconcile"`
-	Started   string            `json:"started"`
-	Finished  bool              `json:"finished"`
+	// Retro 关卡 ID -> 复盘（卡点类型 + 一句「下次怎么办」）。
+	// 只记结果不记复盘，错误谱系就永远是空的。
+	Retro    map[string]Retro `json:"retro"`
+	Started  string           `json:"started"`
+	Finished bool             `json:"finished"`
 }
 
 // Start 开一个新 Run。
@@ -235,4 +238,57 @@ func trim(s string) string {
 		end--
 	}
 	return s[start:end]
+}
+
+// Retro 一次复盘。
+type Retro struct {
+	Kind string `json:"kind"` // concept / condition / env / slip / unfinished
+	Note string `json:"note"` // 一句话：下次怎么办
+}
+
+// RetroKinds 允许的卡点类型（跟教学规范一致）。
+var RetroKinds = []string{"concept", "condition", "env", "slip", "unfinished"}
+
+// ValidRetroKind 校验卡点类型。
+func ValidRetroKind(k string) bool {
+	for _, v := range RetroKinds {
+		if v == k {
+			return true
+		}
+	}
+	return false
+}
+
+// NoteRetro 记一次复盘：卡点类型必须在允许的集合里，note 不能空。
+func (r *Run) NoteRetro(id, kind, note string) bool {
+	kind = trim(kind)
+	note = trim(note)
+	if id == "" || !ValidRetroKind(kind) || note == "" {
+		return false
+	}
+	if r.Retro == nil {
+		r.Retro = map[string]Retro{}
+	}
+	r.Retro[id] = Retro{Kind: kind, Note: note}
+	return true
+}
+
+// RetroCount 按卡点类型统计次数（给「按错误出题」用）。
+func (r *Run) RetroCount() map[string]int {
+	out := map[string]int{}
+	for _, v := range r.Retro {
+		out[v.Kind]++
+	}
+	return out
+}
+
+// DominantKind 出现最多的卡点类型（没有记录返回空串）。
+func (r *Run) DominantKind() string {
+	best, bestN := "", 0
+	for k, n := range r.RetroCount() {
+		if n > bestN {
+			best, bestN = k, n
+		}
+	}
+	return best
 }
