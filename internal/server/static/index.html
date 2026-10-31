@@ -483,7 +483,14 @@ kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;paddi
 [data-theme=dark] #setView input,[data-theme=dark] #setView textarea,[data-theme=dark] #setView select{background:var(--card);color:var(--ink);border-color:var(--line)}
 [data-theme=dark] .dir-input textarea{background:var(--card);color:var(--ink);border-color:var(--line)}
 [data-theme=dark] input[type=checkbox]{accent-color:var(--pink)}
-</style>
+/* 麻烦收件箱：一行版（不抢正文），展开才占地方 */
+.inbox-bar{display:flex;align-items:center;gap:10px;max-width:min(920px,100%);margin:6px auto 4px;padding:8px 14px;border:1px solid var(--line);border-radius:10px;background:var(--card)}
+.inbox-bar .ib-t{font-size:12.5px;color:var(--mut)}
+.inbox-bar .ib-n{font-size:12.5px;color:var(--pink);font-weight:600}
+.inbox-bar .ib-btn{border:1px solid var(--line);background:transparent;color:var(--mut);border-radius:8px;padding:5px 12px;font:inherit;font-size:12.5px;cursor:pointer}
+.inbox-bar .ib-btn:hover{color:var(--ink);border-color:var(--pink)}
+.inbox-bar .ib-btn.primary{border-color:var(--pink);color:var(--pink)}
+#inboxBody{max-width:min(920px,100%);margin:0 auto}</style>
 </head>
 <body>
 <div id="edge"><span class="vtext">VOYAGE · 全托管学习机</span><div class="pill"><i id="edgePill"></i></div><span class="pv" id="edgePct">0%</span></div>
@@ -491,6 +498,7 @@ kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;paddi
   <div class="logo"><div class="kicker">VOYAGE</div><b>AI 学习工作台</b></div>
   <div class="sidebtns">
     <div class="sbtn on" data-v="learn">◈ <span class="sbtn-t">今天</span></div>
+        <div class="sbtn" onclick="openInboxSheet()" title="记一件今天烦到你的小事">＋ <span class="sbtn-t">记麻烦</span></div>
     <div class="sbtn" data-v="progress">◎ <span class="sbtn-t">我的进度</span></div>
         <!-- 项目通关已移交 3.0（voyage3 仓库）：2.0 不再保留这块，避免两套验收逻辑打架 -->
     <div class="sbtn lab-extra" data-v="dir">◈ <span class="sbtn-t">方向</span></div>
@@ -2547,34 +2555,49 @@ function dirListHTML(idx){
   return '<div style="margin-top:8px;border-top:1px solid var(--line);padding-top:6px">'+h+'</div>';
 }
 // ===== 麻烦收件箱（MVP P1）=====
+// 麻烦收件箱：默认只占一行，别把「今天的课」顶下去；点开才展开。
+// 判据：进门第一眼应该是今天要做的事，不是一堆待办垃圾。
+let INBOX_OPEN=false;
 async function renderInbox(){
   const el=$('inboxCard'); if(!el) return;
   let d=null;
   try{ d=await api('/api/inbox'); }catch(e){ el.innerHTML=''; return; }
   const items=(d&&d.items)||[];
   const open=items.filter(x=>x.status==='open');
-  let h='<div class="set-card" style="margin:8px auto 14px;max-width:min(920px,100%);padding:12px 16px">';
-  h+='<div class="grouplabel" style="margin-bottom:8px">麻烦收件箱 —— 今天什么烦到你了？一句话就行</div>';
-  h+='<div style="display:flex;gap:8px"><input id="inboxInput" placeholder="例：选品表要手工抄进 Excel，一小时才两行" style="flex:1;border:1px solid var(--line);border-radius:8px;padding:8px 11px;font:inherit;font-size:13px;outline:none" onkeydown="if(event.key===\'Enter\')addInbox()">';
-  h+='<button class="backbtn" onclick="addInbox()">收下</button></div>';
-  if(open.length){
-    h+='<div style="margin-top:10px;font-size:12.5px;color:var(--mut)">待处理 '+open.length+' 条</div>';
-    open.forEach(it=>{
-      h+='<div style="border-left:3px solid var(--pink);padding:8px 10px;margin:8px 0;background:var(--card);border-radius:0 8px 8px 0">';
-      h+='<div style="font-size:13.5px">'+esc(it.text)+'</div>';
-      h+='<div style="margin-top:6px;display:flex;gap:8px;flex-wrap:wrap">';
-      h+='<button class="backbtn" onclick="draftInbox(\''+it.id+'\')">自动起草任务卡</button>';
-      h+='<button class="backbtn" onclick="startInbox(\''+it.id+'\')">我已知怎么做，直接开一关</button>';
-      h+='<button class="backbtn" onclick="dropInbox(\''+it.id+'\')">不做</button>';
-      h+='</div></div>';
-    });
-  }
+  const n=open.length;
+  let h='<div class="inbox-bar">'
+    +'<span class="ib-t">麻烦收件箱</span>'
+    +(n?('<span class="ib-n">'+n+' 条待处理</span>'):'<span class="ib-n mut">空着挺好</span>')
+    +'<span style="flex:1"></span>'
+    +'<button class="ib-btn" onclick="toggleInbox()">'+(INBOX_OPEN?'收起':'展开')+'</button>'
+    +'<button class="ib-btn primary" onclick="openInboxSheet()">记一条</button>'
+    +'</div>';
+  h+='<div id="inboxBody" style="'+(INBOX_OPEN?'':'display:none')+'">';
+  h+='<div style="display:flex;gap:8px;margin:10px 0">'
+    +'<input id="inboxInput" placeholder="一句话：今天什么烦到你了" style="flex:1;border:1px solid var(--line);border-radius:8px;padding:8px 11px;font:inherit;font-size:13px;outline:none" onkeydown="if(event.key===\'Enter\')addInbox()">'
+    +'<button class="backbtn" onclick="addInbox()">收下</button></div>';
+  open.forEach(it=>{
+    h+='<div style="border-left:3px solid var(--pink);padding:8px 10px;margin:8px 0;background:var(--card);border-radius:0 8px 8px 0">';
+    h+='<div style="font-size:13.5px">'+esc(it.text)+'</div>';
+    h+='<div style="margin-top:6px;display:flex;gap:8px;flex-wrap:wrap">';
+    h+='<button class="backbtn" onclick="draftInbox(\''+it.id+'\')">自动起草任务卡</button>';
+    h+='<button class="backbtn" onclick="startInbox(\''+it.id+'\')">我已知怎么做</button>';
+    h+='<button class="backbtn" onclick="dropInbox(\''+it.id+'\')">不做</button>';
+    h+='</div></div>';
+  });
   const planned=items.filter(x=>x.status==='planned').slice(0,3);
   if(planned.length){
-    h+='<div style="margin-top:10px;font-size:12.5px;color:var(--mut)">已变成任务卡：'+planned.map(x=>esc(x.goal||x.text)).join(' · ')+'</div>';
+    h+='<div style="margin-top:8px;font-size:12.5px;color:var(--mut)">已变成任务卡：'+planned.map(x=>esc(x.goal||x.text)).join(' · ')+'</div>';
   }
   h+='</div>';
   el.innerHTML=h;
+}
+function toggleInbox(){ INBOX_OPEN=!INBOX_OPEN; renderInbox(); }
+function openInboxSheet(){
+  INBOX_OPEN=true;
+  renderInbox().then(()=>{
+    const i=$('inboxInput'); if(i){ i.focus(); i.scrollIntoView({block:'center',behavior:'smooth'}); }
+  });
 }
 async function addInbox(){
   const inp=$('inboxInput'); if(!inp) return;
