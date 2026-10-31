@@ -561,6 +561,7 @@ func (s *Server) Handlers() http.Handler {
 	s.registerInboxHandlers(mux)
 	s.registerInboxDraftHandler(mux)
 	s.registerNextTaskHandlers(mux)
+	s.registerDeliverableHandlers(mux)
 
 	// 第八轮-P1-2：路由按域拆文件（learn/kb/shop/sys），此处只做装配
 	s.registerKBHandlers(mux)

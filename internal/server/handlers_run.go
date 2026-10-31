@@ -105,6 +105,9 @@ func (s *Server) registerRunHandlers(mux *http.ServeMux) {
 			resp["stage"] = s.RunState.CurrentStage()
 			resp["finished"] = s.RunState.Finished
 			if s.RunState.Finished {
+				s.saveDeliverable(s.RunState) // 完工就进交付履历：履历只认走过验收的关
+			}
+			if s.RunState.Finished {
 				resp["deliverable"] = s.RunState.Deliverable()
 			}
 		}
@@ -181,6 +184,7 @@ func (s *Server) registerRunHandlers(mux *http.ServeMux) {
 			return
 		}
 		s.saveState()
+		s.saveDeliverable(s.RunState) // 对账可能发生在完工之后：履历要跟着更新
 		writeJSON(w, map[string]any{"ok": true, "hit": s.RunState.JudgementHit()})
 	})
 
@@ -216,6 +220,7 @@ func (s *Server) registerRunHandlers(mux *http.ServeMux) {
 			return
 		}
 		s.saveState()
+		s.saveDeliverable(s.RunState) // 复盘同理：履历不是一次性快照
 		writeJSON(w, map[string]any{
 			"ok":       true,
 			"counts":   s.RunState.RetroCount(),
