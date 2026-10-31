@@ -84,6 +84,10 @@ async function renderToday(){
     h+='<div class="check">怎么算过：<b>'+esc(stage.check)+'</b></div>';
     h+='<div class="row"><textarea id="out" rows="4" placeholder="把你做的东西贴上来：命令、输出、结果、你判断的依据"></textarea></div>';
     h+='<div class="row"><input id="unc" placeholder="我哪里还不确定（可留空，但写出来更有用）"></div>';
+    if(stage.firstStep)h+='<div class="hint" style="color:#c8ceda">先动这一下：'+esc(stage.firstStep)+'</div>';
+    const sc=(ST.scaffold&&ST.scaffold[stage.id])||'';
+    if(sc)h+='<pre style="margin-top:12px">'+esc(sc)+'</pre>';
+    h+='<div class="row"><button class="ghost" id="stuckBtn" onclick="stuck()">我不知道从哪下手</button></div>';
     h+='<div class="row"><button class="primary" onclick="submitWork()">交上来</button>';
     h+='<button class="ghost" onclick="retro()">复盘这一关</button>';
     h+='<button class="ghost" onclick="nextTask()">按卡点出下一题</button></div>';
@@ -216,6 +220,19 @@ async function saveVault(){
 }
 
 render();
-</script>
+
+// 我不知道从哪下手：把台阶降一级，只给第一条能照抄的动作
+async function stuck(){
+  const b=$('stuckBtn');
+  if(b){b.disabled=true;b.textContent='正在拆小一点…'}
+  try{
+    const r=await api('/api/run/help',{});
+    alert(r.text||'没拆出来，再点一次试试');
+    await render();
+  }catch(e){
+    alert('没拆出来：'+e.message);
+    if(b){b.disabled=false;b.textContent='我不知道从哪下手'}
+  }
+}</script>
 </body>
 </html>

@@ -21,13 +21,14 @@ const draftSystem = `你是任务卡的起草员。学习者给你一句「真�
 - goal：一句话说清「做完什么算把这事解决」，要小到 30~60 分钟能做完
 - check：验收标准，必须是可观察的（跑出一条命令看到输出、贴出结果、别人照着能做）。
   绝对不许写「理解了」「掌握了」这种没法验证的话
-- hint：只给方向或第一步（该先看什么、先敲什么），不给完整答案
+- hint：只给方向（该先看什么），不给完整答案
+- firstStep：**照抄就能动的那一下**——打开哪个软件、在哪个目录、敲哪条命令、点哪个按钮；再附一句「做完你会看到什么」。新手卡住的不是不会做，是不知道从哪下手，所以这栏不许写「学习/了解」
 - 先判断「有没有现成工具、软件或系统功能能解决」：有的话 goal 写成「用现成工具把这件事做掉」，
   hint 写该用哪个工具、先点哪里；不要默认让人自己写代码造一个
 - 只有现成工具确实解决不了，才写「自己做一个小的」
 - 如果这句麻烦大到一次做不完，就把 goal 收窄成「第一个能验证的小步」
 
-输出严格 JSON（无围栏）：{"goal":"...","check":"...","hint":"..."}`
+输出严格 JSON（无围栏）：{"goal":"...","check":"...","hint":"...","firstStep":"...","expect":"做完会看到什么"}`
 
 // registerInboxDraftHandler 装配起草接口。
 func (s *Server) registerInboxDraftHandler(mux *http.ServeMux) {
@@ -70,9 +71,11 @@ func (s *Server) registerInboxDraftHandler(mux *http.ServeMux) {
 
 // taskDraft 起草结果。
 type taskDraft struct {
-	Goal  string `json:"goal"`
-	Check string `json:"check"`
-	Hint  string `json:"hint"`
+	Goal      string `json:"goal"`
+	Check     string `json:"check"`
+	Hint      string `json:"hint"`
+	FirstStep string `json:"firstStep"`
+	Expect    string `json:"expect"`
 }
 
 // draftTask 让模型把麻烦变成任务卡草案。
@@ -89,6 +92,12 @@ func (s *Server) draftTask(ctx context.Context, text string) (taskDraft, error) 
 	d.Goal = strings.TrimSpace(d.Goal)
 	d.Check = strings.TrimSpace(d.Check)
 	d.Hint = strings.TrimSpace(d.Hint)
+	d.FirstStep = strings.TrimSpace(d.FirstStep)
+	d.Expect = strings.TrimSpace(d.Expect)
+	if d.FirstStep == "" {
+		// 没有第一步的任务卡等于把新手扔在原地：不当作可用草案
+		d.FirstStep = "（模型没给出第一步，请自己写：打开什么、敲哪条命令）"
+	}
 	if d.Check == "" {
 		// 模型没给出可观察的验收：不给半成品草案，让人自己写
 		d.Check = "（模型没给出可观察的验收标准，请自己写一条：做完能看到什么）"

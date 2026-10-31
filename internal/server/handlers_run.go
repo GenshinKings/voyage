@@ -132,6 +132,7 @@ func (s *Server) registerRunHandlers(mux *http.ServeMux) {
 			"judgementHit": s.RunState.JudgementHit(),
 			"retro":        s.RunState.Retro,
 			"retroCounts":  s.RunState.RetroCount(),
+			"scaffold":     s.RunState.Scaffold,
 		})
 	})
 

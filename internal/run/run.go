@@ -44,11 +44,14 @@ func TierName(t Tier) string {
 
 // Stage 一关：目标 + 验收 + 卡住时的下一步。
 type Stage struct {
-	ID     string   `json:"id"`
-	Goal   string   `json:"goal"`             // 一句话目标（可观察）
-	Check  string   `json:"check"`            // 一条能跑的验收（命令/操作 + 期望）
-	Hint   string   `json:"hint"`             // 卡住时只给下一步，不给答案
-	Expect []string `json:"expect,omitempty"` // 验收时必须出现的片段（命中任意一个即算过；空=需人工/模型判）
+	ID    string `json:"id"`
+	Goal  string `json:"goal"`  // 一句话目标（可观察）
+	Check string `json:"check"` // 一条能跑的验收（命令/操作 + 期望）
+	Hint  string `json:"hint"`  // 卡住时只给下一步，不给答案
+	// FirstStep 照抄就能动的那一下：打开什么、敲哪条命令、改哪一行。
+	// 只给方向不够——新手会卡在「知道该干嘛但不知道从哪下手」。
+	FirstStep string   `json:"firstStep,omitempty"`
+	Expect    []string `json:"expect,omitempty"` // 验收时必须出现的片段（命中任意一个即算过；空=需人工/模型判）
 }
 
 // Project 一个可从零开始的项目模板。
@@ -76,9 +79,11 @@ type Run struct {
 	Reconcile map[string]string `json:"reconcile"`
 	// Retro 关卡 ID -> 复盘（卡点类型 + 一句「下次怎么办」）。
 	// 只记结果不记复盘，错误谱系就永远是空的。
-	Retro    map[string]Retro `json:"retro"`
-	Started  string           `json:"started"`
-	Finished bool             `json:"finished"`
+	Retro map[string]Retro `json:"retro"`
+	// Scaffold 关卡 ID -> 按需给出的更小台阶（点「我不知道从哪下手」时生成）。
+	Scaffold map[string]string `json:"scaffold"`
+	Started  string            `json:"started"`
+	Finished bool              `json:"finished"`
 }
 
 // Start 开一个新 Run。
@@ -291,4 +296,15 @@ func (r *Run) DominantKind() string {
 		}
 	}
 	return best
+}
+
+// NoteScaffold 记下这一关的更小台阶（照抄版第一步）。
+func (r *Run) NoteScaffold(id, text string) {
+	if id == "" {
+		return
+	}
+	if r.Scaffold == nil {
+		r.Scaffold = map[string]string{}
+	}
+	r.Scaffold[id] = trim(text)
 }
