@@ -490,7 +490,9 @@ kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;paddi
 .inbox-bar .ib-btn{border:1px solid var(--line);background:transparent;color:var(--mut);border-radius:8px;padding:5px 12px;font:inherit;font-size:12.5px;cursor:pointer}
 .inbox-bar .ib-btn:hover{color:var(--ink);border-color:var(--pink)}
 .inbox-bar .ib-btn.primary{border-color:var(--pink);color:var(--pink)}
-#inboxBody{max-width:min(920px,100%);margin:0 auto}</style>
+#inboxBody{max-width:min(920px,100%);margin:0 auto}/* 进度只在顶部说一次；节点与右缘不再重复同一个数字 */
+#guideCard .voyage .pct{display:none}
+#edge .pv{display:none}</style>
 </head>
 <body>
 <div id="edge"><span class="vtext">VOYAGE · 全托管学习机</span><div class="pill"><i id="edgePill"></i></div><span class="pv" id="edgePct">0%</span></div>
@@ -498,7 +500,6 @@ kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;paddi
   <div class="logo"><div class="kicker">VOYAGE</div><b>AI 学习工作台</b></div>
   <div class="sidebtns">
     <div class="sbtn on" data-v="learn">◈ <span class="sbtn-t">今天</span></div>
-        <div class="sbtn" onclick="openInboxSheet()" title="记一件今天烦到你的小事">＋ <span class="sbtn-t">记麻烦</span></div>
     <div class="sbtn" data-v="progress">◎ <span class="sbtn-t">我的进度</span></div>
         <!-- 项目通关已移交 3.0（voyage3 仓库）：2.0 不再保留这块，避免两套验收逻辑打架 -->
     <div class="sbtn lab-extra" data-v="dir">◈ <span class="sbtn-t">方向</span></div>
@@ -1336,7 +1337,7 @@ function renderSettings(){
     v.querySelectorAll('.act-model').forEach(b=>{b.onclick=()=>activateModel(b.dataset.name);});
     api('/api/profile').then(p=>{const el=document.getElementById('profileEdit');if(el)el.value=p.content||'';}).catch(()=>{});
     renderFetchBox();
-    renderInbox();
+  // 3.0 的收件箱与自检卡已迁到 voyage3；2.0 不再挂，避免两套入口做同一件事
     renderNotesBox();
     renderIterBox();
   }).catch(e=>{v.innerHTML='<div class="empty">'+esc(e.message)+'</div>';});
@@ -2348,7 +2349,7 @@ async function renderRun(){
     if(!st.started){await renderRunPicker(box);return;}
     RUN_STATE=st;
     box.innerHTML=runShell(st);
-    renderRunExtra(box, st);
+  // 3.0 的收件箱与自检卡已迁到 voyage3；2.0 不再挂，避免两套入口做同一件事
     renderTeachStats(box);
     renderReviews(box);
   }catch(e){
