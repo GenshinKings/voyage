@@ -93,6 +93,14 @@ func (s *Server) registerInkpalHandlers(mux *http.ServeMux) {
 			return
 		}
 		items, err := s.annotateNote(r.Context(), req.Path, req.Content)
+		// 批注出来的每一条都是「这里理解有问题」：落成薄弱点，
+		// 构建副本时专门在这些地方挖坑，而不是泛泛出题。
+		for _, a := range items {
+			if strings.TrimSpace(a.Correct) == "" {
+				continue
+			}
+			s.Weak.Add(a.Quote, a.Correct, "inkpal")
+		}
 		if err != nil {
 			s.httpErr(w, r, err, 502)
 			return

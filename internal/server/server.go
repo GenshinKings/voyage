@@ -35,6 +35,7 @@ import (
 	"voyage/internal/scheduler"
 	"voyage/internal/store"
 	"voyage/internal/tutor"
+	"voyage/internal/weakpoints"
 )
 
 //go:embed static/index.html
@@ -136,6 +137,8 @@ type Reading struct {
 
 // Server 应用壳。
 type Server struct {
+	// Weak 记「哪个知识点的理解有问题」：副本要挖坑，得先知道病灶。
+	Weak *weakpoints.Store
 	// stateMu 让「改状态」只有一个写者：所有改 RunState 的请求都要先拿这把锁。
 	// Go 的老话——不要用共享内存通信，用通信共享内存；这里先守住最小一条：单写者。
 	stateMu  sync.Mutex
@@ -263,7 +266,7 @@ func (s *Server) save(path string, v any) {
 
 // NewServer 装配：缺 goals 时写入种子（90 天冲刺三产出物）。
 func NewServer(dir string) *Server {
-	s := &Server{Dir: dir, st: store.New(), Ledger: evidence.New(), Bandit: bandit.New(time.Now().UnixNano()), Ability: ability.New(), AgentsPath: filepath.Join(dir, "AGENTS.md"), ProfilePath: profile.Ensure(dir), RefDir: reflib.Ensure(dir), NotesDir: notes.Ensure(dir)}
+	s := &Server{Dir: dir, Weak: weakpoints.New(dir), st: store.New(), Ledger: evidence.New(), Bandit: bandit.New(time.Now().UnixNano()), Ability: ability.New(), AgentsPath: filepath.Join(dir, "AGENTS.md"), ProfilePath: profile.Ensure(dir), RefDir: reflib.Ensure(dir), NotesDir: notes.Ensure(dir)}
 	s.defaultNotesDir = s.NotesDir
 	s.loadVaultConf()
 	s.loadFetchConf()

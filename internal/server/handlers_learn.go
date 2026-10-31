@@ -1002,11 +1002,32 @@ func briefContext(s *Server, rd *Reading) string {
 				done = append(done, l.Title)
 			}
 		}
+		// 副本不是只考最新的 6 个：新知识是主考内容，更早的知识是地基。
+		// 越早越可能是基础——地基不稳的时候，光考新东西只会让人反复卡在同一个地方。
 		if len(done) > 0 {
+			recent := done
+			var base []string
 			if len(done) > 6 {
-				done = done[len(done)-6:] // 只取最近收尾的：越早的东西越不该拿来定这次副本
+				base = done[:len(done)-6]
+				recent = done[len(done)-6:]
+				if len(base) > 6 {
+					base = base[len(base)-6:] // 基础也只取靠后的 6 个，再早的关联太弱
+				}
 			}
-			fmt.Fprintf(&b, "- 最近收尾的知识点：%s\n", strings.Join(done, "、"))
+			fmt.Fprintf(&b, "- 最近收尾的知识点（本次副本的主考内容）：%s\n", strings.Join(recent, "、"))
+			if len(base) > 0 {
+				fmt.Fprintf(&b, "- 更早的知识点（基础，副本要顺带复用、别让它生锈）：%s\n", strings.Join(base, "、"))
+			}
+		}
+		// 病灶：助教批注笔记时记下的「理解有问题」，副本专门在这些地方挖坑。
+		if s.Weak != nil {
+			if ws := s.Weak.Recent(6); len(ws) > 0 {
+				var lines []string
+				for _, w := range ws {
+					lines = append(lines, w.Topic+"（"+clipRunes(w.Detail, 80)+"）")
+				}
+				fmt.Fprintf(&b, "- 已知理解有问题的地方（副本必须在这几处挖坑，让他自己撞上）：%s\n", strings.Join(lines, "；"))
+			}
 		}
 	}
 	// 副本的方向来自学习目标，不是来自今天读到的那篇文章。
@@ -1017,7 +1038,8 @@ func briefContext(s *Server, rd *Reading) string {
 		}
 	}
 	b.WriteString("- 副本选题规则：由「学习者目标」定副本类型（要能独立交付→端到端小交付；要能读懂代码→带明确验收的阅读+改造）；")
-	b.WriteString("再由「最近收尾的知识点」定具体项目，副本必须真的用到这些知识点，用不上就换项目，不要为了读到的文章硬凑一个副本。\n")
+	b.WriteString("再由「最近收尾的知识点」定具体项目，副本必须真的用到这些知识点（主考新知识，同时复用更早的地基），用不上就换项目，不要为了读到的文章硬凑一个副本。")
+	b.WriteString("如果「已知理解有问题的地方」非空，副本必须专门在那几处制造判断点（挖坑），而不是绕开它们。\n")
 	return b.String()
 }
 
