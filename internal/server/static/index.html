@@ -505,7 +505,7 @@ kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;paddi
 <div id="main">
   <div id="topbar"><div style="display:flex;align-items:center;gap:10px"><button id="sideToggle" aria-label="打开或收起侧栏" onclick="toggleSideDrawer()">☰</button><div><div class="kicker" id="kicker">LEARNING · 对话式教学</div><h1 id="lessonTitle">今天丢来的</h1></div></div><div style="display:flex;gap:8px;flex-shrink:0"><button id="todayClass" class="backbtn hidden" style="border-color:var(--line);color:var(--mut)" onclick="openTodayClass()">今天的课</button><button id="backToday" class="backbtn hidden" onclick="backToday()">← 跳回今日知识点</button></div></div>
   <div id="view">
-    <div id="chatOuter"><div id="guideCard"></div><div id="planCard"></div><div id="chat"></div></div>
+    <div id="chatOuter"><div id="inboxCard"></div><div id="guideCard"></div><div id="planCard"></div><div id="chat"></div></div>
     <div id="runView" class="hidden"></div>
     <div id="dirView" class="hidden"></div>
     <div id="progressView" class="hidden">
@@ -1328,6 +1328,7 @@ function renderSettings(){
     v.querySelectorAll('.act-model').forEach(b=>{b.onclick=()=>activateModel(b.dataset.name);});
     api('/api/profile').then(p=>{const el=document.getElementById('profileEdit');if(el)el.value=p.content||'';}).catch(()=>{});
     renderFetchBox();
+    renderInbox();
     renderNotesBox();
     renderIterBox();
   }).catch(e=>{v.innerHTML='<div class="empty">'+esc(e.message)+'</div>';});
@@ -2339,6 +2340,7 @@ async function renderRun(){
     if(!st.started){await renderRunPicker(box);return;}
     RUN_STATE=st;
     box.innerHTML=runShell(st);
+    renderRunExtra(box, st);
     renderTeachStats(box);
     renderReviews(box);
   }catch(e){
@@ -2543,6 +2545,111 @@ function dirListHTML(idx){
     h+='<div style="color:var(--mut);line-height:1.6">'+arr.slice(0,8).map(x=>esc(x.split('/').pop())).join(' · ')+(arr.length>8?' 等 '+arr.length+' 篇':'')+'</div>';
   });
   return '<div style="margin-top:8px;border-top:1px solid var(--line);padding-top:6px">'+h+'</div>';
+}
+// ===== 麻烦收件箱（MVP P1）=====
+async function renderInbox(){
+  const el=$('inboxCard'); if(!el) return;
+  let d=null;
+  try{ d=await api('/api/inbox'); }catch(e){ el.innerHTML=''; return; }
+  const items=(d&&d.items)||[];
+  const open=items.filter(x=>x.status==='open');
+  let h='<div class="set-card" style="margin:8px auto 14px;max-width:min(920px,100%);padding:12px 16px">';
+  h+='<div class="grouplabel" style="margin-bottom:8px">麻烦收件箱 —— 今天什么烦到你了？一句话就行</div>';
+  h+='<div style="display:flex;gap:8px"><input id="inboxInput" placeholder="例：选品表要手工抄进 Excel，一小时才两行" style="flex:1;border:1px solid var(--line);border-radius:8px;padding:8px 11px;font:inherit;font-size:13px;outline:none" onkeydown="if(event.key===\'Enter\')addInbox()">';
+  h+='<button class="backbtn" onclick="addInbox()">收下</button></div>';
+  if(open.length){
+    h+='<div style="margin-top:10px;font-size:12.5px;color:var(--mut)">待处理 '+open.length+' 条</div>';
+    open.forEach(it=>{
+      h+='<div style="border-left:3px solid var(--pink);padding:8px 10px;margin:8px 0;background:var(--card);border-radius:0 8px 8px 0">';
+      h+='<div style="font-size:13.5px">'+esc(it.text)+'</div>';
+      h+='<div style="margin-top:6px;display:flex;gap:8px;flex-wrap:wrap">';
+      h+='<button class="backbtn" onclick="draftInbox(\''+it.id+'\')">自动起草任务卡</button>';
+      h+='<button class="backbtn" onclick="startInbox(\''+it.id+'\')">我已知怎么做，直接开一关</button>';
+      h+='<button class="backbtn" onclick="dropInbox(\''+it.id+'\')">不做</button>';
+      h+='</div></div>';
+    });
+  }
+  const planned=items.filter(x=>x.status==='planned').slice(0,3);
+  if(planned.length){
+    h+='<div style="margin-top:10px;font-size:12.5px;color:var(--mut)">已变成任务卡：'+planned.map(x=>esc(x.goal||x.text)).join(' · ')+'</div>';
+  }
+  h+='</div>';
+  el.innerHTML=h;
+}
+async function addInbox(){
+  const inp=$('inboxInput'); if(!inp) return;
+  const text=(inp.value||'').trim(); if(!text) return;
+  try{ await api('/api/inbox',{text}); inp.value=''; await renderInbox(); }
+  catch(e){ toast('没记下来：'+(e.message||e)); }
+}
+async function draftInbox(id){
+  toast('正在起草任务卡…',2000);
+  let d=null;
+  try{ d=await api('/api/inbox/draft',{id}); }
+  catch(e){ toast('起草失败：'+(e.message||e),4000); return; }
+  const g=d.draft||{};
+  const goal=prompt('目标（改到你满意）', g.goal||'');
+  if(goal===null) return;
+  const check=prompt('验收标准（必须是能看见的结果）', g.check||'');
+  if(check===null) return;
+  try{ await api('/api/inbox/start',{id, goal, check, hint:g.hint||''}); toast('已开一关，去「项目通关」看',3000); await renderInbox(); }
+  catch(e){ toast('开不了：'+(e.message||e),4000); }
+}
+async function startInbox(id){
+  const goal=prompt('目标','');
+  if(goal===null) return;
+  const check=prompt('验收标准（做完能看到什么）','');
+  if(check===null||!check.trim()) { toast('没有验收标准的关不许开'); return; }
+  try{ await api('/api/inbox/start',{id, goal, check}); toast('已开一关',3000); await renderInbox(); }
+  catch(e){ toast('开不了：'+(e.message||e),4000); }
+}
+async function dropInbox(id){
+  try{ await api('/api/inbox/drop',{id}); await renderInbox(); toast('记下了：这条不做'); }
+  catch(e){ toast('失败：'+(e.message||e)); }
+}
+
+// ===== 不确定 / 复盘 / 对账（MVP P2/P3）=====
+function renderRunExtra(box, st){
+  if(!box||!st||!st.stage) return;
+  const cur=st.stage;
+  const myUnc=(st.uncertain&&st.uncertain[cur.id])||'';
+  const myRetro=(st.retro&&st.retro[cur.id])||null;
+  const myRec=(st.reconcile&&st.reconcile[cur.id])||'';
+  let h='<div class="set-card" style="margin:10px auto 0;max-width:min(920px,100%);padding:12px 16px">';
+  h+='<div class="grouplabel" style="margin-bottom:6px">这一关的自检（比过关更重要）</div>';
+  h+='<div style="font-size:12.5px;color:var(--mut);line-height:1.8">我哪里还不确定：'+(myUnc?esc(myUnc):'（还没写）')+'</div>';
+  h+='<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">';
+  h+='<button class="backbtn" onclick="setUncertain()">写「我哪里不确定」</button>';
+  h+='<button class="backbtn" onclick="setRetro()">复盘这一关</button>';
+  if(myUnc) h+='<button class="backbtn" onclick="setReconcile(\'was-problem\')">当时不确定的地方真出问题了</button><button class="backbtn" onclick="setReconcile(\'no-problem\')">其实没问题</button>';
+  h+='</div>';
+  if(myRetro) h+='<div style="margin-top:8px;font-size:12.5px">复盘：<b>'+esc(myRetro.kind)+'</b> · '+esc(myRetro.note)+'</div>';
+  if(myRec) h+='<div style="margin-top:6px;font-size:12.5px;color:var(--mut)">对账：'+(myRec==='was-problem'?'真出过问题':'其实没问题')+'</div>';
+  if(st.judgementHit!=null&&st.judgementHit>=0) h+='<div style="margin-top:6px;font-size:12.5px;color:var(--mut)">判断命中率：'+Math.round(st.judgementHit*100)+'%</div>';
+  if(st.retroCounts&&Object.keys(st.retroCounts).length) h+='<div style="margin-top:6px;font-size:12.5px;color:var(--mut)">卡点分布：'+Object.keys(st.retroCounts).map(k=>k+' '+st.retroCounts[k]).join(' · ')+'</div>';
+  h+='</div>';
+  box.insertAdjacentHTML('afterbegin',h);
+}
+async function setUncertain(){
+  const st=RUN_STATE; if(!st||!st.stage) return;
+  const v=prompt('这一关，你哪里还不确定？（写具体：哪一步、哪个结果）',(st.uncertain&&st.uncertain[st.stage.id])||'');
+  if(v===null) return;
+  try{ await api('/api/run/submit',{output:'（仅记录不确定，未提交产物）',uncertain:v}); toast('记下了',2600); await renderRun(); }
+  catch(e){ toast('没记上：'+(e.message||e)); }
+}
+async function setRetro(){
+  const st=RUN_STATE; if(!st||!st.stage) return;
+  const kind=prompt('卡在哪一类？concept 概念 / condition 条件 / env 环境 / slip 粗心 / unfinished 没做完','env');
+  if(kind===null) return;
+  const note=prompt('下次怎么办？（一句，具体到动作）','');
+  if(note===null||!note.trim()){ toast('只记类型不写做法，下次还会栽'); return; }
+  try{ await api('/api/run/retro',{stageId:st.stage.id, kind:kind.trim(), note}); toast('记进错误谱系了',2600); await renderRun(); }
+  catch(e){ toast('失败：'+(e.message||e)); }
+}
+async function setReconcile(outcome){
+  const st=RUN_STATE; if(!st||!st.stage) return;
+  try{ const r=await api('/api/run/reconcile',{stageId:st.stage.id, outcome}); toast('对账完成，命中率 '+Math.round(r.hit*100)+'%',3000); await renderRun(); }
+  catch(e){ toast('失败：'+(e.message||e)); }
 }</script>
 </body>
 </html>
