@@ -217,9 +217,9 @@ a:hover{text-decoration:underline}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 @media (prefers-reduced-transparency:reduce){#side,#topbar,.inputbar{backdrop-filter:none;-webkit-backdrop-filter:none;background:#fff}}
 /* ===== 左缘装置：竖排标注 + 航路进度药丸（大屏专属，填边缘不挤内容） ===== */
-#edge{position:fixed;left:14px;top:50%;transform:translateY(-50%);z-index:2;display:none;flex-direction:column;align-items:center;gap:14px;pointer-events:none}
-@media (min-width:1240px){#edge{display:flex}}
-#edge .vtext{writing-mode:vertical-rl;letter-spacing:6px;font-size:10px;color:#b9c0ca;font-weight:600;user-select:none}
+#edge{position:fixed;left:14px;top:50%;transform:translateY(-50%);z-index:0;display:none;flex-direction:column;align-items:center;gap:14px;pointer-events:none;opacity:.55}
+@media (min-width:1520px){#edge{display:flex}}  /* 窄屏别摆装饰：它会压在正文上，读者分不清哪层是内容 */
+#edge .vtext{writing-mode:vertical-rl;letter-spacing:6px;font-size:10px;color:#d4d9e0;font-weight:600;user-select:none}
 #edge .pill{width:4px;height:160px;background:var(--line);border-radius:4px;position:relative;overflow:hidden}
 #edge .pill i{position:absolute;left:0;top:0;width:100%;height:12%;background:var(--pink);border-radius:4px}
 #edge .pv{font-size:10px;color:var(--pink);font-weight:700}
@@ -492,7 +492,7 @@ kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;paddi
   <div class="sidebtns">
     <div class="sbtn on" data-v="learn">◈ <span class="sbtn-t">今天</span></div>
     <div class="sbtn" data-v="progress">◎ <span class="sbtn-t">我的进度</span></div>
-    <div class="sbtn" data-v="run">▮ <span class="sbtn-t">项目通关</span></div>
+        <!-- 项目通关已移交 3.0（voyage3 仓库）：2.0 不再保留这块，避免两套验收逻辑打架 -->
     <div class="sbtn lab-extra" data-v="dir">◈ <span class="sbtn-t">方向</span></div>
     <div class="sbtn lab-extra" data-v="set">⚙ <span class="sbtn-t">设置</span></div>
     <div class="sbtn" id="labToggle" onclick="toggleLab()" title="实验室：展开全部功能">⚗ <span class="sbtn-t">实验室</span></div>
