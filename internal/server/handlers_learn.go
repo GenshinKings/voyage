@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"voyage/internal/profile"
 
 	"log"
 	"strconv"
@@ -1002,10 +1003,31 @@ func briefContext(s *Server, rd *Reading) string {
 			}
 		}
 		if len(done) > 0 {
-			fmt.Fprintf(&b, "- 已收尾知识点：%s\n", strings.Join(done, "、"))
+			if len(done) > 6 {
+				done = done[len(done)-6:] // 只取最近收尾的：越早的东西越不该拿来定这次副本
+			}
+			fmt.Fprintf(&b, "- 最近收尾的知识点：%s\n", strings.Join(done, "、"))
 		}
 	}
+	// 副本的方向来自学习目标，不是来自今天读到的那篇文章。
+	// 读到的内容只在「具体项目」这一层做参考；目标对不上的，宁可不做这个副本。
+	if s.Tutor != nil {
+		if aim := strings.TrimSpace(profile.Block(s.ProfilePath)); aim != "" {
+			fmt.Fprintf(&b, "- 学习者目标（决定副本方向）：\n%s\n", clipRunes(aim, 800))
+		}
+	}
+	b.WriteString("- 副本选题规则：由「学习者目标」定副本类型（要能独立交付→端到端小交付；要能读懂代码→带明确验收的阅读+改造）；")
+	b.WriteString("再由「最近收尾的知识点」定具体项目，副本必须真的用到这些知识点，用不上就换项目，不要为了读到的文章硬凑一个副本。\n")
 	return b.String()
+}
+
+// clipRunes 按字符截断，避免把中文截成半个字。
+func clipRunes(s string, max int) string {
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max]) + "\n…（截断）"
 }
 
 // briefContext 导读生成的学习者上下文（贴合个人：在学科目+已收尾）。
