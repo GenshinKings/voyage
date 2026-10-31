@@ -1,8 +1,11 @@
 package server
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"voyage/internal/review"
 	"voyage/internal/run"
@@ -55,8 +58,19 @@ func (s *Server) registerRunHandlers(mux *http.ServeMux) {
 			Uncertain string `json:"uncertain"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&req)
+		// 状态只有一个写者：所有改状态的请求都从这里排队进来，
+		// 否则两个请求各读一份、各写一份，后写的会吃掉先写的（丢更新）。
+		s.stateMu.Lock()
+		defer s.stateMu.Unlock()
 		if s.RunState == nil {
 			writeErr(w, 400, "还没开始一个项目")
+			return
+		}
+		// 幂等：同一份内容刚交过又被交一次 = 连点。不挡的话第二次会落到下一关，
+		// 用同一份东西把下一关也判过（丢更新的经典坑）。
+		fp := submitFingerprint(req.Output)
+		if cur := s.RunState.CurrentStage(); cur != nil && s.RunState.IsDuplicateSubmit(cur.ID, fp) {
+			writeErr(w, 409, "同一份内容刚交过，别连点；要重交就改一下再交")
 			return
 		}
 		// Expect 为空的关卡机器看不出对错：交给模型判，判过再解锁。
@@ -94,6 +108,7 @@ func (s *Server) registerRunHandlers(mux *http.ServeMux) {
 		s.saveState()
 		if submittedID != "" {
 			s.RunState.NoteUncertain(submittedID, req.Uncertain)
+			s.RunState.NoteSubmit(submittedID, fp)
 		}
 		s.saveState()
 		resp := map[string]any{"ok": ok, "progress": s.RunState.Progress(),
@@ -141,6 +156,8 @@ func (s *Server) registerRunHandlers(mux *http.ServeMux) {
 	// 为什么单独开一个口：走 submit 会把这段文字当成产物存进 Results，
 	// 等于用一句自述冒充答案——判定也会被它污染。
 	mux.HandleFunc("/api/run/uncertain", func(w http.ResponseWriter, r *http.Request) {
+		s.stateMu.Lock()
+		defer s.stateMu.Unlock()
 		if r.Method != http.MethodPost {
 			writeErr(w, 405, "只支持 POST")
 			return
@@ -164,6 +181,8 @@ func (s *Server) registerRunHandlers(mux *http.ServeMux) {
 	// 事后对账：这次「不确定」后来真出问题了吗。
 	// 这是量「判断准确度」的唯一入口——没有它，「判断」那层永远只有自述。
 	mux.HandleFunc("/api/run/reconcile", func(w http.ResponseWriter, r *http.Request) {
+		s.stateMu.Lock()
+		defer s.stateMu.Unlock()
 		if r.Method != http.MethodPost {
 			writeErr(w, 405, "只支持 POST")
 			return
@@ -191,6 +210,8 @@ func (s *Server) registerRunHandlers(mux *http.ServeMux) {
 
 	// 复盘：卡点类型 + 一句「下次怎么办」。这是错误谱系的唯一入口。
 	mux.HandleFunc("/api/run/retro", func(w http.ResponseWriter, r *http.Request) {
+		s.stateMu.Lock()
+		defer s.stateMu.Unlock()
 		if r.Method != http.MethodPost {
 			writeErr(w, 405, "只支持 POST")
 			return
@@ -256,4 +277,13 @@ func trimSpace(s string) string {
 		end--
 	}
 	return s[start:end]
+}
+
+// submitFingerprint 提交内容的指纹（去掉首尾空白再散列，避免多一个空格就不算重复）。
+func submitFingerprint(out string) string {
+	sum := sha256.Sum256([]byte(strings.TrimSpace(out)))
+	if strings.TrimSpace(out) == "" {
+		return ""
+	}
+	return hex.EncodeToString(sum[:8])
 }

@@ -82,8 +82,12 @@ type Run struct {
 	Retro map[string]Retro `json:"retro"`
 	// Scaffold 关卡 ID -> 按需给出的更小台阶（点「我不知道从哪下手」时生成）。
 	Scaffold map[string]string `json:"scaffold"`
-	Started  string            `json:"started"`
-	Finished bool              `json:"finished"`
+	// 上一次提交的指纹：用来挡「连点两次把两关一起判过」。
+	LastStage string `json:"lastStage,omitempty"`
+	LastHash  string `json:"lastHash,omitempty"`
+	LastAt    int64  `json:"lastAt,omitempty"`
+	Started   string `json:"started"`
+	Finished  bool   `json:"finished"`
 }
 
 // Start 开一个新 Run。
@@ -308,3 +312,38 @@ func (r *Run) NoteScaffold(id, text string) {
 	}
 	r.Scaffold[id] = trim(text)
 }
+
+// AlreadyPassed 这一关是不是已经过了（当前关卡之后 = 过了）。
+// 用来挡住「连点两次交作业推进两关」这类丢更新的经典坑。
+func (r *Run) AlreadyPassed(id string) bool {
+	for i, st := range r.Stages {
+		if st.ID == id {
+			return i < r.Current
+		}
+	}
+	return false
+}
+
+// NoteSubmit 记下这次提交的关卡与内容指纹。
+func (r *Run) NoteSubmit(stageID, hash string) {
+	r.LastStage = stageID
+	r.LastHash = hash
+	r.LastAt = timeNowUnix()
+}
+
+// IsDuplicateSubmit 同一份内容在 2 分钟内又交了一次 = 连点，不是新作业。
+func (r *Run) IsDuplicateSubmit(stageID, hash string) bool {
+	if r.LastHash == "" || hash == "" {
+		return false
+	}
+	if r.LastHash != hash {
+		return false
+	}
+	if r.LastStage == stageID {
+		return true
+	}
+	return timeNowUnix()-r.LastAt < 120
+}
+
+// timeNowUnix 当前时间戳（单独包一层，方便以后注入假时钟做测试）。
+func timeNowUnix() int64 { return time.Now().Unix() }

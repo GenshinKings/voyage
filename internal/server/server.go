@@ -136,6 +136,9 @@ type Reading struct {
 
 // Server 应用壳。
 type Server struct {
+	// stateMu 让「改状态」只有一个写者：所有改 RunState 的请求都要先拿这把锁。
+	// Go 的老话——不要用共享内存通信，用通信共享内存；这里先守住最小一条：单写者。
+	stateMu  sync.Mutex
 	sc       stateCacheT  // 序列化缓存 + 去抖落盘（statecache.go），每实例一份
 	Dir      string       `json:"dir"`
 	st       *store.Store // 本实例的存储锁与原子写，不再用包级全局
