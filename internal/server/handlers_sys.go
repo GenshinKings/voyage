@@ -34,7 +34,11 @@ func (s *Server) registerSysHandlers(mux *http.ServeMux) {
 		}
 		noCache(w)
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write(indexHTML)
+		page := indexHTML
+		if UIVariant == "next" {
+			page = indexNextHTML
+		}
+		_, _ = w.Write(page)
 	})
 
 	mux.HandleFunc("/api/state", func(w http.ResponseWriter, r *http.Request) { // 性能1+3：缓存+ETag/304（statecache.go）

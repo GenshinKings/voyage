@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Voyage Next · 今天</title>
+<style>
+:root{
+  --bg:#0f1115;--card:#171a21;--line:#262b36;--ink:#e8ebf0;--mut:#8b93a1;
+  --accent:#7c5cff;--ok:#38d39f;--warn:#ffb020;--err:#ff5c6c;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.65 -apple-system,"Segoe UI","Microsoft YaHei",system-ui,sans-serif;min-height:100vh}
+.wrap{max-width:760px;margin:0 auto;padding:28px 22px 120px}
+.nav{display:flex;gap:6px;margin-bottom:26px}
+.nav button{flex:1;background:transparent;border:1px solid var(--line);color:var(--mut);padding:10px 0;border-radius:11px;font:inherit;font-size:13.5px;cursor:pointer;transition:.15s}
+.nav button.on{background:var(--card);color:var(--ink);border-color:var(--accent)}
+h1{font-size:26px;letter-spacing:-.02em;margin-bottom:6px}
+.sub{color:var(--mut);font-size:13.5px;margin-bottom:22px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;margin-bottom:14px}
+.tag{display:inline-block;font-size:11.5px;color:var(--mut);border:1px solid var(--line);border-radius:999px;padding:2px 10px;margin-bottom:12px}
+.goal{font-size:19px;font-weight:600;line-height:1.5;margin-bottom:10px}
+.check{font-size:13.5px;color:var(--mut);line-height:1.8}
+.check b{color:var(--ink);font-weight:600}
+textarea,input{width:100%;background:#11141a;border:1px solid var(--line);border-radius:11px;color:var(--ink);font:inherit;font-size:14px;padding:11px 13px;outline:none;resize:vertical}
+textarea:focus,input:focus{border-color:var(--accent)}
+.primary{background:var(--accent);color:#fff;border:none;border-radius:11px;padding:11px 20px;font:inherit;font-weight:600;cursor:pointer;font-size:14px}
+.primary:disabled{opacity:.45;cursor:default}
+.ghost{background:transparent;border:1px solid var(--line);color:var(--mut);border-radius:10px;padding:8px 14px;font:inherit;font-size:13px;cursor:pointer}
+.ghost:hover{color:var(--ink);border-color:var(--accent)}
+.row{display:flex;gap:10px;align-items:flex-start;margin-top:12px}
+.mut{color:var(--mut);font-size:13px}
+pre{white-space:pre-wrap;word-break:break-word;background:#11141a;border:1px solid var(--line);border-radius:10px;padding:12px;font:13px/1.7 ui-monospace,Consolas,monospace;color:#c8ceda}
+.list{display:flex;flex-direction:column;gap:10px}
+.item{border-left:3px solid var(--accent);background:#11141a;border-radius:0 10px 10px 0;padding:12px 14px}
+.item .t{font-size:14.5px}
+.item .a{margin-top:9px;display:flex;gap:8px;flex-wrap:wrap}
+.hint{font-size:12.5px;color:var(--mut);margin-top:8px}
+.empty{color:var(--mut);text-align:center;padding:36px 12px;font-size:14px;line-height:1.9}
+#toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:#232838;border:1px solid var(--line);color:var(--ink);padding:10px 18px;border-radius:999px;font-size:13.5px;display:none;z-index:9;max-width:80vw}
+.kv{display:flex;justify-content:space-between;gap:12px;font-size:13.5px;padding:7px 0;border-bottom:1px solid var(--line)}
+.kv:last-child{border:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="nav">
+    <button id="nav-today" class="on" onclick="go('today')">今天</button>
+    <button id="nav-record" onclick="go('record')">我的记录</button>
+    <button id="nav-set" onclick="go('set')">设置</button>
+  </div>
+  <div id="view"></div>
+</div>
+<div id="toast"></div>
+<script>
+const $=id=>document.getElementById(id);
+let VIEW='today', ST=null, INBOX=null;
+function toast(m,ms){const t=$('toast');t.textContent=m;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',ms||2800)}
+function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+async function api(path,body){
+  const opt=body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)};
+  const r=await fetch(path,opt);
+  const txt=await r.text();
+  let d={}; try{ d=txt?JSON.parse(txt):{} }catch(e){ d={raw:txt} }
+  if(!r.ok) throw new Error(d.error||('HTTP '+r.status));
+  return d;
+}
+function go(v){VIEW=v;['today','record','set'].forEach(x=>$('nav-'+x).classList.toggle('on',x===v));render()}
+async function render(){
+  try{ ST=await api('/api/run/state'); }catch(e){ ST=null }
+  if(VIEW==='today') return renderToday();
+  if(VIEW==='record') return renderRecord();
+  return renderSet();
+}
+
+async function renderToday(){
+  const box=$('view');
+  const stage=ST&&ST.started?ST.stage:null;
+  let h='';
+  if(stage){
+    h+='<h1>今天这一关</h1><div class="sub">只做这一件。做完交上来，卡住就写「不确定」。</div>';
+    h+='<div class="card"><div class="tag">'+esc(ST.title||'当前任务')+'</div>';
+    h+='<div class="goal">'+esc(stage.goal)+'</div>';
+    h+='<div class="check">怎么算过：<b>'+esc(stage.check)+'</b></div>';
+    h+='<div class="row"><textarea id="out" rows="4" placeholder="把你做的东西贴上来：命令、输出、结果、你判断的依据"></textarea></div>';
+    h+='<div class="row"><input id="unc" placeholder="我哪里还不确定（可留空，但写出来更有用）"></div>';
+    h+='<div class="row"><button class="primary" onclick="submitWork()">交上来</button>';
+    h+='<button class="ghost" onclick="retro()">复盘这一关</button>';
+    h+='<button class="ghost" onclick="nextTask()">按卡点出下一题</button></div>';
+    if(ST.uncertain&&ST.uncertain[stage.id])h+='<div class="hint">上次写的不确定：'+esc(ST.uncertain[stage.id])+'</div>';
+    if(stage.hint)h+='<div class="hint">提示：'+esc(stage.hint)+'</div>';
+    h+='</div>';
+  }else{
+    h+='<h1>今天</h1><div class="sub">还没有进行中的任务。先记一件今天烦到你的小事，把它变成一关。</div>';
+  }
+  // 收件箱
+  try{ INBOX=await api('/api/inbox'); }catch(e){ INBOX=null }
+  const open=(INBOX&&INBOX.items||[]).filter(x=>x.status==='open');
+  h+='<div class="card"><div class="tag">麻烦收件箱</div>';
+  h+='<div class="row"><input id="inboxText" placeholder="一句话：什么烦到你了" onkeydown="if(event.key===\'Enter\')addInbox()">';
+  h+='<button class="ghost" onclick="addInbox()">收下</button></div>';
+  if(open.length){
+    h+='<div class="list" style="margin-top:14px">';
+    open.forEach(it=>{
+      h+='<div class="item"><div class="t">'+esc(it.text)+'</div><div class="a">';
+      h+='<button class="ghost" onclick="draft(\''+it.id+'\')">起草任务卡</button>';
+      h+='<button class="ghost" onclick="startIt(\''+it.id+'\')">直接开一关</button>';
+      h+='<button class="ghost" onclick="dropIt(\''+it.id+'\')">不做</button>';
+      h+='</div></div>';
+    });
+    h+='</div>';
+  }else{
+    h+='<div class="hint">还没有待处理的麻烦。</div>';
+  }
+  h+='</div>';
+  box.innerHTML=h;
+}
+
+async function renderRecord(){
+  const box=$('view');
+  let d={items:[]};
+  try{ d=await api('/api/deliverables'); }catch(e){}
+  const items=d.items||[];
+  let h='<h1>我的记录</h1><div class="sub">只记走过验收的关：目标、验收、我交的东西、当时的判断、事后对账。</div>';
+  if(!items.length){
+    h+='<div class="empty">还没有完成的关卡。<br>做完一关并复盘，这里就会长出一条记录。</div>';
+  }else{
+    items.slice().reverse().forEach(it=>{
+      h+='<div class="card"><div class="tag">'+esc(it.tier||'')+' · '+esc((it.finishedAt||'').slice(0,10))+'</div>';
+      h+='<div class="goal">'+esc(it.title||'')+'</div>';
+      (it.stages||[]).forEach(st=>{
+        const out=(it.results||{})[st.id];
+        if(!out)return;
+        h+='<div class="check" style="margin-top:10px">'+esc(st.goal)+'<br><span class="mut">验收：'+esc(st.check)+'</span></div>';
+        h+='<pre>'+esc(String(out).slice(0,600))+'</pre>';
+        const u=(it.uncertain||{})[st.id];
+        if(u)h+='<div class="hint">当时不确定：'+esc(u)+'</div>';
+        const rc=(it.reconcile||{})[st.id];
+        if(rc)h+='<div class="hint">事后对账：'+(rc==='was-problem'?'真出过问题':'其实没问题')+'</div>';
+        const rt=(it.retro||{})[st.id];
+        if(rt)h+='<div class="hint">复盘：'+esc(rt.kind)+' —— '+esc(rt.note)+'</div>';
+      });
+      h+='</div>';
+    });
+  }
+  if(ST&&ST.retroCounts&&Object.keys(ST.retroCounts).length){
+    h+='<div class="card"><div class="tag">卡点分布</div>';
+    Object.keys(ST.retroCounts).forEach(k=>{h+='<div class="kv"><span>'+esc(k)+'</span><span>'+ST.retroCounts[k]+' 次</span></div>'});
+    h+='</div>';
+  }
+  h+='<div class="row"><button class="primary" onclick="window.open(\'/api/deliverables/md\',\'_blank\')">导出 markdown</button></div>';
+  box.innerHTML=h;
+}
+
+async function renderSet(){
+  let v={path:'',notes:0};
+  try{ v=await api('/api/vault'); }catch(e){}
+  let h='<h1>设置</h1><div class="sub">只放真正要改的东西。</div>';
+  h+='<div class="card"><div class="tag">笔记仓库</div><div class="kv"><span>当前</span><span>'+esc(v.path||'（默认 notes/）')+'</span></div>';
+  h+='<div class="kv"><span>笔记数</span><span>'+(v.notes||0)+' 篇</span></div>';
+  h+='<div class="row"><input id="vaultPath" placeholder="Obsidian 库的根目录路径" value="'+esc(v.path||'')+'">';
+  h+='<button class="ghost" onclick="saveVault()">保存</button></div>';
+  h+='<div class="hint">留空恢复默认 notes/。只读挂载，不会改你的笔记。</div></div>';
+  h+='<div class="card"><div class="tag">说明</div><div class="mut">这是「下一版界面」的线框：三屏，一屏一件事。<br>原来的界面在 7412，这一版在 7413，两边数据是同一份。</div></div>';
+  $('view').innerHTML=h;
+}
+
+// ==== 动作 ====
+async function addInbox(){
+  const el=$('inboxText'); if(!el)return;
+  const text=(el.value||'').trim(); if(!text)return;
+  try{ await api('/api/inbox',{text}); el.value=''; await render(); }catch(e){ toast('没记下：'+e.message) }
+}
+async function draft(id){
+  toast('起草中…',2000);
+  let d={}; try{ d=await api('/api/inbox/draft',{id}); }catch(e){ return toast('起草失败：'+e.message,4200) }
+  const g=d.draft||{};
+  const goal=prompt('目标（可改）',g.goal||''); if(goal===null)return;
+  const check=prompt('验收标准（必须能看见）',g.check||''); if(check===null||!check.trim())return toast('没有验收标准不开关');
+  try{ await api('/api/inbox/start',{id,goal,check,hint:g.hint||''}); toast('已开一关'); await render(); }catch(e){ toast('开不了：'+e.message,4200) }
+}
+async function startIt(id){
+  const goal=prompt('目标',''); if(goal===null)return;
+  const check=prompt('验收标准',''); if(check===null||!check.trim())return toast('没有验收标准不开关');
+  try{ await api('/api/inbox/start',{id,goal,check}); toast('已开一关'); await render(); }catch(e){ toast(e.message,4200) }
+}
+async function dropIt(id){ try{ await api('/api/inbox/drop',{id}); await render(); }catch(e){ toast(e.message) } }
+async function submitWork(){
+  const out=($('out').value||'').trim(); if(!out)return toast('先把你做的东西贴上来');
+  const unc=($('unc').value||'').trim();
+  try{
+    const r=await api('/api/run/submit',{output:out,uncertain:unc});
+    if(r.ok){ toast('过了。这一关记进记录了。',3600); await render(); }
+    else { toast('没过：'+(r.reason||'还差点'),6000); }
+  }catch(e){ toast('提交失败：'+e.message,4200) }
+}
+async function retro(){
+  if(!ST||!ST.stage)return;
+  const kind=prompt('卡在哪类？concept 概念 / condition 条件 / env 环境 / slip 粗心 / unfinished 没做完','env');
+  if(kind===null)return;
+  const note=prompt('下次怎么办（一句，具体动作）',''); if(note===null||!note.trim())return toast('不写做法，下次还会栽');
+  try{ await api('/api/run/retro',{stageId:ST.stage.id,kind:kind.trim(),note}); toast('记进错误谱系'); await render(); }catch(e){ toast(e.message,4200) }
+}
+async function nextTask(){
+  toast('按你的卡点出题…',3000);
+  let d={}; try{ d=await api('/api/run/next',{}); }catch(e){ return toast('出不来：'+e.message,4600) }
+  const g=d.draft||{};
+  if(g.why)toast('依据：'+g.why,6000);
+  const goal=prompt('新题目标（可改）',g.goal||''); if(goal===null)return;
+  const check=prompt('验收标准',g.check||''); if(check===null||!check.trim())return toast('没有验收不开关');
+  try{ await api('/api/run/start-custom',{goal,check,hint:g.hint||''}); toast('新题已开'); await render(); }catch(e){ toast(e.message,4200) }
+}
+async function saveVault(){
+  const p=($('vaultPath').value||'').trim();
+  try{ const r=await api('/api/vault',{path:p}); toast('已切到 '+r.path+'（'+r.notes+' 篇）',3400); await render(); }catch(e){ toast('失败：'+e.message,4200) }
+}
+
+render();
+</script>
+</body>
+</html>

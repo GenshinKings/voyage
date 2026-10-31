@@ -43,6 +43,13 @@ var indexHTML []byte
 //go:embed static/copy.json
 var copyJSON []byte
 
+//go:embed static-next/index.html
+var indexNextHTML []byte
+
+// UIVariant 选择哪套界面：「next」= 三屏线框（7413），默认旧界面（7412）。
+// 用变量而不是编译期常量，是为了同一个二进制能起两套界面做对比。
+var UIVariant = ""
+
 // copyTable 第八轮-P1-1 白话文案映射表：代码里只引用 key，工程词不出现在用户界面。
 // 随 /api/state 下发（STATE.copy）；单测保证每个 key 都有值。
 var copyTable = func() map[string]string {
@@ -585,3 +592,16 @@ func Serve(addr string) (*Server, error) {
 }
 
 var _ = template.HTMLEscapeString // 保留模板引用
+// ServeUI 起服务并指定界面变体（next = 三屏线框）。
+func ServeUI(addr, variant string) (*Server, error) {
+	UIVariant = variant
+	s := NewServer(DataDirName)
+	s.StartFetchLoop()
+	go func() {
+		if err := http.ListenAndServe(addr, s.Handlers()); err != nil { // ServeUI 是新命令的入口，监听失败要让人看见
+			fmt.Fprintln(os.Stderr, "监听失败：", err)
+		}
+	}()
+	time.Sleep(200 * time.Millisecond)
+	return s, nil
+}
