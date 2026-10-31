@@ -51,6 +51,8 @@ func (s *Server) registerRunHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("/api/run/submit", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Output string `json:"output"`
+			// 我哪里还不确定（可空）——验收台最重要的一栏
+			Uncertain string `json:"uncertain"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		if s.RunState == nil {
@@ -59,6 +61,11 @@ func (s *Server) registerRunHandlers(mux *http.ServeMux) {
 		}
 		// Expect 为空的关卡机器看不出对错：交给模型判，判过再解锁。
 		// 没配模型时退回「非空即过」，不让闯关卡死。
+		// 先记下这次提交的是哪一关：过关后 Current 会前移，回头找不到该记给谁
+		submittedID := ""
+		if st := s.RunState.CurrentStage(); st != nil {
+			submittedID = st.ID
+		}
 		var ok bool
 		var reason string
 		if st := s.RunState.CurrentStage(); st != nil && len(st.Expect) == 0 {
@@ -85,7 +92,12 @@ func (s *Server) registerRunHandlers(mux *http.ServeMux) {
 			ok, reason = s.RunState.Submit(req.Output)
 		}
 		s.saveState()
-		resp := map[string]any{"ok": ok, "progress": s.RunState.Progress()}
+		if submittedID != "" {
+			s.RunState.NoteUncertain(submittedID, req.Uncertain)
+		}
+		s.saveState()
+		resp := map[string]any{"ok": ok, "progress": s.RunState.Progress(),
+			"uncertain": s.RunState.Uncertain, "reconcile": s.RunState.Reconcile}
 		if !ok {
 			resp["reason"] = reason
 			resp["hint"] = currentHint(s.RunState)
@@ -106,16 +118,46 @@ func (s *Server) registerRunHandlers(mux *http.ServeMux) {
 			return
 		}
 		writeJSON(w, map[string]any{
-			"started":  true,
-			"title":    s.RunState.Title,
-			"tier":     run.TierName(s.RunState.Tier),
-			"progress": s.RunState.Progress(),
-			"stage":    s.RunState.CurrentStage(),
-			"finished": s.RunState.Finished,
+			"started":      true,
+			"title":        s.RunState.Title,
+			"tier":         run.TierName(s.RunState.Tier),
+			"progress":     s.RunState.Progress(),
+			"stage":        s.RunState.CurrentStage(),
+			"finished":     s.RunState.Finished,
+			"uncertain":    s.RunState.Uncertain,
+			"reconcile":    s.RunState.Reconcile,
+			"judgementHit": s.RunState.JudgementHit(),
 		})
 	})
 
 	// 教学指标（docs/teach/spec.md 第八节）：独立通过率 / 错误类型分布 / 退档后回升率。
+	// 事后对账：这次「不确定」后来真出问题了吗。
+	// 这是量「判断准确度」的唯一入口——没有它，「判断」那层永远只有自述。
+	mux.HandleFunc("/api/run/reconcile", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeErr(w, 405, "只支持 POST")
+			return
+		}
+		var req struct {
+			StageID string `json:"stageId"`
+			Outcome string `json:"outcome"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.StageID == "" {
+			writeErr(w, 400, "需要 stageId")
+			return
+		}
+		if s.RunState == nil {
+			writeErr(w, 400, "还没开始一个项目")
+			return
+		}
+		if !s.RunState.ReconcileStage(req.StageID, req.Outcome) {
+			writeErr(w, 400, "outcome 只能是 was-problem 或 no-problem")
+			return
+		}
+		s.saveState()
+		writeJSON(w, map[string]any{"ok": true, "hit": s.RunState.JudgementHit()})
+	})
+
 	mux.HandleFunc("/api/stats", func(w http.ResponseWriter, r *http.Request) {
 		if s.Tutor == nil {
 			writeJSON(w, map[string]any{"judged": 0, "note": "助教还没起来"})

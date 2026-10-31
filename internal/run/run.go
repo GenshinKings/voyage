@@ -68,6 +68,12 @@ type Run struct {
 	Stages    []Stage           `json:"stages"`
 	Current   int               `json:"current"` // 当前关卡下标
 	Results   map[string]string `json:"results"` // 关卡 ID -> 学员贴的输出
+	// Uncertain 关卡 ID -> 学员自述「我哪里还不确定」。这是整套系统的灵魂：
+	// 没通过可以再试，不知道自己不确定什么才是真问题。
+	Uncertain map[string]string `json:"uncertain"`
+	// Reconcile 关卡 ID -> 事后对账结果（was-problem / no-problem）。
+	// 用来量「判断的准确度」——说会出问题的地方，后来真出问题了吗。
+	Reconcile map[string]string `json:"reconcile"`
 	Started   string            `json:"started"`
 	Finished  bool              `json:"finished"`
 }
@@ -182,4 +188,51 @@ func (r *Run) Deliverable() string {
 	fmt.Fprintf(&b, "· 终点：%s\n", r.Stages[len(r.Stages)-1].Goal)
 	b.WriteString("· 证据：仓库链接 + 运行截图 + 这一段描述")
 	return b.String()
+}
+
+// NoteUncertain 记下「我哪里还不确定」（同一关重复提交时覆盖，保留最新一次）。
+func (r *Run) NoteUncertain(id, text string) {
+	if r.Uncertain == nil {
+		r.Uncertain = map[string]string{}
+	}
+	if text = trim(text); text != "" {
+		r.Uncertain[id] = text
+	}
+}
+
+// ReconcileStage 事后对账：这次「不确定」后来真成问题了吗（was-problem / no-problem）。
+func (r *Run) ReconcileStage(id, outcome string) bool {
+	if outcome != "was-problem" && outcome != "no-problem" {
+		return false
+	}
+	if r.Reconcile == nil {
+		r.Reconcile = map[string]string{}
+	}
+	r.Reconcile[id] = outcome
+	return true
+}
+
+// JudgementHit 判断命中率：不确定的地方真出问题的比例（没有对账记录时返回 -1）。
+func (r *Run) JudgementHit() float64 {
+	if len(r.Reconcile) == 0 {
+		return -1
+	}
+	hit := 0
+	for _, v := range r.Reconcile {
+		if v == "was-problem" {
+			hit++
+		}
+	}
+	return float64(hit) / float64(len(r.Reconcile))
+}
+
+func trim(s string) string {
+	start, end := 0, len(s)
+	for start < end && (s[start] == ' ' || s[start] == '\t' || s[start] == '\n' || s[start] == '\r') {
+		start++
+	}
+	for end > start && (s[end-1] == ' ' || s[end-1] == '\t' || s[end-1] == '\n' || s[end-1] == '\r') {
+		end--
+	}
+	return s[start:end]
 }
