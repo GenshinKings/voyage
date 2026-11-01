@@ -1805,6 +1805,7 @@ async function abandonDungeon(id){
 
 let PROG_TAB='dungeon';
 function renderProgress(){
+  renderWeakCard($('progressView'));
   applyProgTab();
   (function(){
     const el=document.getElementById('progStats');if(!el)return;
@@ -2708,6 +2709,51 @@ async function stuckHelp(){
     alert(r.text||'没拆出来');
     await renderRun();
   }catch(e){ toast('没拆出来：'+(e.message||e),4200) }
+}
+// 助教觉得我哪里理解错了：看得见、也能删。
+// 看不见的标签等于背后说人坏话——而且只能增不能删的清单，最后没人看。
+async function renderWeakCard(box){
+  let d=null;
+  try{ d=await api('/api/weakpoints'); }catch(e){ return; }
+  const items=(d&&d.items)||[];
+  const host = box || $('progressView') || $('view');
+  if(!host) return;
+  let card = $('weakCard');
+  if(!card){
+    card=document.createElement('div');
+    card.id='weakCard';
+    card.className='set-card';
+    card.style='margin:10px auto 14px;max-width:min(920px,100%);padding:12px 16px';
+    host.insertBefore(card, host.firstChild);
+  }
+  if(!items.length){ card.innerHTML=''; return; }
+  let h='<div class="grouplabel" style="margin-bottom:6px">助教觉得我哪里理解错了（'+items.length+' 条）</div>';
+  items.slice(0,8).forEach(it=>{
+    h+='<div style="border-left:3px solid #ffb020;padding:6px 10px;margin:6px 0;background:var(--card);border-radius:0 8px 8px 0">'
+      +'<div style="font-size:13px"><b>'+esc(it.topic)+'</b></div>'
+      +'<div style="font-size:12.5px;color:var(--mut);line-height:1.7">'+esc(it.detail||'')+'</div>'
+      +'<div style="margin-top:5px"><button class="backbtn" onclick="dropWeak(\''+esc(it.topic).replace(/'/g,"\\'")+'\')">这条不对，删掉</button></div>'
+      +'</div>';
+  });
+  h+='<div style="font-size:12px;color:var(--mut);margin-top:6px">这些会拿去建副本时挖坑：故意在你容易错的地方设判断点。</div>';
+  card.innerHTML=h;
+}
+async function dropWeak(topic){
+  try{
+    await apiMethod('/api/weakpoints','DELETE',{topic});
+    toast('删掉了');
+    await renderWeakCard(null);
+  }catch(e){ toast('删不掉：'+(e.message||e),4000) }
+}
+// apiMethod：api() 只发 POST，删东西得带 DELETE，这里补一个。
+async function apiMethod(path, method, body){
+  const opt={method};
+  if(body!==undefined){ opt.headers={'Content-Type':'application/json'}; opt.body=JSON.stringify(body); }
+  const r=await fetch(path,opt);
+  const raw=await r.text();
+  let j={}; try{ j=raw?JSON.parse(raw):{} }catch(e){ j={error:raw.trim()} }
+  if(r.status>=400) throw new Error(j.error||raw.trim()||'请求失败');
+  return j;
 }</script>
 </body>
 </html>

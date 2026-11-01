@@ -111,3 +111,28 @@ func (s *Store) persistLocked() {
 		return
 	}
 }
+
+// Remove 删掉某个知识点的薄弱点（用户自己说「这条不对」时用）。
+func (s *Store) Remove(topic string) bool {
+	topic = strings.TrimSpace(topic)
+	if topic == "" {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	kept := s.items[:0]
+	found := false
+	for _, it := range s.items {
+		if strings.EqualFold(it.Topic, topic) {
+			found = true
+			continue
+		}
+		kept = append(kept, it)
+	}
+	if !found {
+		return false
+	}
+	s.items = kept
+	s.persistLocked()
+	return true
+}
