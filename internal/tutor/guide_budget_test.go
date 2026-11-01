@@ -382,7 +382,7 @@ func TestAskWhyFlowPassAndFuzzy(t *testing.T) {
 		t.Fatal("AskRealUse 后应挂起 AskWhy")
 	}
 	last := s.Messages[len(s.Messages)-1]
-	if !strings.Contains(last.Content, "你为什么会这么写") {
+	if !strings.Contains(last.Content, "下次怎么一眼看出来") {
 		t.Fatalf("应追加追问消息: %q", last.Content)
 	}
 	// 答得上 → fu-pass（AskWhy 清除，判定保持 pass）

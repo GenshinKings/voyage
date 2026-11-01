@@ -51,7 +51,7 @@ type Session struct {
 	// 此字段保留为「进课时的档位快照」（旧会话文件兼容），不再推进。
 	Guide       int    `json:"guide,omitempty"`
 	GuideStreak [2]int `json:"guideStreak,omitempty"` // 遗留字段，不再使用
-	// 第六轮-P1-1 追问判真会：首次通过后挂起「你为什么会这么写」，答上才收尾（履历延迟入账，不违反「履历不撤回」）
+	// 追问判真会（可选）：通过后问一句「这次踩的坑下次怎么一眼看出来」，答得好记进履历；不答不影响收尾
 	AskWhy bool `json:"askWhy,omitempty"`
 	// 第八轮-P0-1 判定诊断：每次判定事件一条（通道/耗时/是否二次校验）——判定不再是无据可查的黑箱
 	Diagnostics []Diag `json:"diagnostics,omitempty"`
@@ -537,9 +537,9 @@ func (t *Tutor) followup(ctx context.Context, s *Session, userText string) (Verd
 		return Verdict{}, fmt.Errorf("LLM 未配置")
 	}
 	if s.AskWhy {
-		sys := `学习者刚刚判定通过这是「真会度」追问「你为什么会这么写？一句话。」的答复。只判这一句：
+		sys := `学习者刚交完一道题，助教问了他一句可选题：「这次踩的坑，下次怎么一眼看出来？」他答了这句。只判这一句：
 - 答得出原理/说得清理由（哪怕不完美）→ 回复先简短点评一句，然后单独一行输出标记 [FU-PASS]。
-- 答不上/含糊其辞/只是复述表象（如「我看着对」「因为教程这么写」）→ 单独一行输出标记 [FU-FUZZY]，然后直接给一道**更小的同类题**（比刚才的检查题更简单、更具体、给半个开头），不批评不说教。
+- 答不上/含糊其辞/只是复述表象（如「我看着对」「因为教程这么写」）→ 单独一行输出标记 [FU-FUZZY]，然后给一句「下次遇到这类问题，先看 XXX」的具体提醒，不批评不说教、也不额外出题（他已经过了这一关）。
 [FU-PASS] 与 [FU-FUZZY] 必须单独成行。`
 		s.Messages = append(s.Messages, llm.Message{Role: "user", Content: userText})
 		reply, err := llm.ChatWith(ctx, t.Client, t.withAgents(sys), s.Messages)
@@ -591,7 +591,9 @@ func (t *Tutor) AskRealUse(nodeID string) {
 		s.Verdict = "pass" // 收尾在途：会话不再走主判定流，后续输入进追问分支
 	}
 	s.Messages = append(s.Messages, llm.Message{Role: "assistant",
-		Content: "判定通过。不过收尾前只差一步——**你为什么会这么写？一句话。**"})
+		// 原来的文案「判定通过。不过收尾前只差一步」自相矛盾：都说通过了还差什么？
+		// 而且「你为什么会这么写」没有指代，新手看晕。改成：明确可跳过 + 问一个他能答的问题。
+		Content: "这关过了 ✅\n\n（可选）一句话说说：这次你踩到的那个坑，下次怎么一眼看出来？\n不答也没关系，照样收尾；答了会记进你的履历。"})
 	t.save(s)
 }
 
@@ -649,4 +651,19 @@ func parseCourse(raw string) ([]Lesson, error) {
 		return out, nil
 	}
 	return nil, fmt.Errorf("无已知键（nodes/knowledge_points/lessons）")
+}
+
+// AskRealUseOptional 收尾之后的**可选**追问：只追加一条消息，不挂起判定。
+//
+// 为什么要这样做：原来「首次通过→挂起追问→答上去才收尾」的设计，一旦学习者不答，
+// 这一节永远结算不了；而文案又说「判定通过」。两边对不上，人就看晕了。
+// 现在收尾立刻发生，问的那句话纯粹是可选的补充——答了就多一条记录，不答什么都不欠。
+func (t *Tutor) AskRealUseOptional(nodeID string) {
+	s := t.Load(nodeID)
+	if s == nil {
+		return
+	}
+	s.Messages = append(s.Messages, llm.Message{Role: "assistant",
+		Content: "这关过了 ✅\n\n（可选，不答也算完）一句话说说：这次踩到的那个坑，下次怎么一眼看出来？"})
+	t.save(s)
 }

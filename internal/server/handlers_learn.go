@@ -185,11 +185,11 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 		}
 		switch {
 		case v.Kind == "pass":
+			// 通过就立刻收尾：不再「挂起等追问」——不答的话那一节永远结算不了，
+			// 而文案又写着「判定通过」，两头对不上，学习者会看晕。
+			settlePass(true)
 			if firstPass {
-				// 第六轮-P1-1：首次通过必追问，追问过了才真正收尾
-				s.Tutor.AskRealUse(lesson.ID)
-			} else {
-				settlePass(true)
+				s.Tutor.AskRealUseOptional(lesson.ID)
 			}
 			verdict = "pass"
 		case v.Kind == "partial":
