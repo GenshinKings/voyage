@@ -667,3 +667,17 @@ func (t *Tutor) AskRealUseOptional(nodeID string) {
 		Content: "这关过了 ✅\n\n（可选，不答也算完）一句话说说：这次踩到的那个坑，下次怎么一眼看出来？"})
 	t.save(s)
 }
+
+// ForceSettle 把一节直接结算掉：清掉挂起的追问、判定记为通过。
+//
+// 只用于收拾老数据里卡死的会话（旧版本「不答追问就不结算」留下的）。
+// 新流程不会产生这种状态——通过即结算，追问是可选的。
+func (t *Tutor) ForceSettle(nodeID string) {
+	s := t.Load(nodeID)
+	if s == nil {
+		return
+	}
+	s.AskWhy = false
+	s.Verdict = "pass"
+	t.save(s)
+}

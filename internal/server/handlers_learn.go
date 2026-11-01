@@ -131,6 +131,35 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 		writeJSON(w, map[string]any{"session": sess, "isNew": isNew})
 	})
 
+	// 收拾卡死的会话：早期版本有过「通过后挂起追问、不答就永远结算不了」的坑。
+	// 已经修掉了，但老数据还卡着——这里给一个把这一节直接结算掉的出口。
+	mux.HandleFunc("/api/lesson/force-settle", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			NodeID string `json:"nodeId"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.NodeID == "" {
+			writeErr(w, 400, "需要 nodeId")
+			return
+		}
+		lesson := findLesson(s, req.NodeID)
+		if lesson == nil {
+			writeErr(w, 404, "知识点不存在")
+			return
+		}
+		s.Tutor.ForceSettle(req.NodeID)
+		s.Ledger.Record(lesson.ID, lesson.Title, evidence.Known, time.Now(), "tutor:"+lesson.Subject, "")
+		if s.FSCards == nil {
+			s.FSCards = map[string]*fsrs.Card{}
+		}
+		if _, ok := s.FSCards[lesson.ID]; !ok {
+			c := fsrs.NewCard(time.Now())
+			s.FSCards[lesson.ID] = &c
+		}
+		s.Tutor.MarkLessonDone(lesson.ID)
+		s.save("ledger.json", s.Ledger)
+		writeJSON(w, map[string]any{"ok": true, "nodeId": req.NodeID})
+	})
+
 	mux.HandleFunc("/api/tutor/send", func(w http.ResponseWriter, r *http.Request) {
 		s.st.State.Lock()
 		defer s.st.State.Unlock()
