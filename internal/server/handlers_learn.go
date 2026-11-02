@@ -17,6 +17,7 @@ import (
 	"voyage/internal/evidence"
 
 	"voyage/fsrs"
+	"voyage/internal/insight"
 	"voyage/internal/llm"
 	"voyage/internal/sandbox"
 	"voyage/internal/tutor"
@@ -183,6 +184,7 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 			return
 		}
 		verdict := ""
+		var kept []string
 		// settlePass 收尾入账（履历+FSRS 建卡+课程 done）——延迟记触发：
 		// 首次通过先追问「为什么这么写」，答上（FU-pass 或非首次）才入账；履历不撤回原则=先不记，不事后删。
 		// 自查修复②（学生实测 2026-10-28）：只有最终 verdict≠pass 的会话才保留误因记录——
@@ -248,6 +250,13 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 		if v.Kind == "partial" {
 			if reason, evid := tutor.ParseCause(v.Reply); tutor.ValidCause(reason) {
 				s.recordWrongCause(lesson, reason, evid)
+			}
+		}
+		// 重要发现：助教讲出的「能反复用的规律」要留住，不能只沉在对话里
+		for _, line := range insight.Lines(v.Reply) {
+			_, created, err := insight.Add(s.Dir, line, "lesson:"+lesson.ID)
+			if err == nil && created {
+				kept = append(kept, line)
 			}
 		}
 		s.recordVerdict(verdict, lesson.ID)
