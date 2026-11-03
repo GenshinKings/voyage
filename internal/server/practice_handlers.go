@@ -173,6 +173,13 @@ func (s *Server) registerProjectHandlers(mux *http.ServeMux) {
 		}
 		summary := fmt.Sprintf("%d/%d", pass, len(res))
 		passed := pass == len(res)
+		// 没过 = 有病灶：把没过的每条写成弱项，助教下次讲课/出题就会对着它使劲。
+		// 这是「副本 → 教学」的回流，不然副本过了没过都白过。
+		if !passed && s.Weak != nil {
+			for _, it := range failed {
+				s.Weak.Add(it, "副本「"+rd.Title+"」这条没过（"+summary+"）", "dungeon")
+			}
+		}
 		// 提交即定状态：过关才算副本完成；没过退回 working，留在这一关。
 		if _, err := project.Submit(dir, passed, failed, summary); err != nil {
 			writeErr(w, 400, err.Error())
