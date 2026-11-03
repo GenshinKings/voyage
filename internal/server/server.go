@@ -565,6 +565,7 @@ func (s *Server) Handlers() http.Handler {
 	// 第八轮-P1-2：路由按域拆文件（learn/kb/shop/sys），此处只做装配
 	s.registerLearnHandlers(mux)
 	s.registerMetricsHandlers(mux)
+	s.registerPrecheckHandlers(mux)
 	s.registerRunHandlers(mux)
 	s.registerTeachHandlers(mux)
 	s.registerReviewHandlers(mux)
