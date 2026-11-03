@@ -566,6 +566,7 @@ func (s *Server) Handlers() http.Handler {
 	s.registerLearnHandlers(mux)
 	s.registerMetricsHandlers(mux)
 	s.registerPrecheckHandlers(mux)
+	s.registerProjectHandlers(mux)
 	s.registerRunHandlers(mux)
 	s.registerTeachHandlers(mux)
 	s.registerReviewHandlers(mux)
