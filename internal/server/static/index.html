@@ -829,10 +829,10 @@ function todaySteps(){
     act:exs.find(e=>e.status!=='done')?'去做题':'已全部通过'};
   // 步3 副本：进行中=当前（继续）；无=待开（去进度页开影子）
   const act=(st.dungeons||[]).find(x=>x.status==='active');
-  const s3=act
-    ?{done:false,title:'影子副本',act:'继续 '+(act.cur||0)+'/'+((act.stages||[]).length)+' 关'}
-    :{done:(st.trophies||[]).some(t=>(t.date||'').slice(0,10)===new Date().toISOString().slice(0,10)),
-      title:'影子副本',act:'去开一个影子'};
+    const curP=(PRACT||[]).filter(x=>x.state!=='passed')[0];
+    const s3=curP
+      ?{done:false,title:'副本 · '+(curP.title||'当前副本'),act:'进入副本'}
+      :{done:false,title:'副本',act:'让助教安排'};
   // 步0 复习（P0-1）：有到期 FSRS 卡时插到最前——做完才算今天完成
   const due=(FSDUE||[]).filter(c=>c.previews||c.due);
   const s0=due.length
@@ -946,7 +946,7 @@ function todayGoReview(){
 }
 function todayGoLearn(){
   if(STATE.today){openLesson(STATE.today.id)}
-  else{toast('今天的课已经讲完了——先做题或开影子副本')}
+  else{toast('今天的课已经讲完了——先做题或开副本')}
 }
 function todayGoPractice(){
   const ex=(STATE.exercises||[]).find(e=>e.status!=='done');
@@ -955,9 +955,13 @@ function todayGoPractice(){
   else{toast('练习在课程收尾后由助教生成')}
 }
 function todayGoDungeon(){
+  // 2026-11-04：旧影子副本下线，改走新副本（practice）
+  const curP=(PRACT||[]).filter(x=>x.state!=='passed')[0];
+  if(curP){openPractice(curP.dir)}else{nextPractice()}
+  return;
   const act=(STATE.dungeons||[]).find(x=>x.status==='active');
   if(act){openDungeon(act.id)}
-  else{PROG_TAB='dungeon';switchTab('progress');toast('挑一个影子副本开门——通关才知道它是什么')}
+  else{nextPractice()}
 }
 
 /* P0-1 判定出口：再试一次 / 看解析 / 下一节（默认高亮下一节） */
@@ -992,7 +996,7 @@ function explainVerdict(){
 function gotoNext(){
   const nid=nextLessonId();
   if(nid){LASTVERDICT=null;openLesson(nid)}
-  else toast('这一科已经全部收尾——去「我的进度」开个新影子副本试试');
+  else toast('这一科已经全部收尾——去「我的进度」让助教安排一个副本');
 }
 
 // 练习作答：题目对话里发解法 → 助教批改 → [PASS] 记「用过」履历
@@ -1022,7 +1026,7 @@ async function loadState(){
   renderToday();
   api('/api/review/due').then(d=>{FSDUE=d.cards||[];renderSidebar();renderTodaySteps();}).catch(()=>{});
   api('/api/practice/list').then(d=>{PRACT=d.items||[];STATE._practice=d;renderSidebar();}).catch(()=>{});
-  api('/api/dungeon/list').then(d=>{STATE.dungeons=d.dungeons||[];renderSidebar();if(DN){const dd=(STATE.dungeons||[]).find(x=>x.id===DN);if(dd)renderDungeon(dd);}}).catch(()=>{});
+  STATE.dungeons=[]; // 2026-11-04：旧「影子副本」下线，新副本走 /api/practice/*
   renderTodaySteps();
   if(!CURRENT&&!HIST&&!EXER&&STATE.today){if(!openCached(STATE.today.id))openLesson(STATE.today.id)}
 }
