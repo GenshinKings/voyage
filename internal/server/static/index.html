@@ -1172,8 +1172,12 @@ function renderSidebar(){
   if(act){
     list.innerHTML='<div class="lp" onclick="openDungeon(\''+act.id+'\')"><span class="st" style="color:var(--pink)">⚔</span><span>副本 · ？？？（'+((act.stages||[]).filter(sg=>sg.done).length)+'/'+((act.stages||[]).length)+' 关）</span></div>';
   }
+  // 2026-11-03 修复：课程为空时不再直接 return —— 否则「到期复习」整块渲染不到，卡片点不开。
+  const _dueNow=(FSDUE||[]).filter(c=>c.previews);
   if(!STATE.curriculum||!(STATE.curriculum.lessons||[]).length){
+    if(!_dueNow.length){
     list.innerHTML='<div class="empty" style="margin-top:24px;padding:0 10px">输入想学的科目，<br>AI 会拆成课程，今天开始教</div>';return;
+    }
   }
   // 侧栏=到期复习（FSRS）+ 今天的实操练习（助教按实时进度出，点开一道做）
   const due=(FSDUE||[]).filter(c=>c.previews);
