@@ -2,3 +2,5 @@ outpost2-data/
 *.exe
 docs/demo-frames/
 outpost2.exe~
+
+outpost2-data.bak-*/

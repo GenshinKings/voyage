@@ -53,3 +53,17 @@ func TestTeachSystemRequiresBlankRewrite(t *testing.T) {
 		}
 	}
 }
+
+// 学生 2026-11-04：助教不要过多赘述已完成的内容（进度-学会的）。
+func TestTeachSystemDoesNotRecap(t *testing.T) {
+	for _, want := range []string{
+		"不复述已完成",
+		"不是讲稿",
+		"开场最多一句指路",
+		"已经发生过的内容」删掉",
+	} {
+		if !strings.Contains(teachSystem, want) {
+			t.Errorf("teachSystem 里少了「%s」", want)
+		}
+	}
+}
