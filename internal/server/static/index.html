@@ -1021,12 +1021,14 @@ async function loadState(){
   renderSidebar();
   renderToday();
   api('/api/review/due').then(d=>{FSDUE=d.cards||[];renderSidebar();renderTodaySteps();}).catch(()=>{});
+  api('/api/practice/list').then(d=>{PRACT=d.items||[];STATE._practice=d;renderSidebar();}).catch(()=>{});
   api('/api/dungeon/list').then(d=>{STATE.dungeons=d.dungeons||[];renderSidebar();if(DN){const dd=(STATE.dungeons||[]).find(x=>x.id===DN);if(dd)renderDungeon(dd);}}).catch(()=>{});
   renderTodaySteps();
   if(!CURRENT&&!HIST&&!EXER&&STATE.today){if(!openCached(STATE.today.id))openLesson(STATE.today.id)}
 }
 /* ---------- FSRS 到期复习（评审 P1-5） ---------- */
 let FSDUE=[],REV=null;
+var PRACT=[],POPEN=null; // 副本（练习项目）：列表 + 当前打开的那个
 function openReview(id){
   const c=(FSDUE||[]).find(x=>x.id===id);if(!c)return;
   leaveHistory();
@@ -1188,6 +1190,20 @@ function renderSidebar(){
       el.className='lp rev-item'+(REV===c.id?' on':'');
       el.innerHTML='<span class="st" style="color:var(--pink)">↻</span><span>'+esc(c.title||c.id)+'<div class="lp-sub">到期 '+esc(String(c.due||'').slice(0,10))+'</div></span>';
       el.onclick=()=>openReview(c.id);
+      list.appendChild(el);
+    });
+  }
+  // 副本（主人 2026-11-03 23:29）：讲解完 → 建文件夹 → 他做 → 提交 → 助教检查 → 过关才算完成
+  {
+    const stName={ready:'待开始',working:'在做',submitted:'待检查',passed:'已过关'};
+    const left=(PRACT||[]).filter(x=>x.state!=='passed').length;
+    list.innerHTML+='<div class="grouplabel" style="padding:8px 12px 0">副本 · '+left+' 个未完成<button class="va" onclick="newPractice()" style="float:right;font-size:10.5px;padding:1px 7px;border-radius:6px;border:1px solid var(--line);background:transparent;color:var(--mut);cursor:pointer">＋新建</button></div>';
+    (PRACT||[]).forEach(c=>{
+      const el=document.createElement('div');
+      el.className='lp'+(POPEN===c.dir?' on':'');
+      const mark=c.state==='passed'?'✓':(c.state==='working'?'·':'○');
+      el.innerHTML='<span class="st" style="color:'+(c.state==='passed'?'var(--green)':'var(--amber)')+'">'+mark+'</span><span>'+esc(c.title||c.dir.split(/[\\/]/).pop())+'<div class="lp-sub">'+stName[c.state||'ready']+(c.submits?' · 提交 '+c.submits+' 次':'')+'</div></span>';
+      el.onclick=()=>openPractice(c.dir);
       list.appendChild(el);
     });
   }
@@ -2758,6 +2774,52 @@ async function apiMethod(path, method, body){
   let j={}; try{ j=raw?JSON.parse(raw):{} }catch(e){ j={error:raw.trim()} }
   if(r.status>=400) throw new Error(j.error||raw.trim()||'请求失败');
   return j;
-}</script>
+}/* ---------- 副本（练习项目）---------- */
+async function openPractice(dir){
+  POPEN=dir;CURRENT=null;EXER=null;REV=null;
+  const c=(PRACT||[]).find(x=>x.dir===dir);
+  const stName={ready:'待开始',working:'在做',submitted:'待检查',passed:'已过关'};
+  $('lessonTitle').textContent=(c&&c.title)||'副本';
+  $('kicker').textContent='DUNGEON · 副本';
+  let body='<div class="msg a"><div class="bubble">';
+  body+='<b>'+esc((c&&c.title)||'副本')+'</b>　<span class="mut">'+(stName[(c&&c.state)||'ready'])+(c&&c.submits?'　提交 '+(c.submits)+' 次':'')+'</span><br>';
+  body+='<div class="mut" style="font-size:12px;margin-top:6px">项目在：'+esc(dir)+'</div>';
+  body+='<div class="mut" style="font-size:12px;margin-top:4px">按 README 做完，再点下面的按钮——我会逐条跑验收，全过才算过关。</div>';
+  if(c&&c.lastCheck){body+='<div class="mut" style="font-size:12px;margin-top:6px">上次：'+esc(c.lastCheck)+(c.lastFailed&&c.lastFailed.length?'（没过：'+c.lastFailed.map(esc).join('、')+'）':'')+'</div>';}
+  body+='<div style="margin-top:12px"><button class="btn primary" onclick="submitPractice(\''+dir.replace(/\\/g,'\\\\')+'\')">提交，让助教检查</button></div>';
+  body+='<div id="practResult" style="margin-top:12px"></div>';
+  body+='</div></div>';
+  $('chat').innerHTML=body;
+  switchTab('learn');
+}
+async function submitPractice(dir){
+  const box=$('practResult'); if(box)box.innerHTML='<div class="mut">正在逐条跑验收…（可能要几十秒）</div>';
+  try{
+    const d=await api('/api/practice/check?dir='+encodeURIComponent(dir));
+    let h='<div class="mut" style="margin-bottom:8px">结果：<b>'+d.pass+'/'+d.total+'</b>'+(d.done?'　<b style="color:var(--green)">过关了</b>':'　还没过，改完再提交')+'</div>';
+    (d.items||[]).forEach(it=>{
+      h+='<div style="border-left:2px solid '+(it.pass?'var(--green)':'var(--red)')+';padding-left:8px;margin:6px 0;font-size:12.5px">'
+        +(it.pass?'✓ ':'✗ ')+esc(it.note)+'<div class="mut" style="font-size:11.5px">跑：'+esc(it.cmd)+'　该看到：'+esc(it.want)+'</div>'
+        +(it.error?'<div class="mut" style="font-size:11.5px">错误：'+esc(it.error)+'</div>':'')
+        +(it.got?'<div class="mut" style="font-size:11px;white-space:pre-wrap;max-height:90px;overflow:auto">'+esc(String(it.got).slice(0,400))+'</div>':'')
+        +'</div>';
+    });
+    if(box)box.innerHTML=h;
+    loadState();
+  }catch(e){ if(box)box.innerHTML='<div class="mut">检查失败：'+esc(e.message||String(e))+'</div>'; }
+}
+async function newPractice(){
+  const brief=prompt('想练什么？一句话就行（例：做一个能暂停的番茄钟）');
+  if(!brief)return;
+  toast('助教在出题…');
+  try{
+    const d=await api('/api/practice/new',{brief});
+    if(d.error){toast(d.error);return;}
+    toast('建好了：'+d.dir);
+    await loadState();
+    openPractice(d.dir);
+  }catch(e){ toast('出题失败：'+(e.message||e)); }
+}
+</script>
 </body>
 </html>
