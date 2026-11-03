@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -53,6 +54,11 @@ func (s *Server) registerProjectHandlers(mux *http.ServeMux) {
 			return out, nil
 		}
 		root := practiceRoot(s)
+		// 闭环：没过关的副本挡在前面，不许开新的（「过关则副本完成」不是装饰）
+		if blocked, yes := project.Blocking(root); yes {
+			writeErr(w, 409, "还有一个副本没过：「"+blocked.Title+"」。先把这一关过了，再开新的")
+			return
+		}
 		if err := project.EnsureRoot(root); err != nil {
 			writeErr(w, 500, "建不了练习目录："+err.Error())
 			return
@@ -70,6 +76,18 @@ func (s *Server) registerProjectHandlers(mux *http.ServeMux) {
 		writeJSON(w, map[string]any{"ok": true, "dir": dir, "readme": rd})
 	})
 
+	// 列出所有副本与状态
+	mux.HandleFunc("/api/practice/list", func(w http.ResponseWriter, r *http.Request) {
+		root := practiceRoot(s)
+		list := project.ListDirs(root)
+		blocked, hasBlocked := project.Blocking(root)
+		writeJSON(w, map[string]any{
+			"root":       root,
+			"items":      list,
+			"hasBlocked": hasBlocked,
+			"blocked":    blocked,
+		})
+	})
 	// 检查完成情况：逐条跑验收
 	mux.HandleFunc("/api/practice/check", func(w http.ResponseWriter, r *http.Request) {
 		dir := r.URL.Query().Get("dir")
@@ -84,10 +102,20 @@ func (s *Server) registerProjectHandlers(mux *http.ServeMux) {
 		}
 		res := project.Run(dir, rd)
 		pass := 0
+		var failed []string
 		for _, x := range res {
 			if x.Pass {
 				pass++
+				continue
 			}
+			failed = append(failed, x.Note)
+		}
+		summary := fmt.Sprintf("%d/%d", pass, len(res))
+		passed := pass == len(res)
+		// 提交即定状态：过关才算副本完成；没过退回 working，留在这一关。
+		if _, err := project.Submit(dir, passed, failed, summary); err != nil {
+			writeErr(w, 400, err.Error())
+			return
 		}
 		writeJSON(w, map[string]any{
 			"dir":   dir,

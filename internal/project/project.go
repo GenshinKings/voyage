@@ -195,6 +195,10 @@ func Create(root string, r README) (string, error) {
 	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte(readme), 0o644); err != nil {
 		return "", err
 	}
+	// 状态就地落一份：标题带过来，界面不用再读 spec 才知道这是什么副本。
+	if err := SaveStatus(Status{Dir: dir, Title: r.Title, State: StatusReady}); err != nil {
+		return "", err
+	}
 	// 机器可读的一份：检查完成情况时读它，不去解析 Markdown（解析文本太脆）。
 	if b, err := json.MarshalIndent(r, "", "  "); err == nil {
 		if err := os.WriteFile(filepath.Join(dir, SpecFile), b, 0o644); err != nil {
