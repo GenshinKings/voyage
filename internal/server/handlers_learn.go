@@ -54,6 +54,8 @@ func (s *Server) registerLearnHandlers(mux *http.ServeMux) {
 			writeErr(w, 400, "rating 取值 1-4")
 			return
 		}
+		// 北极星信号一：复测到期作答，记一次保持率（rating>=3 = 想起来了）
+		s.recordRetention(req.ID, req.Rating)
 		next, _ := s.FSRS.Review(*card, fsrs.Rating(req.Rating), time.Now(), 0)
 		s.FSCards[req.ID] = &next
 		s.Done.Reviews = append(s.Done.Reviews, req.ID)

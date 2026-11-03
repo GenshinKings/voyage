@@ -42,6 +42,7 @@ func (s *Server) registerSysHandlers(mux *http.ServeMux) {
 	})
 
 	mux.HandleFunc("/api/state", func(w http.ResponseWriter, r *http.Request) { // 性能1+3：缓存+ETag/304（statecache.go）
+		s.markSession() // 北极星信号三：相隔 >24h 自己回来算自发回归
 		s.serveStateCache(w, r, func() (any, error) {
 			if s.Plan == nil {
 				s.RefreshPlan()
