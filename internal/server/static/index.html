@@ -1125,7 +1125,18 @@ function renderToday(){
     h+='<div class="tl primary"><div class="no">01</div><div class="bd"><div class="cat">学 · 对话教学</div><div class="ti">'+esc(cur?cur.title:'')+'</div><div class="why">'+anchor+'——'+esc(cur?cur.brief:'')+'</div></div><div class="act">'+(CURRENT?'':'<button class="btn primary" onclick="openLesson(STATE.today.id)">继续学习</button>')+'</div></div>';
     h+='<div class="tl"><div class="no">02</div><div class="bd"><div class="cat">练 · 实操练习</div><div class="ti">'+(exLeft?exLeft+' 道待做':'今天的练习已清空')+'</div><div class="why">'+(exLeft?'做完它们，收尾的知识点才落进关联图':'明天收尾新课后会有新的练习')+'</div></div>'+(exLeft?'<div class="act"><button class="btn ghost" onclick="switchTab(&#39;learn&#39;)">左侧选题</button></div>':'')+'</div>';
     h+='<div class="tl"><div class="no">03</div><div class="bd"><div class="cat">复习 · 到期 '+dueN+' 张</div><div class="ti">'+(dueN?esc((FSDUE[0]||{}).title||'')+(dueN>1?' 等 '+dueN+' 张':''):'暂无到期')+'</div><div class="why">凭记忆先想再评——间隔按你的遗忘曲线安排</div></div><div class="act">'+(dueN?'<button class="btn ghost" onclick="openReview(FSDUE[0].id)">开始复习</button>':'')+'</div></div>';
-    main.slice(0,2).forEach((m,i)=>{
+    {
+      const left=(PRACT||[]).filter(x=>x.state!=='passed');
+      const cur=left[0];
+      const stName={ready:'待开始',working:'在做',submitted:'待检查',passed:'已过关'};
+      h+='<div class="tl"><div class="no">04</div><div class="bd"><div class="cat">副本 · 做完才算学完</div><div class="ti">'
+        +(cur?esc(cur.title||cur.dir.split(/[\\/]/).pop()):'助教还没给你安排')+'</div><div class="why">'
+        +(cur?(stName[cur.state||'ready']+(cur.lastCheck?'　上次 '+cur.lastCheck:'')):'讲完一课，助教会按你的进度安排一个项目')
+        +'</div></div><div class="act">'
+        +(cur?'<button class="btn primary" onclick="openPractice(\''+cur.dir.replace(/\\/g,'\\\\')+'\')">进入副本</button>'
+             :'<button class="btn ghost" onclick="nextPractice()">让助教安排</button>')
+        +'</div></div>';
+    }    main.slice(0,2).forEach((m,i)=>{
       const t=String(m.Title||'');
       h+='<div class="tl"><div class="no">0'+(4+i)+'</div><div class="bd"><div class="cat">推进 · 90 天冲刺</div><div class="ti">'+esc(t)+(m.Minutes?' · '+m.Minutes+' 分钟':'')+'</div></div><div class="act"><button class="btn" onclick="completeMain(this)" data-t="'+esc(t)+'">完成</button></div></div>';
     });
