@@ -322,6 +322,22 @@ func execFlag() string {
 	}
 	return "-c"
 }
+
+// shortHash 让目录名唯一；只取 4 位，够用又不难看。
+func shortHash(s string) string {
+	var h uint32 = 2166136261
+	for i := 0; i < len(s); i++ {
+		h ^= uint32(s[i])
+		h *= 16777619
+	}
+	const hex = "0123456789abcdef"
+	out := make([]byte, 4)
+	for i := 0; i < 4; i++ {
+		out[3-i] = hex[h&0xf]
+		h >>= 4
+	}
+	return string(out)
+}
 func slugify(s string) string {
 	s = strings.TrimSpace(s)
 	var b strings.Builder
@@ -335,8 +351,10 @@ func slugify(s string) string {
 	}
 	out := strings.Trim(b.String(), "-")
 	if out == "" {
-		// 中文标题兜底：用时间戳，避免空目录名
-		return "project-" + time.Now().Format("0102-1504")
+		// 中文标题兜底：不能只用时间戳——同一分钟内连开两个会撞同一个目录，
+		// 第二个把第一个的 README 覆盖掉。加标题短哈希保证唯一。
+		return "project-" + time.Now().Format("0102-1504") + "-" + shortHash(strings.TrimSpace(s))
 	}
-	return out
+	// 英文标题也可能重复（同一个词开两次），同样带短哈希。
+	return out + "-" + shortHash(strings.TrimSpace(s))
 }

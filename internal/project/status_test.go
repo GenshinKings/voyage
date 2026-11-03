@@ -90,3 +90,26 @@ func TestLoadIgnoresNonProjectDirs(t *testing.T) {
 		t.Errorf("没有 .practice.json 的目录不该列出：%+v", got)
 	}
 }
+
+// 中文标题在同一分钟连开两个，不许撞目录（会互相覆盖 README）。
+func TestCreateNoSlugCollision(t *testing.T) {
+	root := t.TempDir()
+	mk := func(title string) string {
+		r := README{Title: title, Goal: "g", Steps: []string{"s"},
+			Checks: []CheckItem{
+				{Cmd: "ls", Want: "x", Note: "1"},
+				{Cmd: "ls", Want: "x", Note: "2"},
+				{Cmd: "ls", Want: "x", Note: "3"},
+			}}
+		d, err := Create(root, r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return d
+	}
+	a := mk("番茄钟")
+	b := mk("计算器")
+	if a == b {
+		t.Fatalf("两个不同项目撞到了同一个目录：%s", a)
+	}
+}

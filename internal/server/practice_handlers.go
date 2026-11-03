@@ -76,6 +76,67 @@ func (s *Server) registerProjectHandlers(mux *http.ServeMux) {
 		writeJSON(w, map[string]any{"ok": true, "dir": dir, "readme": rd})
 	})
 
+	// 助教按「目标 + 当前学到哪 + 卡过什么」安排下一个副本（主人 2026-11-03 23:57：
+	// 副本该按学习目标和当前情况制定，不是摆一排让人挑）。
+	mux.HandleFunc("/api/practice/next", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeErr(w, 405, "只能用 POST")
+			return
+		}
+		if s.Tutor == nil || s.Tutor.Client == nil {
+			writeErr(w, 400, "模型没连上，安排不了")
+			return
+		}
+		root := practiceRoot(s)
+		// 已经有一个没过关的：就练它，不再生成新的（不摆货架）。
+		if cur, yes := project.Blocking(root); yes {
+			writeJSON(w, map[string]any{"ok": true, "reuse": true, "dir": cur.Dir, "item": cur})
+			return
+		}
+
+		st := project.State{}
+		if cur := s.Tutor.TodayLesson(); cur != nil {
+			st.Goal = cur.Subject
+			st.CurrentLsn = cur.Title
+			st.Checklist = append(st.Checklist, cur.Brief)
+		}
+		for _, wp := range s.Weak.Recent(6) {
+			st.Weak = append(st.Weak, wp.Topic)
+		}
+		for _, it := range project.ListDirs(root) {
+			if it.State == project.StatusPassed {
+				st.Passed = append(st.Passed, it.Title)
+			} else {
+				st.Failed = append(st.Failed, it.Title)
+			}
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 180*time.Second)
+		defer cancel()
+		chat := func(ctx context.Context, sys, user string) (string, error) {
+			return s.Tutor.Client.Chat(sys, []llm.Message{{Role: "user", Content: user}})
+		}
+		plan, err := project.PlanNext(ctx, chat, st)
+		if err != nil {
+			writeErr(w, 502, "助教没排出安排："+err.Error())
+			return
+		}
+		if err := project.EnsureRoot(root); err != nil {
+			writeErr(w, 500, "建不了练习目录："+err.Error())
+			return
+		}
+		rd, err := project.Generate(ctx, chat, plan.Brief)
+		if err != nil {
+			writeErr(w, 502, "出题不合格："+err.Error())
+			return
+		}
+		dir, err := project.Create(root, rd)
+		if err != nil {
+			writeErr(w, 500, "写不出项目："+err.Error())
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true, "dir": dir, "plan": plan, "readme": rd})
+	})
 	// 列出所有副本与状态
 	mux.HandleFunc("/api/practice/list", func(w http.ResponseWriter, r *http.Request) {
 		root := practiceRoot(s)
