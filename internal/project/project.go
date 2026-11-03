@@ -68,6 +68,9 @@ const readmeSystem = `你是项目出题人。给一个完全新手出一个「�
    那几个字符（如 "25:00"、"时间到"、"PASS"），不许写「出现 25:00 这样的起始时间」
    这种描述句，否则没法自动比对。挑一个最短又能证明这一条的字面量。
 4. 不许出现他没学过的术语；必须用的名词，在 goal 里先用一句大白话解释。
+4.5 要监听端口时，**不要用 8080/3000/8000 这类被别的程序占满的常见端口**，
+    用 8787、9731 这种不常用的；否则验收会被别人的服务污染（真踩到：8080 被本机
+    另一套工具占着，访问 /nothing 得到的是它的 404，看起来像学生答对了）。
 5. 3~5 条验收，覆盖「能跑起来 / 核心行为对 / 边界对」三类。
 
 只输出 JSON：
@@ -243,7 +246,7 @@ type Result struct {
 }
 
 // 只允许这些命令前缀：白名单，避免"验收"变成任意命令执行。
-var allowPrefix = []string{"go run", "go test", "go build", "go vet", "ls", "dir", "cat", "type", "sleep", "timeout"}
+var allowPrefix = []string{"go run", "go test", "go build", "go vet", "ls", "dir", "cat", "type", "sleep", "timeout", "curl", "invoke-webrequest"}
 
 func allowed(cmd string) bool {
 	// 允许 a && b 串联，但每一段都必须在白名单里——
@@ -286,7 +289,9 @@ func Run(dir string, r README) []Result {
 		if err != nil && len(b) == 0 {
 			res.Error = err.Error()
 		}
-		res.Pass = strings.Contains(res.Got, c.Want)
+		// 只有命令真的成功、并且输出里出现期望值才算过。
+		// 反例（真实踩到）：服务没起，curl 报错信息里恰好带 "404"，被误判成通过。
+		res.Pass = err == nil && strings.Contains(res.Got, c.Want)
 		out = append(out, res)
 	}
 	return out
