@@ -38,3 +38,18 @@ func TestTeachSystemStillTeachesTheTerm(t *testing.T) {
 		t.Error("要求术语出现时必须先解释，这条不能被省掉")
 	}
 }
+
+// 2026-11-04：学生实测「学完还是晕，只会和助教写出一样的代码」。
+// 这条必须写死在提示词里：不通过就不许给 PASS。
+func TestTeachSystemRequiresBlankRewrite(t *testing.T) {
+	for _, want := range []string{
+		"空白重写关",
+		"合上讲义",
+		"不通过就不许输出 [PASS]",
+		"能跑但靠抄的，不算过",
+	} {
+		if !strings.Contains(teachSystem, want) {
+			t.Errorf("teachSystem 里少了「%s」", want)
+		}
+	}
+}
